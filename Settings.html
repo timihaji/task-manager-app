@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Settings — Task Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--font:'Geist',sans-serif;--mono:'Geist Mono',monospace}
+
+/* Themes */
+body[data-theme="dark"]{--bg:#071512;--bg-side:#06110f;--surface:#10201d;--surface-2:#1d342f;--surface-3:#1d342f;--border:#1d342f;--border-s:#1d342f;--t1:#e6fffb;--t2:#c3ddd7;--t3:#8eada6;--t4:#66837c;--shadow-lg:0 8px 32px rgba(0,0,0,.6)}
+body[data-theme="light"]{--bg:#f3f7f4;--bg-side:#e7efe9;--surface:#fffdfa;--surface-2:#f3f7f4;--surface-3:#d5ded7;--border:#d5ded7;--border-s:#d5ded7;--t1:#17211d;--t2:#46564f;--t3:#6d7b74;--t4:#8b9992;--shadow-lg:0 8px 32px rgba(0,0,0,.12)}
+
+html,body,#root{height:100%;overflow:hidden}
+body{font-family:var(--font);background:var(--bg);color:var(--t1);display:flex;flex-direction:column}
+.settings-scroll{overflow-y:auto!important;scrollbar-gutter:stable;background:var(--bg-side);scrollbar-width:thin;scrollbar-color:var(--t4) var(--bg-side)}
+.settings-scroll::-webkit-scrollbar{width:10px}
+.settings-scroll::-webkit-scrollbar-track{background:var(--bg-side);border-left:1px solid var(--border)}
+.settings-scroll::-webkit-scrollbar-thumb{background:var(--t4);border:2px solid var(--bg-side);border-radius:999px}
+.settings-scroll::-webkit-scrollbar-thumb:hover{background:var(--t3)}
+
+/* Topbar */
+.topbar{height:44px;display:flex;align-items:center;gap:8px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.tb-back{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t3);cursor:pointer;padding:4px 8px;border-radius:2px;border:none;background:transparent;transition:background .1s}
+.tb-back:hover{background:var(--surface-2);color:var(--t2)}
+.tb-title{font-size:14px;font-weight:600;color:var(--t1);letter-spacing:-.2px}
+.tb-spacer{flex:1}
+
+/* Layout */
+.settings-body{display:flex;flex:1;min-height:0;overflow:hidden;background:var(--bg-side)}
+.settings-nav{width:200px;min-width:200px;background:var(--bg-side);border-right:1px solid var(--border);padding:16px 8px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.snav-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:2px;font-size:13px;color:var(--t3);cursor:pointer;transition:all .1s;user-select:none}
+.snav-item:hover{background:var(--surface-2);color:var(--t2)}
+.snav-item.active{background:var(--surface-3);color:var(--t1);font-weight:500}
+.snav-item svg{width:13px;height:13px;flex-shrink:0}
+.settings-main{flex:1;min-height:0;padding:32px 40px;background:var(--bg-side)}
+
+/* Section */
+.s-section{max-width:620px;margin-bottom:40px}
+.s-section-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t4);margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.s-card{background:var(--surface);border:1px solid var(--border-s);border-radius:4px;overflow:hidden;margin-bottom:2px}
+
+/* Row */
+.s-row{display:flex;align-items:center;gap:16px;padding:13px 16px;border-bottom:1px solid var(--border)}
+.s-row:last-child{border-bottom:none}
+.s-row-info{flex:1;min-width:0}
+.s-row-label{font-size:13px;color:var(--t1);font-weight:500;margin-bottom:2px}
+.s-row-desc{font-size:11.5px;color:var(--t4);line-height:1.4}
+.s-row-ctrl{flex-shrink:0;display:flex;align-items:center;gap:8px}
+
+/* Controls */
+.s-select{padding:5px 10px;border:1px solid var(--border-s);border-radius:2px;background:var(--surface-2);color:var(--t1);font:13px var(--font);outline:none;cursor:pointer;min-width:120px}
+.s-select:focus{border-color:var(--accent)}
+.s-toggle{width:36px;height:20px;border-radius:99px;border:none;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0}
+.s-toggle[data-on="1"]{background:var(--accent)}
+.s-toggle[data-on="0"]{background:var(--surface-3)}
+.s-toggle i{position:absolute;top:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.s-toggle[data-on="1"] i{left:19px}
+.s-toggle[data-on="0"] i{left:3px}
+.s-color-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.s-swatch{display:flex;align-items:center;gap:6px;cursor:pointer;position:relative}
+.s-swatch input[type=color]{opacity:0;position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
+.s-swatch-dot{width:24px;height:24px;border-radius:4px;border:1px solid var(--border-s);flex-shrink:0}
+.s-swatch-lbl{font-size:11px;color:var(--t3);white-space:nowrap}
+
+/* Presets */
+.s-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px;padding:16px}
+.s-preset{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border-s);border-radius:4px;background:var(--surface-2);cursor:pointer;transition:all .1s;user-select:none}
+.s-preset:hover{border-color:var(--accent);background:var(--surface)}
+.s-preset.active{border-color:var(--accent);background:var(--surface)}
+.s-preset-swatch{width:18px;height:18px;border-radius:3px;flex-shrink:0}
+.s-preset-name{font-size:12.5px;color:var(--t1);font-weight:500}
+
+/* Seg radio */
+.s-seg{display:flex;background:var(--surface-3);border-radius:4px;padding:2px;gap:2px}
+.s-seg button{padding:4px 12px;border:none;border-radius:3px;background:transparent;color:var(--t3);font:12px var(--font);cursor:pointer;transition:all .1s;white-space:nowrap}
+.s-seg button.active{background:var(--surface);color:var(--t1);font-weight:500;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+
+/* Slider */
+.s-slider{-webkit-appearance:none;width:160px;height:4px;border-radius:99px;background:var(--border-s);outline:none;cursor:pointer}
+.s-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.s-val{font:12px var(--mono);color:var(--t4);min-width:28px;text-align:right}
+
+/* Status bar */
+.sbar{height:26px;display:flex;align-items:center;padding:0 20px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0;font-size:10.5px;color:var(--t4)}
+</style>
+</head>
+<body data-theme="light">
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const STORAGE_KEY = 'tm_settings';
+
+const DEFAULTS = {
+  theme: 'light',
+  look: 'minimal',
+  density: 'normal',
+  font: 'geist',
+  accentColor: '#0f766e',
+  cardRadius: 10,
+  showWeekend: false,
+  dark_bg: '#071512',
+  dark_surface: '#10201d',
+  dark_sidebar: '#06110f',
+  dark_border: '#1d342f',
+  dark_text: '#e6fffb',
+  light_bg: '#f3f7f4',
+  light_surface: '#fffdfa',
+  light_sidebar: '#e7efe9',
+  light_border: '#d5ded7',
+  light_text: '#17211d',
+};
+
+const PRESETS = [
+  {n:'Harbor',  a:'#0f766e', db:'#071512',ds:'#10201d',dn:'#06110f',dbr:'#1d342f',dt:'#e6fffb', lb:'#f3f7f4',ls:'#fffdfa',ln:'#e7efe9',lbr:'#d5ded7',lt:'#17211d'},
+  {n:'Indigo',  a:'#4f46e5', db:'#0d1020',ds:'#171a2f',dn:'#080b18',dbr:'#252a46',dt:'#eef2ff', lb:'#f4f6ff',ls:'#ffffff',ln:'#e8ecff',lbr:'#d7ddfa',lt:'#17172f'},
+  {n:'Ember',   a:'#ea580c', db:'#190f0a',ds:'#261812',dn:'#110a06',dbr:'#3a2419',dt:'#fff1e7', lb:'#fff8f1',ls:'#fffdf9',ln:'#f8eadf',lbr:'#edcfbd',lt:'#24140e'},
+  {n:'Moss',    a:'#65a30d', db:'#0d1408',ds:'#182312',dn:'#080f05',dbr:'#29361f',dt:'#f0fbea', lb:'#f6faef',ls:'#fffffb',ln:'#e9f2df',lbr:'#d5e2c5',lt:'#17220f'},
+  {n:'Lagoon',  a:'#0284c7', db:'#07141c',ds:'#102331',dn:'#061019',dbr:'#1c3547',dt:'#e8f7ff', lb:'#f2f9fd',ls:'#ffffff',ln:'#e2f0f8',lbr:'#cbe0eb',lt:'#102532'},
+  {n:'Marigold',a:'#d97706', db:'#171207',ds:'#241c0e',dn:'#100c04',dbr:'#362a16',dt:'#fff7db', lb:'#fff9ea',ls:'#fffefa',ln:'#f6edcf',lbr:'#e8d7aa',lt:'#241b08'},
+  {n:'Rose',    a:'#e11d48', db:'#180b12',ds:'#25131a',dn:'#10070c',dbr:'#3a2028',dt:'#fff1f4', lb:'#fff5f7',ls:'#fffefe',ln:'#f8e2e8',lbr:'#eec6d0',lt:'#2a1118'},
+  {n:'Aubergine',a:'#9333ea',db:'#140d1f',ds:'#20172d',dn:'#0d0816',dbr:'#312342',dt:'#f7efff', lb:'#faf7ff',ls:'#ffffff',ln:'#efe7fb',lbr:'#ddcff3',lt:'#20142f'},
+  {n:'Clay',    a:'#b45309', db:'#17110d',ds:'#231a14',dn:'#0f0a07',dbr:'#35271d',dt:'#fff4e8', lb:'#faf4ed',ls:'#fffdf9',ln:'#eee3d7',lbr:'#ddcdbd',lt:'#211812'},
+  {n:'Graphite',a:'#525252', db:'#0b0b0b',ds:'#181818',dn:'#050505',dbr:'#2a2a2a',dt:'#f5f5f5', lb:'#f7f7f5',ls:'#ffffff',ln:'#eeeeeb',lbr:'#ddddda',lt:'#181818'},
+  {n:'Nordic',  a:'#2563eb', db:'#08111f',ds:'#111d2f',dn:'#050c17',dbr:'#21314a',dt:'#eaf2ff', lb:'#f5f7fb',ls:'#ffffff',ln:'#e8edf5',lbr:'#d5dce8',lt:'#111827'},
+  {n:'Mono',    a:'#737373', db:'#0a0a0a',ds:'#171717',dn:'#000000',dbr:'#262626',dt:'#fafafa', lb:'#fafafa',ls:'#ffffff',ln:'#f5f5f5',lbr:'#e5e5e5',lt:'#0a0a0a'},
+];
+
+function loadSettings() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}') || {};
+    return {...DEFAULTS,...stored};
+  }
+  catch { return {...DEFAULTS}; }
+}
+function saveSettings(s) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+}
+
+// Read-only: copies localStorage values into a JSON file. Never writes or
+// removes — the underlying data stays exactly where it is.
+function exportAllData() {
+  const data = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith('tm_')) continue;
+    const raw = localStorage.getItem(key);
+    try { data[key] = JSON.parse(raw); }
+    catch { data[key] = raw; }
+  }
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    schemaVersion: 1,
+    source: 'Task Manager (localStorage)',
+    data,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `task-manager-export-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  return Object.keys(data).length;
+}
+
+function applyTheme(s) {
+  const b = document.body;
+  b.setAttribute('data-theme', s.theme);
+  const R = b;
+  R.style.setProperty('--accent', s.accentColor);
+  if (s.theme === 'dark') {
+    R.style.setProperty('--bg', s.dark_bg);
+    R.style.setProperty('--bg-side', s.dark_sidebar);
+    R.style.setProperty('--surface', s.dark_surface);
+    R.style.setProperty('--surface-2', s.dark_border);
+    R.style.setProperty('--surface-3', s.dark_border);
+    R.style.setProperty('--border', s.dark_border);
+    R.style.setProperty('--border-s', s.dark_border);
+    R.style.setProperty('--t1', s.dark_text);
+  } else {
+    R.style.setProperty('--bg', s.light_bg);
+    R.style.setProperty('--bg-side', s.light_sidebar);
+    R.style.setProperty('--surface', s.light_surface);
+    R.style.setProperty('--surface-2', s.light_bg);
+    R.style.setProperty('--surface-3', s.light_border);
+    R.style.setProperty('--border', s.light_border);
+    R.style.setProperty('--border-s', s.light_border);
+    R.style.setProperty('--t1', s.light_text);
+  }
+}
+
+// Small controls
+function Seg({value, options, onChange}) {
+  return (
+    <div className="s-seg">
+      {options.map(o=>(
+        <button key={o} className={value===o?'active':''} onClick={()=>onChange(o)}>{o}</button>
+      ))}
+    </div>
+  );
+}
+function Toggle({value, onChange}) {
+  return (
+    <button className="s-toggle" data-on={value?'1':'0'} onClick={()=>onChange(!value)}>
+      <i/>
+    </button>
+  );
+}
+function ColorSwatch({label, value, onChange}) {
+  return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+      <div className="s-swatch">
+        <div className="s-swatch-dot" style={{background:value}}/>
+        <input type="color" value={value} onChange={e=>onChange(e.target.value)}/>
+      </div>
+      <span className="s-swatch-lbl">{label}</span>
+    </div>
+  );
+}
+function Row({label, desc, children}) {
+  return (
+    <div className="s-row">
+      <div className="s-row-info">
+        <div className="s-row-label">{label}</div>
+        {desc && <div className="s-row-desc">{desc}</div>}
+      </div>
+      <div className="s-row-ctrl">{children}</div>
+    </div>
+  );
+}
+
+function App() {
+  const [s, setS] = useState(loadSettings);
+  const [activeSection, setActiveSection] = useState('appearance');
+
+  const set = (key, val) => {
+    setS(prev => {
+      const next = typeof key === 'object' ? {...prev,...key} : {...prev,[key]:val};
+      saveSettings(next);
+      applyTheme(next);
+      return next;
+    });
+  };
+
+  useEffect(() => { applyTheme(s); }, []);
+
+  const navItems = [
+    {id:'appearance', label:'Appearance'},
+    {id:'colors', label:'Colors'},
+    {id:'layout', label:'Layout'},
+    {id:'data', label:'Data'},
+  ];
+
+  const [exportMsg, setExportMsg] = useState('');
+  const handleExport = () => {
+    try {
+      const n = exportAllData();
+      setExportMsg(`Exported ${n} key${n===1?'':'s'} from localStorage.`);
+    } catch (e) {
+      setExportMsg(`Export failed: ${e?.message || e}`);
+    }
+    setTimeout(()=>setExportMsg(''), 4000);
+  };
+
+  const applyPreset = (p) => set({
+    accentColor: p.a,
+    dark_bg: p.db, dark_surface: p.ds, dark_sidebar: p.dn, dark_border: p.dbr, dark_text: p.dt,
+    light_bg: p.lb, light_surface: p.ls, light_sidebar: p.ln, light_border: p.lbr, light_text: p.lt,
+  });
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',height:'100vh',overflow:'hidden'}}>
+      {/* Topbar */}
+      <div className="topbar">
+        <button className="tb-back" onClick={()=>window.open('Task Manager v2.html','_blank')}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Back to app
+        </button>
+        <div className="tb-spacer"/>
+        <div className="tb-title">Settings</div>
+        <div className="tb-spacer"/>
+      </div>
+
+      {/* Body */}
+      <div className="settings-body">
+        {/* Nav */}
+        <div className="settings-nav">
+          {navItems.map(n=>(
+            <div key={n.id} className={`snav-item${activeSection===n.id?' active':''}`}
+              onClick={()=>setActiveSection(n.id)}>
+              {n.label}
+            </div>
+          ))}
+        </div>
+
+        {/* Main */}
+        <div className="settings-main settings-scroll">
+
+          {activeSection==='appearance' && <>
+            <div className="s-section">
+              <div className="s-section-title">Mode</div>
+              <div className="s-card">
+                <Row label="Color mode" desc="Choose between dark and light interface.">
+                  <Seg value={s.theme} options={['light','dark']} onChange={v=>set('theme',v)}/>
+                </Row>
+                <Row label="Style" desc="Controls border radius, shadow, and visual density of surfaces.">
+                  <Seg value={s.look||'minimal'} options={['minimal','soft','sharp','glass']} onChange={v=>set('look',v)}/>
+                </Row>
+                <Row label="Font" desc="Interface typeface.">
+                  <Seg value={s.font||'geist'} options={['geist','serif','mono']} onChange={v=>set('font',v)}/>
+                </Row>
+              </div>
+            </div>
+
+            <div className="s-section">
+              <div className="s-section-title">Color presets</div>
+              <div className="s-card">
+                <div className="s-presets">
+                  {PRESETS.map(p=>{
+                    const isActive = s.accentColor===p.a;
+                    return (
+                      <div key={p.n} className={`s-preset${isActive?' active':''}`} onClick={()=>applyPreset(p)}>
+                        <div className="s-preset-swatch" style={{background:p.a}}/>
+                        <span className="s-preset-name">{p.n}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="s-section">
+              <div className="s-section-title">Accent</div>
+              <div className="s-card">
+                <Row label="Accent color" desc="Used for highlights, focus rings, and today's column header.">
+                  <input type="color" value={s.accentColor} onChange={e=>set('accentColor',e.target.value)}
+                    style={{width:36,height:28,border:'1px solid var(--border-s)',borderRadius:4,cursor:'pointer',padding:2,background:'var(--surface-2)'}}/>
+                  <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--t4)'}}>{s.accentColor}</span>
+                </Row>
+              </div>
+            </div>
+          </>}
+
+          {activeSection==='colors' && <>
+            <div className="s-section">
+              <div className="s-section-title">Dark mode palette</div>
+              <div className="s-card">
+                <div style={{padding:'16px 16px 12px',display:'flex',gap:20,flexWrap:'wrap'}}>
+                  <ColorSwatch label="Background"  value={s.dark_bg}      onChange={v=>set('dark_bg',v)}/>
+                  <ColorSwatch label="Surface"     value={s.dark_surface} onChange={v=>set('dark_surface',v)}/>
+                  <ColorSwatch label="Sidebar"     value={s.dark_sidebar} onChange={v=>set('dark_sidebar',v)}/>
+                  <ColorSwatch label="Borders"     value={s.dark_border}  onChange={v=>set('dark_border',v)}/>
+                  <ColorSwatch label="Text"        value={s.dark_text}    onChange={v=>set('dark_text',v)}/>
+                </div>
+              </div>
+            </div>
+            <div className="s-section">
+              <div className="s-section-title">Light mode palette</div>
+              <div className="s-card">
+                <div style={{padding:'16px 16px 12px',display:'flex',gap:20,flexWrap:'wrap'}}>
+                  <ColorSwatch label="Background"  value={s.light_bg}      onChange={v=>set('light_bg',v)}/>
+                  <ColorSwatch label="Surface"     value={s.light_surface} onChange={v=>set('light_surface',v)}/>
+                  <ColorSwatch label="Sidebar"     value={s.light_sidebar} onChange={v=>set('light_sidebar',v)}/>
+                  <ColorSwatch label="Borders"     value={s.light_border}  onChange={v=>set('light_border',v)}/>
+                  <ColorSwatch label="Text"        value={s.light_text}    onChange={v=>set('light_text',v)}/>
+                </div>
+              </div>
+            </div>
+          </>}
+
+          {activeSection==='data' && <>
+            <div className="s-section">
+              <div className="s-section-title">Export</div>
+              <div className="s-card">
+                <Row label="Export all data" desc="Download a JSON file containing every tm_* key in localStorage (tasks, settings, taxonomy, delegation people, etc.). Read-only — your data stays in localStorage.">
+                  <button
+                    onClick={handleExport}
+                    style={{padding:'6px 14px',border:'1px solid var(--border-s)',borderRadius:3,background:'var(--accent)',color:'#fff',font:'500 12.5px var(--font)',cursor:'pointer'}}>
+                    Export JSON
+                  </button>
+                </Row>
+                {exportMsg && (
+                  <div style={{padding:'10px 16px',font:'12px var(--mono)',color:'var(--t3)',borderTop:'1px solid var(--border)'}}>
+                    {exportMsg}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>}
+
+          {activeSection==='layout' && <>
+            <div className="s-section">
+              <div className="s-section-title">Board</div>
+              <div className="s-card">
+                <Row label="Show weekends" desc="Display Saturday and Sunday columns in the week view.">
+                  <Toggle value={s.showWeekend} onChange={v=>set('showWeekend',v)}/>
+                </Row>
+                <Row label="Density" desc="Controls vertical spacing and card padding.">
+                  <Seg value={s.density||'normal'} options={['compact','normal','airy']} onChange={v=>set('density',v)}/>
+                </Row>
+                <Row label="Card radius" desc="Border radius applied to task cards.">
+                  <input type="range" className="s-slider" min={0} max={16} step={1}
+                    value={s.cardRadius} onChange={e=>set('cardRadius',Number(e.target.value))}/>
+                  <span className="s-val">{s.cardRadius}px</span>
+                </Row>
+              </div>
+            </div>
+          </>}
+
+        </div>
+      </div>
+
+      {/* Status bar */}
+      <div className="sbar">Settings are saved automatically and applied on next app load.</div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+<div id="root"></div>
+</body>
+</html>

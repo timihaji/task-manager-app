@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Power User Directions</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600&family=IBM+Plex+Mono:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0a0a0c; font-family: sans-serif; }
+kbd {
+  font-family: 'Geist Mono', monospace;
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  opacity: 0.6;
+  font-weight: 500;
+  line-height: 1;
+}
+</style>
+</head>
+<body>
+<script type="text/babel">
+const { useState } = React;
+
+/* sample data */
+const DAYS = ['MON','TUE','WED','THU','FRI'];
+const DATES = [27,28,29,30,1];
+const TODAY_IDX = 2;
+const TASKS = [
+  [
+    { title:'Review Q2 roadmap', tag:'work', priority:'p1', done:false, time:'45m', project:'PLAT' },
+    { title:'Morning run · 5k', tag:'health', priority:'p3', done:true, time:'30m', project:'LIFE' },
+  ],
+  [
+    { title:'1:1 — Sarah', tag:'mtg', priority:'p2', done:false, time:'30m', project:'TEAM' },
+    { title:'Deep work: API design', tag:'focus', priority:'p1', done:false, time:'2h', project:'PLAT' },
+    { title:'Review pull requests', tag:'code', priority:'p2', done:false, time:'45m', project:'PLAT' },
+  ],
+  [
+    { title:'Standup', tag:'mtg', priority:'p3', done:true, time:'15m', project:'TEAM' },
+    { title:'Write release notes v2.4', tag:'docs', priority:'p2', done:false, time:'30m', project:'PLAT' },
+    { title:'Reply: design review thread', tag:'comm', priority:'p2', done:false, time:'20m', project:'DSGN' },
+    { title:'Schedule Q3 planning', tag:'admin', priority:'p3', done:false, time:'10m', project:'TEAM' },
+  ],
+  [
+    { title:'Dentist', tag:'health', priority:'p1', done:false, time:'1h', project:'LIFE' },
+    { title:'Read: Shape Up ch.5', tag:'learn', priority:'p3', done:false, time:'40m', project:'LIFE' },
+  ],
+  [
+    { title:'Weekly review', tag:'focus', priority:'p2', done:false, time:'45m', project:'LIFE' },
+  ],
+];
+
+/* ═══════════════════════════════════════════════
+   DIRECTION E — "TERMINAL"
+   Monospace IDE aesthetic. Vim-like.
+   File-tree sidebar. Dense. Hotkey-driven.
+   Ascii box drawing. green-on-black-ish.
+   ═══════════════════════════════════════════════ */
+function DirectionE() {
+  const tagColor = {
+    work:'#7dd3fc', health:'#86efac', mtg:'#c4b5fd', focus:'#fbbf24',
+    code:'#f0abfc', docs:'#94a3b8', comm:'#fca5a5', admin:'#cbd5e1',
+    learn:'#5eead4',
+  };
+  const priColor = { p1:'#ef4444', p2:'#f59e0b', p3:'#475569' };
+  return (
+    <div style={{
+      width:'100%', height:'100%',
+      background:'#0a0d12',
+      fontFamily:"'JetBrains Mono', monospace",
+      display:'flex', flexDirection:'column',
+      overflow:'hidden',
+      color:'#cbd5e1', fontSize:11,
+    }}>
+      {/* tabs row */}
+      <div style={{
+        display:'flex', alignItems:'center',
+        background:'#06080c', borderBottom:'1px solid #1a1f2a',
+        height:28, flexShrink:0, fontSize:10,
+      }}>
+        <div style={{padding:'0 12px',display:'flex',gap:4,alignItems:'center',color:'#475569'}}>
+          <span style={{color:'#10b981'}}>●</span>
+          <span style={{color:'#94a3b8',marginLeft:2}}>tasks.md</span>
+        </div>
+        <div style={{padding:'0 10px',color:'#334155',borderLeft:'1px solid #1a1f2a',height:'100%',display:'flex',alignItems:'center'}}>backlog.md</div>
+        <div style={{padding:'0 10px',color:'#334155',borderLeft:'1px solid #1a1f2a',height:'100%',display:'flex',alignItems:'center'}}>archive/</div>
+        <div style={{flex:1}}/>
+        <div style={{padding:'0 10px',color:'#475569'}}>:wq</div>
+      </div>
+
+      <div style={{display:'flex',flex:1,overflow:'hidden'}}>
+        {/* sidebar */}
+        <div style={{
+          width:140,minWidth:140,
+          background:'#070a0e',
+          borderRight:'1px solid #1a1f2a',
+          padding:'10px 8px', fontSize:10,
+          color:'#475569',
+        }}>
+          <div style={{color:'#334155',marginBottom:6,fontSize:9,letterSpacing:'0.1em'}}>EXPLORER</div>
+          <div style={{color:'#94a3b8',marginBottom:2}}>▾ week-17/</div>
+          <div style={{paddingLeft:10,color:'#10b981'}}>● mon-27.md</div>
+          <div style={{paddingLeft:10}}>○ tue-28.md</div>
+          <div style={{paddingLeft:10,color:'#10b981',background:'#0d1626'}}>● wed-29.md</div>
+          <div style={{paddingLeft:10}}>○ thu-30.md</div>
+          <div style={{paddingLeft:10}}>○ fri-01.md</div>
+          <div style={{color:'#334155',marginTop:10,marginBottom:6,fontSize:9,letterSpacing:'0.1em'}}>FILTERS</div>
+          <div style={{color:'#7dd3fc'}}>#work</div>
+          <div style={{color:'#fbbf24'}}>#focus</div>
+          <div style={{color:'#c4b5fd'}}>#mtg</div>
+          <div style={{color:'#86efac'}}>#health</div>
+          <div style={{color:'#334155',marginTop:10,marginBottom:6,fontSize:9,letterSpacing:'0.1em'}}>STATS</div>
+          <div>tasks: 12</div>
+          <div>done:  2</div>
+          <div>focus: 4h45m</div>
+        </div>
+
+        {/* board */}
+        <div style={{display:'flex',flex:1,overflow:'hidden'}}>
+          {DAYS.map((day,i) => {
+            const isToday = i === TODAY_IDX;
+            return (
+              <div key={i} style={{
+                flex:1, borderRight:'1px solid #1a1f2a',
+                display:'flex',flexDirection:'column',
+                background: isToday ? '#0c1018' : 'transparent',
+              }}>
+                <div style={{
+                  padding:'8px 10px 6px',
+                  borderBottom:'1px solid #1a1f2a',
+                  background:'#06080c',
+                  fontSize:10,
+                  color: isToday ? '#10b981' : '#475569',
+                }}>
+                  <span style={{color:isToday?'#10b981':'#334155'}}>$ </span>
+                  <span>{day}</span>
+                  <span style={{color:'#334155'}}> · </span>
+                  <span style={{color: isToday ? '#fff' : '#64748b'}}>{DATES[i]}</span>
+                  {isToday && <span style={{color:'#10b981',marginLeft:4,fontSize:8}}>HEAD</span>}
+                </div>
+                <div style={{padding:'4px 0', flex:1, overflowY:'auto'}}>
+                  {TASKS[i].map((t,j) => (
+                    <div key={j} style={{
+                      padding:'3px 10px',
+                      borderLeft: j === 0 && isToday ? '2px solid #10b981' : '2px solid transparent',
+                      background: j === 0 && isToday ? '#0d1626' : 'transparent',
+                      fontSize:10.5, lineHeight:1.4,
+                      cursor:'pointer',
+                    }}>
+                      <div style={{display:'flex',gap:5}}>
+                        <span style={{color: t.done ? '#10b981' : '#334155'}}>{t.done ? '[x]' : '[ ]'}</span>
+                        <span style={{color: priColor[t.priority]}}>{t.priority}</span>
+                        <span style={{
+                          color: t.done ? '#334155' : '#cbd5e1',
+                          textDecoration: t.done ? 'line-through' : 'none',
+                          flex:1,
+                        }}>{t.title}</span>
+                      </div>
+                      <div style={{paddingLeft:30,fontSize:9,color:'#475569',display:'flex',gap:6}}>
+                        <span style={{color:tagColor[t.tag]}}>#{t.tag}</span>
+                        <span>·</span>
+                        <span>{t.project}</span>
+                        <span>·</span>
+                        <span>{t.time}</span>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{padding:'4px 10px',color:'#334155',fontSize:10}}>
+                    <span style={{color:'#10b981'}}>+</span> new task
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* status bar */}
+      <div style={{
+        height:22, background:'#06080c',
+        borderTop:'1px solid #1a1f2a',
+        display:'flex',alignItems:'center',gap:14,
+        padding:'0 12px', fontSize:9.5, color:'#475569',
+        flexShrink:0,
+      }}>
+        <span style={{color:'#10b981'}}>● NORMAL</span>
+        <span>wed-29.md</span>
+        <span>L 3, C 12</span>
+        <div style={{flex:1}}/>
+        <span><kbd>j/k</kbd> nav</span>
+        <span><kbd>x</kbd> toggle</span>
+        <span><kbd>m</kbd> move</span>
+        <span><kbd>?</kbd> help</span>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   DIRECTION F — "LINEAR"
+   Linear/Superhuman-inspired. Sleek dark.
+   Hotkey hints inline. Status indicators.
+   Sidebar with workspace nav. Color-coded labels.
+   ═══════════════════════════════════════════════ */
+function DirectionF() {
+  const tagPalette = {
+    work: { bg:'rgba(99,102,241,0.18)', fg:'#a5b4fc' },
+    health:{ bg:'rgba(34,197,94,0.18)', fg:'#86efac' },
+    mtg:  { bg:'rgba(168,85,247,0.18)', fg:'#d8b4fe' },
+    focus:{ bg:'rgba(245,158,11,0.18)', fg:'#fcd34d' },
+    code: { bg:'rgba(236,72,153,0.18)', fg:'#f9a8d4' },
+    docs: { bg:'rgba(148,163,184,0.18)', fg:'#cbd5e1' },
+    comm: { bg:'rgba(239,68,68,0.18)', fg:'#fca5a5' },
+    admin:{ bg:'rgba(100,116,139,0.18)', fg:'#94a3b8' },
+    learn:{ bg:'rgba(20,184,166,0.18)', fg:'#5eead4' },
+  };
+  const PriIcon = ({p}) => {
+    const colors = { p1:'#ef4444', p2:'#f59e0b', p3:'#64748b' };
+    const heights = { p1:[6,8,10], p2:[4,6,8], p3:[3,4,5] };
+    const h = heights[p];
+    return (
+      <div style={{display:'flex',alignItems:'flex-end',gap:1.5,height:10}}>
+        {h.map((bar,i) => (
+          <div key={i} style={{width:2,height:bar,background:colors[p],borderRadius:1,opacity: p === 'p3' ? 0.5 : 0.85}}/>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{
+      width:'100%', height:'100%',
+      background:'#0e0f13',
+      fontFamily:"'Geist', sans-serif",
+      display:'flex', overflow:'hidden',
+      color:'#d4d4d8',
+    }}>
+      {/* sidebar */}
+      <div style={{
+        width:170, minWidth:170,
+        background:'#0a0b0e',
+        borderRight:'1px solid #1c1d24',
+        display:'flex',flexDirection:'column',
+        padding:'10px 0',fontSize:11.5,
+      }}>
+        <div style={{padding:'0 12px',display:'flex',alignItems:'center',gap:7,marginBottom:14}}>
+          <div style={{
+            width:18,height:18,borderRadius:5,
+            background:'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            display:'flex',alignItems:'center',justifyContent:'center',
+            fontSize:10,color:'#fff',fontWeight:700,
+          }}>K</div>
+          <span style={{fontWeight:600,fontSize:13,color:'#fafafa'}}>kanban</span>
+          <span style={{marginLeft:'auto',fontSize:9,color:'#52525b',background:'#1c1d24',padding:'1px 4px',borderRadius:3}}>⌘K</span>
+        </div>
+
+        <div style={{padding:'0 8px'}}>
+          <div style={{
+            padding:'5px 8px',borderRadius:5,
+            background:'#1c1d24',color:'#fafafa',
+            display:'flex',alignItems:'center',gap:7,marginBottom:1,
+          }}>
+            <span style={{fontSize:10}}>◐</span> This week
+            <span style={{marginLeft:'auto',fontSize:9,color:'#71717a'}}>10</span>
+          </div>
+          <div style={{padding:'5px 8px',color:'#a1a1aa',display:'flex',gap:7,alignItems:'center'}}>
+            <span style={{fontSize:10}}>◇</span> Inbox
+            <span style={{marginLeft:'auto',fontSize:9,color:'#52525b'}}>4</span>
+          </div>
+          <div style={{padding:'5px 8px',color:'#a1a1aa',display:'flex',gap:7,alignItems:'center'}}>
+            <span style={{fontSize:10}}>★</span> Priorities
+          </div>
+          <div style={{padding:'5px 8px',color:'#a1a1aa',display:'flex',gap:7,alignItems:'center'}}>
+            <span style={{fontSize:10}}>⏱</span> Today's focus
+          </div>
+        </div>
+
+        <div style={{padding:'12px 12px 4px',fontSize:9,color:'#52525b',letterSpacing:'0.08em',textTransform:'uppercase'}}>
+          Projects
+        </div>
+        <div style={{padding:'0 8px'}}>
+          {[
+            {n:'PLAT', c:'#a5b4fc', count:5},
+            {n:'TEAM', c:'#fcd34d', count:3},
+            {n:'DSGN', c:'#f9a8d4', count:1},
+            {n:'LIFE', c:'#86efac', count:4},
+          ].map(p => (
+            <div key={p.n} style={{padding:'4px 8px',color:'#a1a1aa',display:'flex',gap:7,alignItems:'center'}}>
+              <span style={{width:7,height:7,borderRadius:2,background:p.c}}/>
+              <span style={{fontSize:11}}>{p.n}</span>
+              <span style={{marginLeft:'auto',fontSize:9,color:'#52525b'}}>{p.count}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{flex:1}}/>
+        <div style={{
+          margin:'0 8px 4px', padding:'7px 8px',
+          background:'#1c1d24',borderRadius:5,
+          fontSize:10,color:'#71717a',
+          display:'flex',alignItems:'center',gap:5,
+        }}>
+          <span style={{
+            width:5,height:5,borderRadius:'50%',
+            background:'#10b981',boxShadow:'0 0 4px #10b981',
+          }}/>
+          <span>Synced · 2s ago</span>
+        </div>
+      </div>
+
+      {/* main */}
+      <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+        {/* top bar */}
+        <div style={{
+          display:'flex',alignItems:'center',gap:8,
+          padding:'0 16px',height:42,
+          borderBottom:'1px solid #1c1d24',flexShrink:0,
+        }}>
+          <span style={{fontSize:11,color:'#71717a',display:'flex',alignItems:'center',gap:5}}>
+            <span style={{color:'#a1a1aa'}}>This week</span>
+            <span>›</span>
+            <span style={{color:'#fafafa',fontWeight:500}}>Wed Apr 29</span>
+          </span>
+          <div style={{flex:1}}/>
+          <div style={{
+            display:'flex',alignItems:'center',gap:6,
+            padding:'4px 10px',borderRadius:5,
+            background:'#1c1d24',fontSize:11,color:'#a1a1aa',
+            border:'1px solid #27272f',
+          }}>
+            <span style={{fontSize:10}}>⌕</span>
+            <span>Search or run command</span>
+            <span style={{marginLeft:8,fontSize:9,color:'#52525b',background:'#0a0b0e',padding:'1px 4px',borderRadius:3}}>⌘K</span>
+          </div>
+          <div style={{
+            padding:'4px 10px',borderRadius:5,
+            background:'#6366f1',color:'#fff',fontSize:11,fontWeight:500,
+            display:'flex',alignItems:'center',gap:6,
+          }}>
+            New task
+            <span style={{fontSize:9,opacity:0.7,background:'rgba(0,0,0,0.2)',padding:'1px 4px',borderRadius:2}}>C</span>
+          </div>
+        </div>
+
+        {/* columns */}
+        <div style={{display:'flex',flex:1,overflow:'hidden'}}>
+          {DAYS.map((day,i) => {
+            const isToday = i === TODAY_IDX;
+            const total = TASKS[i].length;
+            const done = TASKS[i].filter(t => t.done).length;
+            return (
+              <div key={i} style={{
+                flex:1,minWidth:175,
+                borderRight:'1px solid #1c1d24',
+                display:'flex',flexDirection:'column',
+                background: isToday ? '#11131a' : 'transparent',
+              }}>
+                <div style={{
+                  padding:'10px 12px 9px',
+                  borderBottom:'1px solid #1c1d24',
+                  display:'flex',alignItems:'center',gap:6,
+                  background: isToday ? '#11131a' : 'transparent',
+                }}>
+                  <span style={{
+                    fontSize:10.5,fontWeight:600,
+                    color: isToday ? '#fafafa' : '#71717a',
+                    letterSpacing:'0.04em',
+                  }}>{day}</span>
+                  <span style={{
+                    fontSize:10.5,
+                    color: isToday ? '#a5b4fc' : '#52525b',
+                    fontWeight: isToday ? 500 : 400,
+                  }}>{DATES[i]}</span>
+                  {isToday && (
+                    <span style={{
+                      fontSize:8.5,fontWeight:600,
+                      color:'#a5b4fc',
+                      background:'rgba(99,102,241,0.15)',
+                      padding:'1.5px 5px',borderRadius:3,
+                      letterSpacing:'0.04em',
+                    }}>TODAY</span>
+                  )}
+                  <span style={{marginLeft:'auto',fontSize:9.5,color:'#52525b'}}>
+                    {done}/{total}
+                  </span>
+                </div>
+                <div style={{padding:'6px 8px',display:'flex',flexDirection:'column',gap:4,flex:1,overflowY:'auto'}}>
+                  {TASKS[i].map((t,j) => {
+                    const tp = tagPalette[t.tag] || tagPalette.admin;
+                    return (
+                      <div key={j} style={{
+                        background: t.done ? 'transparent' : '#16171d',
+                        border:'1px solid',
+                        borderColor: t.done ? '#1c1d24' : '#22232b',
+                        borderRadius:6, padding:'7px 9px',
+                      }}>
+                        <div style={{display:'flex',alignItems:'flex-start',gap:6,marginBottom:5}}>
+                          <PriIcon p={t.priority}/>
+                          <span style={{
+                            fontSize:11.5,lineHeight:1.35,flex:1,
+                            color: t.done ? '#52525b' : '#e4e4e7',
+                            textDecoration: t.done ? 'line-through' : 'none',
+                          }}>{t.title}</span>
+                          {t.done && <span style={{color:'#10b981',fontSize:10}}>✓</span>}
+                        </div>
+                        <div style={{display:'flex',alignItems:'center',gap:4}}>
+                          <span style={{
+                            fontSize:9.5,fontWeight:500,
+                            padding:'1.5px 6px',borderRadius:3,
+                            background: tp.bg, color: tp.fg,
+                          }}>{t.tag}</span>
+                          <span style={{fontSize:9.5,color:'#52525b'}}>{t.project}</span>
+                          <span style={{marginLeft:'auto',fontSize:9.5,color:'#71717a'}}>{t.time}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div style={{
+                    padding:'5px 9px',fontSize:10.5,color:'#52525b',
+                    display:'flex',alignItems:'center',gap:5,cursor:'pointer',
+                  }}>
+                    <span>+</span>
+                    <span>Add task</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* status bar */}
+        <div style={{
+          height:24,borderTop:'1px solid #1c1d24',
+          display:'flex',alignItems:'center',gap:12,
+          padding:'0 14px',fontSize:10,color:'#71717a',flexShrink:0,
+        }}>
+          <span>10 tasks · 2 done · 4h45m focus</span>
+          <div style={{flex:1}}/>
+          <span><kbd>N</kbd> new</span>
+          <span><kbd>↑↓</kbd> nav</span>
+          <span><kbd>⏎</kbd> open</span>
+          <span><kbd>X</kbd> done</span>
+          <span><kbd>⌘K</kbd> commands</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   DIRECTION G — "TIMELINE"
+   Hour-grid view. Each day a column, each row an hour.
+   Tasks placed at scheduled times. Calendar/spreadsheet hybrid.
+   Power-user: see your week at a glance with time blocks.
+   ═══════════════════════════════════════════════ */
+function DirectionG() {
+  const HOURS = ['9','10','11','12','1','2','3','4','5'];
+  // task blocks: {day, startHour (offset), durationHours, ...}
+  const blocks = [
+    { day:0, start:0, dur:1, title:'Roadmap review', tag:'work', color:'#6366f1' },
+    { day:0, start:2, dur:0.5, title:'Run', tag:'health', color:'#22c55e', done:true },
+    { day:1, start:0, dur:0.5, title:'1:1 Sarah', tag:'mtg', color:'#a855f7' },
+    { day:1, start:1, dur:2, title:'Deep work: API', tag:'focus', color:'#f59e0b' },
+    { day:1, start:4, dur:1, title:'Review PRs', tag:'code', color:'#ec4899' },
+    { day:2, start:0, dur:0.25, title:'Standup', tag:'mtg', color:'#a855f7', done:true },
+    { day:2, start:1, dur:0.5, title:'Release notes', tag:'docs', color:'#94a3b8' },
+    { day:2, start:2, dur:1.5, title:'Design review', tag:'comm', color:'#ef4444' },
+    { day:2, start:4, dur:0.5, title:'Q3 plan', tag:'admin', color:'#64748b' },
+    { day:3, start:1, dur:1, title:'Dentist', tag:'health', color:'#22c55e' },
+    { day:3, start:3, dur:0.75, title:'Read Shape Up', tag:'learn', color:'#14b8a6' },
+    { day:4, start:0, dur:1, title:'Weekly review', tag:'focus', color:'#f59e0b' },
+  ];
+  const HOUR_H = 36;
+  return (
+    <div style={{
+      width:'100%',height:'100%',
+      background:'#fafaf9',
+      fontFamily:"'Geist', sans-serif",
+      display:'flex',flexDirection:'column',
+      overflow:'hidden',color:'#1c1917',
+    }}>
+      {/* topbar */}
+      <div style={{
+        height:38,borderBottom:'1px solid #e7e5e4',
+        display:'flex',alignItems:'center',gap:8,
+        padding:'0 14px',background:'#fff',flexShrink:0,
+      }}>
+        <span style={{
+          fontFamily:"'Geist Mono', monospace",
+          fontSize:11,fontWeight:600,color:'#1c1917',letterSpacing:'-0.2px',
+        }}>FLOW<span style={{color:'#dc2626'}}>·</span></span>
+        <span style={{fontSize:11,color:'#78716c'}}>Apr 27 — May 1</span>
+        <div style={{flex:1}}/>
+        <div style={{display:'flex',gap:1,background:'#f5f5f4',padding:2,borderRadius:5,fontSize:10}}>
+          {['Day','Week','Month'].map(v => (
+            <div key={v} style={{
+              padding:'3px 9px',borderRadius:3,
+              background: v === 'Week' ? '#fff' : 'transparent',
+              fontWeight: v === 'Week' ? 600 : 400,
+              color: v === 'Week' ? '#1c1917' : '#78716c',
+              boxShadow: v === 'Week' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+            }}>{v}</div>
+          ))}
+        </div>
+        <span style={{fontSize:9,color:'#a8a29e',padding:'2px 5px',borderRadius:3,background:'#f5f5f4',fontFamily:"'Geist Mono',monospace"}}>⌘ /</span>
+      </div>
+
+      {/* day header row */}
+      <div style={{display:'flex',borderBottom:'1px solid #e7e5e4',background:'#fff',flexShrink:0}}>
+        <div style={{width:42,minWidth:42,borderRight:'1px solid #e7e5e4'}}/>
+        {DAYS.map((day,i) => {
+          const isToday = i === TODAY_IDX;
+          const total = TASKS[i].length;
+          const done = TASKS[i].filter(t => t.done).length;
+          return (
+            <div key={i} style={{
+              flex:1,padding:'6px 10px',
+              borderRight:'1px solid #e7e5e4',
+              background: isToday ? '#fef2f2' : '#fff',
+            }}>
+              <div style={{display:'flex',alignItems:'baseline',gap:6}}>
+                <span style={{
+                  fontSize:10,fontWeight:600,letterSpacing:'0.06em',
+                  color: isToday ? '#dc2626' : '#a8a29e',
+                }}>{day}</span>
+                <span style={{
+                  fontSize:14,fontWeight:600,
+                  color: isToday ? '#dc2626' : '#1c1917',
+                }}>{DATES[i]}</span>
+                <span style={{
+                  marginLeft:'auto',fontSize:9,
+                  color:'#a8a29e',
+                  fontFamily:"'Geist Mono',monospace",
+                }}>{done}/{total}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* timeline grid */}
+      <div style={{flex:1,overflowY:'auto',display:'flex',background:'#fff',position:'relative'}}>
+        {/* hours column */}
+        <div style={{width:42,minWidth:42,borderRight:'1px solid #e7e5e4',position:'relative'}}>
+          {HOURS.map((h,i) => (
+            <div key={i} style={{
+              height:HOUR_H,
+              padding:'2px 6px',
+              fontSize:9,color:'#a8a29e',
+              fontFamily:"'Geist Mono', monospace",
+              borderTop: i === 0 ? 'none' : '1px solid #f5f5f4',
+              textAlign:'right',
+            }}>{h}</div>
+          ))}
+        </div>
+
+        {/* day columns with blocks */}
+        {DAYS.map((day,di) => {
+          const isToday = di === TODAY_IDX;
+          return (
+            <div key={di} style={{
+              flex:1,position:'relative',
+              borderRight:'1px solid #e7e5e4',
+              background: isToday ? 'rgba(254,242,242,0.3)' : 'transparent',
+            }}>
+              {/* hour grid lines */}
+              {HOURS.map((_,i) => (
+                <div key={i} style={{
+                  height:HOUR_H,
+                  borderTop: i === 0 ? 'none' : '1px solid #f5f5f4',
+                }}/>
+              ))}
+              {/* "now" indicator on today */}
+              {isToday && (
+                <div style={{
+                  position:'absolute',
+                  top: HOUR_H * 2.4, left:0, right:0, height:1,
+                  background:'#dc2626', zIndex:2,
+                }}>
+                  <div style={{
+                    position:'absolute',left:-3,top:-3,
+                    width:7,height:7,borderRadius:'50%',
+                    background:'#dc2626',
+                  }}/>
+                </div>
+              )}
+              {/* task blocks */}
+              {blocks.filter(b => b.day === di).map((b,j) => (
+                <div key={j} style={{
+                  position:'absolute',
+                  top: b.start * HOUR_H + 2,
+                  left:3, right:3,
+                  height: b.dur * HOUR_H - 3,
+                  background: b.done ? '#fff' : `${b.color}15`,
+                  border: `1px solid ${b.done ? '#e7e5e4' : b.color}40`,
+                  borderLeft: `3px solid ${b.color}`,
+                  borderRadius:4,
+                  padding:'4px 7px',
+                  fontSize:10,lineHeight:1.25,
+                  color: b.done ? '#a8a29e' : '#1c1917',
+                  textDecoration: b.done ? 'line-through' : 'none',
+                  overflow:'hidden',
+                }}>
+                  <div style={{fontWeight:500,fontSize:10.5,
+                    whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',
+                  }}>{b.title}</div>
+                  {b.dur >= 0.5 && (
+                    <div style={{
+                      fontSize:8.5,color: b.done ? '#a8a29e' : b.color,
+                      fontWeight:500,marginTop:1,
+                      fontFamily:"'Geist Mono',monospace",
+                    }}>{b.tag}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* status bar */}
+      <div style={{
+        height:22,borderTop:'1px solid #e7e5e4',
+        display:'flex',alignItems:'center',gap:12,
+        padding:'0 12px',fontSize:10,color:'#a8a29e',
+        background:'#fff',flexShrink:0,
+        fontFamily:"'Geist Mono',monospace",
+      }}>
+        <span style={{color:'#dc2626'}}>● 11:24</span>
+        <span>scheduled: 9h25m</span>
+        <span>free: 7h35m</span>
+        <div style={{flex:1}}/>
+        <span><kbd>D</kbd> drag</span>
+        <span><kbd>R</kbd> resize</span>
+        <span><kbd>⌘ ↵</kbd> schedule</span>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   DIRECTION H — "COMMAND"
+   Inline-tag syntax (#work @sarah !p1 ~30m).
+   Sharp typography. Mono everywhere.
+   Floating command bar bottom. Wireframe-y but precise.
+   For people who type their tasks like commit messages.
+   ═══════════════════════════════════════════════ */
+function DirectionH() {
+  return (
+    <div style={{
+      width:'100%',height:'100%',
+      background:'#111',
+      fontFamily:"'IBM Plex Mono', monospace",
+      color:'#e5e5e5',fontSize:11,
+      display:'flex',flexDirection:'column',
+      overflow:'hidden',
+    }}>
+      {/* top bar */}
+      <div style={{
+        height:36,borderBottom:'1px solid #2a2a2a',
+        display:'flex',alignItems:'center',gap:12,
+        padding:'0 14px',flexShrink:0,
+        fontSize:11,
+      }}>
+        <span style={{color:'#fafafa',fontWeight:600,letterSpacing:'0.05em'}}>~/tasks</span>
+        <span style={{color:'#525252'}}>·</span>
+        <span style={{color:'#a3a3a3'}}>week 17</span>
+        <span style={{color:'#525252'}}>·</span>
+        <span style={{color:'#22c55e'}}>● live</span>
+        <div style={{flex:1}}/>
+        <span style={{color:'#525252'}}>filter:</span>
+        <span style={{color:'#fbbf24'}}>!p1,p2</span>
+        <span style={{color:'#525252'}}>· sort:</span>
+        <span style={{color:'#a5b4fc'}}>day,priority</span>
+      </div>
+
+      {/* columns */}
+      <div style={{display:'flex',flex:1,overflow:'hidden'}}>
+        {DAYS.map((day,i) => {
+          const isToday = i === TODAY_IDX;
+          return (
+            <div key={i} style={{
+              flex:1,
+              borderRight:'1px solid #1f1f1f',
+              display:'flex',flexDirection:'column',
+              background: isToday ? '#191919' : 'transparent',
+            }}>
+              <div style={{
+                padding:'10px 12px 8px',
+                fontSize:10.5,
+                borderBottom:'1px solid #1f1f1f',
+                color: isToday ? '#fafafa' : '#525252',
+              }}>
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  <span style={{fontWeight:600,letterSpacing:'0.05em'}}>{day}</span>
+                  <span style={{color:'#404040'}}>{String(DATES[i]).padStart(2,'0')}</span>
+                  {isToday && <span style={{color:'#22c55e',fontSize:9,marginLeft:'auto'}}>← now</span>}
+                </div>
+              </div>
+              <div style={{padding:'6px 0',flex:1,overflowY:'auto'}}>
+                {TASKS[i].map((t,j) => {
+                  const priColor = t.priority === 'p1' ? '#ef4444' : t.priority === 'p2' ? '#fbbf24' : '#525252';
+                  return (
+                    <div key={j} style={{
+                      padding:'4px 12px',
+                      fontSize:10.5,lineHeight:1.5,
+                      borderLeft: '2px solid transparent',
+                      borderLeftColor: t.done ? 'transparent' : isToday && j === 0 ? '#22c55e' : 'transparent',
+                      background: isToday && j === 0 && !t.done ? '#1f1f1f' : 'transparent',
+                    }}>
+                      <div style={{display:'flex',gap:5,alignItems:'flex-start'}}>
+                        <span style={{color: t.done ? '#22c55e' : '#404040',marginTop:1}}>
+                          {t.done ? '✓' : '◯'}
+                        </span>
+                        <div style={{flex:1}}>
+                          <div style={{
+                            color: t.done ? '#525252' : '#e5e5e5',
+                            textDecoration: t.done ? 'line-through' : 'none',
+                          }}>{t.title}</div>
+                          <div style={{fontSize:9.5,marginTop:1,display:'flex',gap:6,flexWrap:'wrap'}}>
+                            <span style={{color:'#a5b4fc'}}>#{t.tag}</span>
+                            <span style={{color:priColor}}>!{t.priority}</span>
+                            <span style={{color:'#71717a'}}>~{t.time}</span>
+                            <span style={{color:'#525252'}}>@{t.project.toLowerCase()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* prompt */}
+                <div style={{padding:'4px 12px',fontSize:10.5,color:'#404040',marginTop:4}}>
+                  <span style={{color:'#22c55e'}}>{'›'}</span>
+                  <span style={{marginLeft:6,color:'#525252',borderLeft:'1px solid #525252',paddingLeft:0}}> </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* command bar */}
+      <div style={{
+        margin:'10px 14px 12px',
+        background:'#1a1a1a',
+        border:'1px solid #2a2a2a',
+        borderRadius:6,
+        padding:'8px 12px',
+        display:'flex',alignItems:'center',gap:8,
+        fontSize:11,flexShrink:0,
+      }}>
+        <span style={{color:'#22c55e',fontWeight:600}}>›</span>
+        <span style={{color:'#a3a3a3'}}>add</span>
+        <span style={{color:'#fafafa'}}>"Refactor scheduler"</span>
+        <span style={{color:'#a5b4fc'}}>#focus</span>
+        <span style={{color:'#ef4444'}}>!p1</span>
+        <span style={{color:'#71717a'}}>~2h</span>
+        <span style={{color:'#525252'}}>@plat</span>
+        <span style={{color:'#fbbf24'}}>thu</span>
+        <span style={{
+          width:7,height:13,background:'#fafafa',
+          marginLeft:2,
+          animation:'blink 1s steps(2) infinite',
+        }}/>
+        <div style={{flex:1}}/>
+        <span style={{fontSize:9,color:'#525252'}}>
+          <kbd>↹</kbd> autocomplete · <kbd>⏎</kbd> commit · <kbd>esc</kbd> close
+        </span>
+      </div>
+      <style>{`@keyframes blink { 50% { opacity: 0; } }`}</style>
+    </div>
+  );
+}
+
+/* ── App ── */
+function App() {
+  return (
+    <DesignCanvas title="Power-user directions">
+      <DCSection id="power" title="Built for keyboard-first humans">
+        <DCArtboard id="e" label="E — Terminal  ·  Vim-like, file-tree, hotkeys" width={760} height={460}>
+          <DirectionE />
+        </DCArtboard>
+        <DCArtboard id="f" label="F — Linear  ·  Sleek dark, command palette" width={760} height={460}>
+          <DirectionF />
+        </DCArtboard>
+        <DCArtboard id="g" label="G — Timeline  ·  Hour-grid, time blocking" width={760} height={460}>
+          <DirectionG />
+        </DCArtboard>
+        <DCArtboard id="h" label="H — Command  ·  Inline syntax, mono" width={760} height={460}>
+          <DirectionH />
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<div id="root" style="width:100vw;height:100vh;"></div>
+</body>
+</html>

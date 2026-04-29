@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Design Directions</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600;700&family=Libre+Baskerville:ital@0;1&family=Sora:wght@300;400;500;600&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0e0e0f; font-family: sans-serif; }
+</style>
+</head>
+<body>
+<script type="text/babel">
+const { useState } = React;
+
+/* ─── shared sample data ─── */
+const DAYS = ['Mon','Tue','Wed','Thu','Fri'];
+const DATES = [27,28,29,30,1];
+const TODAY = 2; // Wed = index 2
+
+const TASKS = [
+  [
+    { title:'Review Q2 roadmap', tag:'Work', color:'#6366f1', done:false, time:'45m' },
+    { title:'Morning run', tag:'Health', color:'#22c55e', done:true, time:'30m' },
+  ],
+  [
+    { title:'1:1 with Sarah', tag:'Meeting', color:'#a855f7', done:false, time:'30m' },
+    { title:'Deep work: API', tag:'Focus', color:'#f59e0b', done:false, time:'2h' },
+  ],
+  [
+    { title:'Team standup', tag:'Meeting', color:'#a855f7', done:false, time:'15m' },
+    { title:'Write release notes', tag:'Work', color:'#6366f1', done:false, time:'30m' },
+    { title:'Review PRs', tag:'Focus', color:'#f59e0b', done:true, time:'1h' },
+  ],
+  [
+    { title:'Dentist appt.', tag:'Health', color:'#22c55e', done:false, time:'1h' },
+  ],
+  [
+    { title:'Weekly review', tag:'Focus', color:'#f59e0b', done:false, time:'45m' },
+    { title:'Groceries', tag:'Personal', color:'#ec4899', done:false, time:'30m' },
+  ],
+];
+
+/* ═══════════════════════════════════════════════
+   DIRECTION A — "SLATE"
+   Dark, newspaper-column layout. Dense, editorial.
+   Strong typographic hierarchy. Cool grays + electric blue accent.
+   ═══════════════════════════════════════════════ */
+function DirectionA() {
+  return (
+    <div style={{
+      width:'100%', height:'100%',
+      background:'#0f1117',
+      fontFamily:"'Space Grotesk', sans-serif",
+      display:'flex', flexDirection:'column',
+      overflow:'hidden',
+    }}>
+      {/* topbar */}
+      <div style={{
+        display:'flex', alignItems:'center', gap:12,
+        padding:'0 20px', height:44,
+        borderBottom:'1px solid #1e2130',
+        background:'#0a0b0f',
+        flexShrink:0,
+      }}>
+        <span style={{fontWeight:700, fontSize:14, color:'#fff', letterSpacing:'-0.3px'}}>SLATE</span>
+        <span style={{fontSize:11, color:'#444', marginLeft:4, fontWeight:500, letterSpacing:'0.06em', textTransform:'uppercase'}}>Apr 27 – May 1</span>
+        <div style={{flex:1}}/>
+        <div style={{width:24,height:24,borderRadius:4,background:'#1a8cff',display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <span style={{color:'#fff',fontSize:14,lineHeight:1,marginTop:-1}}>+</span>
+        </div>
+      </div>
+      {/* columns */}
+      <div style={{display:'flex',flex:1,overflow:'hidden'}}>
+        {DAYS.map((day, i) => {
+          const isToday = i === TODAY;
+          return (
+            <div key={i} style={{
+              flex:1, borderRight:'1px solid #1e2130',
+              display:'flex',flexDirection:'column',
+              background: isToday ? '#0d1420' : 'transparent',
+            }}>
+              <div style={{
+                padding:'10px 12px 8px',
+                borderBottom:'1px solid #1e2130',
+                background: isToday ? '#101828' : '#0a0b0f',
+              }}>
+                <div style={{
+                  fontSize:10, fontWeight:600, letterSpacing:'0.1em',
+                  textTransform:'uppercase',
+                  color: isToday ? '#1a8cff' : '#3a3e50',
+                  marginBottom:2,
+                }}>{day}</div>
+                <div style={{
+                  fontSize:22, fontWeight:700, lineHeight:1,
+                  color: isToday ? '#fff' : '#2e3244',
+                  letterSpacing:'-0.5px',
+                }}>{DATES[i]}</div>
+              </div>
+              <div style={{padding:'8px 8px', display:'flex', flexDirection:'column', gap:5, flex:1, overflowY:'auto'}}>
+                {TASKS[i].map((t, j) => (
+                  <div key={j} style={{
+                    background: t.done ? 'transparent' : '#141620',
+                    border:'1px solid',
+                    borderColor: t.done ? '#1a1d28' : isToday ? '#1e3260' : '#1e2130',
+                    borderRadius:5,
+                    padding:'8px 9px',
+                  }}>
+                    <div style={{display:'flex',alignItems:'flex-start',gap:6,marginBottom:4}}>
+                      <div style={{
+                        width:13,height:13,borderRadius:'50%',
+                        border:`1.5px solid ${t.done ? '#1a8cff' : '#2a2e42'}`,
+                        background: t.done ? '#1a8cff' : 'transparent',
+                        flexShrink:0, marginTop:1,
+                      }}/>
+                      <span style={{
+                        fontSize:11.5, lineHeight:1.35,
+                        color: t.done ? '#333' : '#c8cce0',
+                        textDecoration: t.done ? 'line-through' : 'none',
+                        flex:1,
+                      }}>{t.title}</span>
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:4,paddingLeft:19}}>
+                      <span style={{
+                        fontSize:9, fontWeight:600, textTransform:'uppercase',
+                        letterSpacing:'0.05em', color: t.color, opacity:0.85,
+                      }}>{t.tag}</span>
+                      {t.time && <span style={{fontSize:9, color:'#2e3244', marginLeft:'auto'}}>{t.time}</span>}
+                    </div>
+                  </div>
+                ))}
+                <div style={{
+                  marginTop:2,padding:'6px 8px',
+                  border:'1px dashed #1e2130',borderRadius:5,
+                  fontSize:10,color:'#2a2e42',cursor:'pointer',
+                  display:'flex',alignItems:'center',gap:4,
+                }}>
+                  <span style={{fontSize:13,lineHeight:1}}>+</span> Add
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   DIRECTION B — "LINEN"
+   Light, airy, warm. Japanese stationery vibes.
+   Very minimal chrome. Serif dates. Lots of whitespace.
+   ═══════════════════════════════════════════════ */
+function DirectionB() {
+  return (
+    <div style={{
+      width:'100%', height:'100%',
+      background:'#faf8f4',
+      fontFamily:"'Geist', sans-serif",
+      display:'flex', flexDirection:'column',
+      overflow:'hidden',
+    }}>
+      {/* topbar */}
+      <div style={{
+        display:'flex', alignItems:'center',
+        padding:'0 22px', height:48,
+        borderBottom:'1px solid #e8e3d8',
+        background:'#faf8f4',
+        flexShrink:0,
+      }}>
+        <span style={{
+          fontFamily:"'Instrument Serif', serif",
+          fontStyle:'italic',
+          fontSize:17, color:'#2a2520', letterSpacing:'-0.2px',
+        }}>Linen</span>
+        <span style={{
+          fontSize:11, color:'#b5ae9f', marginLeft:14,
+          paddingLeft:14, borderLeft:'1px solid #e8e3d8',
+          fontWeight:400,
+        }}>Week of Apr 27</span>
+        <div style={{flex:1}}/>
+        <div style={{
+          width:26,height:26,borderRadius:6,
+          background:'#2a2520',
+          display:'flex',alignItems:'center',justifyContent:'center',
+        }}>
+          <span style={{color:'#faf8f4',fontSize:16,lineHeight:1,marginTop:-1}}>+</span>
+        </div>
+      </div>
+      {/* columns */}
+      <div style={{display:'flex',flex:1,overflow:'hidden'}}>
+        {DAYS.map((day, i) => {
+          const isToday = i === TODAY;
+          return (
+            <div key={i} style={{
+              flex:1, borderRight:'1px solid #e8e3d8',
+              display:'flex', flexDirection:'column',
+              background: isToday ? '#fff7f0' : 'transparent',
+            }}>
+              <div style={{padding:'14px 14px 10px'}}>
+                <div style={{
+                  fontSize:10, fontWeight:500, letterSpacing:'0.08em',
+                  textTransform:'uppercase',
+                  color: isToday ? '#c87941' : '#c5bdb0',
+                  marginBottom:3,
+                }}>{day}</div>
+                <div style={{
+                  fontFamily:"'Instrument Serif', serif",
+                  fontSize:28, lineHeight:1,
+                  color: isToday ? '#c87941' : '#d4cdc2',
+                }}>{DATES[i]}</div>
+              </div>
+              <div style={{
+                height:1, background: isToday ? '#f0d9c4' : '#e8e3d8',
+                margin:'0 14px',
+              }}/>
+              <div style={{padding:'10px 10px', display:'flex', flexDirection:'column', gap:6, flex:1, overflowY:'auto'}}>
+                {TASKS[i].map((t, j) => (
+                  <div key={j} style={{
+                    background: t.done ? 'transparent' : '#fff',
+                    border:'1px solid',
+                    borderColor: t.done ? 'transparent' : '#e8e3d8',
+                    borderRadius:8,
+                    padding:'9px 10px',
+                    boxShadow: t.done ? 'none' : '0 1px 4px rgba(0,0,0,0.04)',
+                  }}>
+                    <div style={{display:'flex',gap:7,alignItems:'flex-start',marginBottom:5}}>
+                      <div style={{
+                        width:13,height:13,borderRadius:'50%',
+                        border:`1.5px solid ${t.done ? t.color : '#d4cdc2'}`,
+                        background: t.done ? t.color : 'transparent',
+                        flexShrink:0, marginTop:1,
+                      }}/>
+                      <span style={{
+                        fontSize:12, lineHeight:1.38, flex:1,
+                        color: t.done ? '#c5bdb0' : '#2a2520',
+                        textDecoration: t.done ? 'line-through' : 'none',
+                      }}>{t.title}</span>
+                    </div>
+                    <div style={{paddingLeft:20,display:'flex',gap:5,alignItems:'center'}}>
+                      <span style={{
+                        fontSize:9.5, fontWeight:500,
+                        color: t.color, opacity:0.85,
+                      }}>{t.tag}</span>
+                      {t.time && <span style={{fontSize:9.5,color:'#c5bdb0',marginLeft:'auto'}}>{t.time}</span>}
+                    </div>
+                  </div>
+                ))}
+                <button style={{
+                  background:'transparent', border:'1px dashed #d4cdc2',
+                  borderRadius:8, padding:'6px 10px',
+                  fontSize:11, color:'#c5bdb0', cursor:'pointer',
+                  display:'flex', alignItems:'center', gap:4,
+                  fontFamily:"'Geist', sans-serif",
+                }}>
+                  + Add
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   DIRECTION C — "DEPTH"
+   Dark glass/frosted panels. Blur effects. Subtle
+   gradients. Premium productivity app feel.
+   ═══════════════════════════════════════════════ */
+function DirectionC() {
+  const BG = 'linear-gradient(145deg, #10121a 0%, #0d0f1a 50%, #12101e 100%)';
+  return (
+    <div style={{
+      width:'100%', height:'100%',
+      background: BG,
+      fontFamily:"'Sora', sans-serif",
+      display:'flex', flexDirection:'column',
+      overflow:'hidden',
+      position:'relative',
+    }}>
+      {/* ambient glow */}
+      <div style={{
+        position:'absolute', top:-60, left:'30%',
+        width:300, height:300,
+        background:'radial-gradient(circle, rgba(120,80,255,0.12) 0%, transparent 70%)',
+        pointerEvents:'none',
+      }}/>
+      <div style={{
+        position:'absolute', bottom:0, right:'10%',
+        width:200, height:200,
+        background:'radial-gradient(circle, rgba(0,200,180,0.08) 0%, transparent 70%)',
+        pointerEvents:'none',
+      }}/>
+
+      {/* topbar */}
+      <div style={{
+        display:'flex', alignItems:'center', gap:10,
+        padding:'0 20px', height:46,
+        borderBottom:'1px solid rgba(255,255,255,0.06)',
+        background:'rgba(255,255,255,0.02)',
+        backdropFilter:'blur(20px)',
+        flexShrink:0, position:'relative', zIndex:2,
+      }}>
+        <span style={{
+          fontWeight:600, fontSize:14, color:'#fff',
+          letterSpacing:'-0.4px',
+        }}>depth</span>
+        <span style={{
+          width:5,height:5,borderRadius:'50%',
+          background:'rgba(120,80,255,0.8)',
+          boxShadow:'0 0 6px rgba(120,80,255,0.6)',
+        }}/>
+        <span style={{fontSize:11,color:'rgba(255,255,255,0.25)',fontWeight:300}}>Apr 27 – May 1</span>
+        <div style={{flex:1}}/>
+        <div style={{
+          padding:'4px 12px', borderRadius:6,
+          background:'rgba(120,80,255,0.25)',
+          border:'1px solid rgba(120,80,255,0.4)',
+          fontSize:11, color:'rgba(200,180,255,0.9)', fontWeight:500,
+          cursor:'pointer',
+        }}>+ Task</div>
+      </div>
+
+      {/* columns */}
+      <div style={{display:'flex',flex:1,overflow:'hidden',position:'relative',zIndex:1}}>
+        {DAYS.map((day, i) => {
+          const isToday = i === TODAY;
+          return (
+            <div key={i} style={{
+              flex:1, borderRight:'1px solid rgba(255,255,255,0.04)',
+              display:'flex',flexDirection:'column',
+              background: isToday
+                ? 'rgba(120,80,255,0.05)'
+                : 'transparent',
+              position:'relative',
+            }}>
+              {isToday && <div style={{
+                position:'absolute', top:0, left:0, right:0, height:2,
+                background:'linear-gradient(90deg, transparent, rgba(120,80,255,0.6), transparent)',
+              }}/>}
+              <div style={{padding:'12px 13px 9px'}}>
+                <div style={{
+                  fontSize:9.5, fontWeight:600, letterSpacing:'0.09em',
+                  textTransform:'uppercase',
+                  color: isToday ? '#9b6fff' : 'rgba(255,255,255,0.18)',
+                  marginBottom:3,
+                }}>{day}</div>
+                <div style={{
+                  fontSize:24, fontWeight:isToday ? 600 : 300, lineHeight:1,
+                  color: isToday ? '#fff' : 'rgba(255,255,255,0.2)',
+                  letterSpacing:'-0.5px',
+                }}>{DATES[i]}</div>
+              </div>
+              <div style={{
+                height:'1px',
+                background: isToday
+                  ? 'linear-gradient(90deg, rgba(120,80,255,0.3), transparent)'
+                  : 'rgba(255,255,255,0.04)',
+                margin:'0 13px',
+              }}/>
+              <div style={{padding:'8px 8px',display:'flex',flexDirection:'column',gap:5,flex:1,overflowY:'auto'}}>
+                {TASKS[i].map((t,j) => (
+                  <div key={j} style={{
+                    background: t.done
+                      ? 'transparent'
+                      : 'rgba(255,255,255,0.04)',
+                    border:'1px solid',
+                    borderColor: t.done
+                      ? 'rgba(255,255,255,0.03)'
+                      : isToday
+                        ? 'rgba(120,80,255,0.2)'
+                        : 'rgba(255,255,255,0.07)',
+                    borderRadius:8,
+                    padding:'8px 9px',
+                    backdropFilter: t.done ? 'none' : 'blur(10px)',
+                  }}>
+                    <div style={{display:'flex',alignItems:'flex-start',gap:6,marginBottom:4}}>
+                      <div style={{
+                        width:12,height:12,borderRadius:'50%',
+                        border:`1.5px solid ${t.done ? t.color : 'rgba(255,255,255,0.2)'}`,
+                        background: t.done ? t.color : 'transparent',
+                        boxShadow: t.done ? `0 0 6px ${t.color}66` : 'none',
+                        flexShrink:0, marginTop:1,
+                      }}/>
+                      <span style={{
+                        fontSize:11, lineHeight:1.38,
+                        color: t.done ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.75)',
+                        textDecoration: t.done ? 'line-through' : 'none',
+                        flex:1, fontWeight:300,
+                      }}>{t.title}</span>
+                    </div>
+                    <div style={{paddingLeft:18,display:'flex',gap:4,alignItems:'center'}}>
+                      <span style={{
+                        fontSize:9, fontWeight:600,
+                        textTransform:'uppercase', letterSpacing:'0.05em',
+                        color: t.color, opacity:0.7,
+                      }}>{t.tag}</span>
+                      {t.time && <span style={{fontSize:9,color:'rgba(255,255,255,0.18)',marginLeft:'auto'}}>{t.time}</span>}
+                    </div>
+                  </div>
+                ))}
+                <div style={{
+                  padding:'6px 8px', borderRadius:8,
+                  border:'1px dashed rgba(255,255,255,0.07)',
+                  fontSize:10, color:'rgba(255,255,255,0.2)',
+                  cursor:'pointer', display:'flex', gap:4, alignItems:'center',
+                }}>
+                  <span style={{fontSize:13}}>+</span> Add
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   DIRECTION D — "GRID"
+   Clean, structured, Notion-meets-Linear energy.
+   Light with crisp grid lines. Colored category bars.
+   No-nonsense but polished.
+   ═══════════════════════════════════════════════ */
+function DirectionD() {
+  const tagColors = {
+    Work: { bg:'#eef2ff', text:'#4f46e5', dot:'#6366f1' },
+    Meeting: { bg:'#faf5ff', text:'#7c3aed', dot:'#a855f7' },
+    Focus: { bg:'#fffbeb', text:'#b45309', dot:'#f59e0b' },
+    Health: { bg:'#f0fdf4', text:'#15803d', dot:'#22c55e' },
+    Personal: { bg:'#fdf2f8', text:'#9d174d', dot:'#ec4899' },
+  };
+  return (
+    <div style={{
+      width:'100%', height:'100%',
+      background:'#ffffff',
+      fontFamily:"'Geist', sans-serif",
+      display:'flex', flexDirection:'column',
+      overflow:'hidden',
+    }}>
+      {/* topbar */}
+      <div style={{
+        display:'flex', alignItems:'center', gap:8,
+        padding:'0 18px', height:44,
+        borderBottom:'1.5px solid #f0f0f0',
+        flexShrink:0,
+      }}>
+        <span style={{fontWeight:600,fontSize:13,color:'#111',letterSpacing:'-0.3px'}}>Grid</span>
+        <span style={{fontSize:10,color:'#bbb',marginLeft:2}}>Apr 27 – May 1, 2026</span>
+        <div style={{flex:1}}/>
+        <div style={{
+          display:'flex', gap:3,
+        }}>
+          {['←','→'].map((c,i) => (
+            <div key={i} style={{
+              width:24,height:24,borderRadius:5,
+              background:'#f5f5f5',
+              display:'flex',alignItems:'center',justifyContent:'center',
+              fontSize:11,color:'#777',cursor:'pointer',
+            }}>{c}</div>
+          ))}
+          <div style={{
+            marginLeft:4,
+            padding:'0 10px', height:24, borderRadius:5,
+            background:'#111',
+            display:'flex',alignItems:'center',justifyContent:'center',
+            fontSize:11,color:'#fff',fontWeight:500,cursor:'pointer',
+          }}>+ New</div>
+        </div>
+      </div>
+
+      {/* day headers row */}
+      <div style={{
+        display:'flex',
+        borderBottom:'1.5px solid #f0f0f0',
+        flexShrink:0,
+      }}>
+        {DAYS.map((day,i) => {
+          const isToday = i === TODAY;
+          return (
+            <div key={i} style={{
+              flex:1,
+              padding:'10px 14px 9px',
+              borderRight:'1px solid #f0f0f0',
+              background: isToday ? '#fafafa' : '#fff',
+              position:'relative',
+            }}>
+              {isToday && (
+                <div style={{
+                  position:'absolute',bottom:0,left:14,right:14,
+                  height:2, borderRadius:2,
+                  background:'#111',
+                }}/>
+              )}
+              <div style={{
+                fontSize:10,fontWeight:600,letterSpacing:'0.06em',
+                textTransform:'uppercase',
+                color: isToday ? '#111' : '#bbb',
+                marginBottom:1,
+              }}>{day}</div>
+              <div style={{
+                fontSize:20,fontWeight: isToday ? 600 : 400,
+                lineHeight:1, color: isToday ? '#111' : '#ccc',
+                letterSpacing:'-0.5px',
+              }}>{DATES[i]}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* tasks body */}
+      <div style={{display:'flex',flex:1,overflow:'hidden'}}>
+        {DAYS.map((day,i) => {
+          const isToday = i === TODAY;
+          return (
+            <div key={i} style={{
+              flex:1, borderRight:'1px solid #f5f5f5',
+              display:'flex', flexDirection:'column',
+              background: isToday ? '#fafafa' : '#fff',
+              padding:'8px 8px', gap:5,
+              overflowY:'auto',
+            }}>
+              {TASKS[i].map((t,j) => {
+                const tc = tagColors[t.tag] || { bg:'#f5f5f5', text:'#555', dot:'#999' };
+                return (
+                  <div key={j} style={{
+                    background: t.done ? '#fafafa' : '#fff',
+                    border:'1px solid',
+                    borderColor: t.done ? '#f0f0f0' : '#ebebeb',
+                    borderRadius:7,
+                    padding:'8px 10px',
+                    borderLeft: t.done ? '3px solid #e8e8e8' : `3px solid ${tc.dot}`,
+                  }}>
+                    <div style={{
+                      fontSize:11.5, fontWeight:400, lineHeight:1.35,
+                      color: t.done ? '#bbb' : '#111',
+                      textDecoration: t.done ? 'line-through' : 'none',
+                      marginBottom:5,
+                    }}>{t.title}</div>
+                    <div style={{display:'flex',alignItems:'center',gap:5}}>
+                      <span style={{
+                        fontSize:9.5, fontWeight:500, borderRadius:4,
+                        padding:'1.5px 6px',
+                        background: tc.bg, color: tc.text,
+                      }}>{t.tag}</span>
+                      {t.time && <span style={{fontSize:9.5,color:'#ccc',marginLeft:'auto'}}>{t.time}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+              <button style={{
+                background:'transparent', border:'1px dashed #e8e8e8',
+                borderRadius:7, padding:'6px 10px',
+                fontSize:10.5, color:'#ccc', cursor:'pointer',
+                fontFamily:"'Geist', sans-serif",
+                display:'flex', alignItems:'center', gap:4,
+              }}>+ Add task</button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Canvas ── */
+function App() {
+  return (
+    <DesignCanvas title="Task Manager — Design Directions">
+      <DCSection id="directions" title="Pick a direction">
+        <DCArtboard id="a" label="A — Slate  ·  Dark editorial" width={700} height={440}>
+          <DirectionA />
+        </DCArtboard>
+        <DCArtboard id="b" label="B — Linen  ·  Warm minimal" width={700} height={440}>
+          <DirectionB />
+        </DCArtboard>
+        <DCArtboard id="c" label="C — Depth  ·  Dark glass" width={700} height={440}>
+          <DirectionC />
+        </DCArtboard>
+        <DCArtboard id="d" label="D — Grid  ·  Clean structured" width={700} height={440}>
+          <DirectionD />
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<div id="root" style="width:100vw;height:100vh;"></div>
+</body>
+</html>

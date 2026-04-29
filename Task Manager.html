@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kanban — Task Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --font: 'Geist', sans-serif;
+  --mono: 'Geist Mono', monospace;
+  --accent: #6366f1;
+  --accent-dim: rgba(99,102,241,0.15);
+  --accent-border: rgba(99,102,241,0.35);
+  --radius: 2px;
+  --radius-lg: 3px;
+}
+
+/* ── DARK (default) ── */
+body[data-theme="dark"] {
+  --bg:           #0e0f13;
+  --bg-sidebar:   #0a0b0e;
+  --bg-topbar:    #0c0d10;
+  --surface:      #16171d;
+  --surface-2:    #1c1d24;
+  --surface-3:    #22232b;
+  --surface-hover:#1f2029;
+  --border:       #1c1d24;
+  --border-strong:#27272f;
+  --text-1:       #fafafa;
+  --text-2:       #a1a1aa;
+  --text-3:       #71717a;
+  --text-4:       #52525b;
+  --today-bg:     #11131a;
+  --today-header: #0f1118;
+  --shadow:       0 1px 3px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.3);
+  --shadow-lg:    0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4);
+  --scrollbar:    rgba(255,255,255,0.08);
+}
+
+/* ── LIGHT ── */
+body[data-theme="light"] {
+  --bg:           #f8f8f8;
+  --bg-sidebar:   #f0f0f0;
+  --bg-topbar:    #ffffff;
+  --surface:      #ffffff;
+  --surface-2:    #f5f5f5;
+  --surface-3:    #ebebeb;
+  --surface-hover:#f0f0f0;
+  --border:       #e8e8e8;
+  --border-strong:#dedede;
+  --text-1:       #111111;
+  --text-2:       #555555;
+  --text-3:       #999999;
+  --text-4:       #bbbbbb;
+  --today-bg:     #f0f4ff;
+  --today-header: #eaefff;
+  --shadow:       0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+  --shadow-lg:    0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+  --scrollbar:    rgba(0,0,0,0.12);
+}
+
+html, body {
+  height: 100%;
+}
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text-1);
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: background 0.2s, color 0.2s;
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 99px; }
+
+/* ── TOPBAR ── */
+.topbar {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background: var(--bg-topbar);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 8px;
+  z-index: 10;
+}
+.topbar-logo {
+  display: flex; align-items: center; gap: 7px;
+  font-weight: 700; font-size: 14px; color: var(--text-1); letter-spacing: -0.3px;
+  margin-right: 4px;
+}
+.logo-icon {
+  width: 22px; height: 22px;
+  background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
+  border-radius: 2px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+}
+.topbar-sep { width: 1px; height: 16px; background: var(--border-strong); margin: 0 4px; }
+.breadcrumb { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 5px; }
+.breadcrumb-active { color: var(--text-1); font-weight: 500; }
+.topbar-spacer { flex: 1; }
+
+.cmd-trigger {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 11px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text-3); font-size: 12px; font-family: var(--font);
+  cursor: pointer; transition: all 0.12s;
+}
+.cmd-trigger:hover { background: var(--surface-3); color: var(--text-2); }
+.cmd-trigger kbd {
+  font-family: var(--mono); font-size: 9px;
+  padding: 1px 5px; border-radius: 1px;
+  background: var(--surface-3); border: 1px solid var(--border-strong);
+  color: var(--text-4); margin-left: 6px;
+}
+
+.icon-btn {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 2px; border: none;
+  background: transparent; color: var(--text-3); cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--text-2); }
+.icon-btn svg { width: 15px; height: 15px; }
+.col-add svg { width: 10px; height: 10px; flex-shrink: 0; }
+
+.btn-primary {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 12px; border-radius: 2px; border: none;
+  background: var(--accent); color: #fff; font-family: var(--font);
+  font-size: 12px; font-weight: 500; cursor: pointer; transition: opacity 0.12s;
+}
+.btn-primary:hover { opacity: 0.88; }
+.btn-primary kbd {
+  font-family: var(--mono); font-size: 9px;
+  opacity: 0.65; background: rgba(0,0,0,0.2);
+  padding: 1px 4px; border-radius: 2px;
+}
+
+.week-nav { display: flex; gap: 2px; }
+.week-nav-btn {
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 2px; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text-3); cursor: pointer;
+  font-size: 12px; transition: all 0.12s;
+}
+.week-nav-btn:hover { background: var(--surface-2); color: var(--text-2); }
+.week-today-btn {
+  height: 26px; padding: 0 9px;
+  border-radius: 2px; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text-3); cursor: pointer;
+  font-family: var(--font); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  transition: all 0.12s;
+}
+.week-today-btn:hover { background: var(--surface-2); color: var(--text-2); }
+
+/* ── LAYOUT ── */
+.app-body { display: flex; flex: 1; overflow: hidden; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width: 200px; min-width: 200px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  padding: 12px 0; flex-shrink: 0;
+  overflow-y: auto;
+}
+.sidebar-section { padding: 0 8px; margin-bottom: 18px; }
+.sidebar-label {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--text-4);
+  padding: 0 6px; margin-bottom: 3px;
+}
+.sidebar-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 8px; border-radius: 2px;
+  font-size: 12.5px; color: var(--text-2);
+  cursor: pointer; transition: all 0.1s; user-select: none;
+}
+.sidebar-item:hover { background: var(--surface-2); color: var(--text-1); }
+.sidebar-item.active { background: var(--surface-3); color: var(--text-1); font-weight: 500; }
+.sidebar-item svg { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.7; }
+.sidebar-item.active svg { opacity: 1; }
+.sidebar-count {
+  margin-left: auto; font-size: 10px; font-family: var(--mono);
+  color: var(--text-4); font-weight: 500;
+}
+.sidebar-item.active .sidebar-count { color: var(--accent); }
+
+.project-dot { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+
+.sync-indicator {
+  margin: 8px; padding: 7px 9px;
+  background: var(--surface);
+  border-radius: 2px;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10.5px; color: var(--text-3);
+}
+.sync-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #10b981; box-shadow: 0 0 5px rgba(16,185,129,0.5);
+  flex-shrink: 0;
+}
+
+/* ── BOARD ── */
+.board {
+  display: flex; flex: 1;
+  overflow-x: auto; overflow-y: hidden;
+}
+
+/* ── COLUMN ── */
+.col {
+  display: flex; flex-direction: column;
+  flex: 1; min-width: 160px;
+  border-right: 1px solid var(--border);
+  transition: background 0.12s;
+  position: relative;
+}
+.col:last-child { border-right: none; }
+.col.is-today { background: var(--today-bg); }
+.col.drag-over { background: var(--accent-dim); }
+
+.col-header {
+  padding: 12px 12px 10px;
+  flex-shrink: 0; position: sticky; top: 0; z-index: 2;
+  background: var(--bg);
+}
+.col.is-today .col-header { background: var(--today-header); }
+
+.col-day {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-4); margin-bottom: 2px;
+}
+.col.is-today .col-day { color: var(--accent); }
+
+.col-date-row { display: flex; align-items: baseline; gap: 7px; margin-bottom: 6px; }
+.col-date {
+  font-size: 20px; font-weight: 600; line-height: 1;
+  color: var(--text-3); letter-spacing: -0.5px;
+}
+.col.is-today .col-date { color: var(--text-1); }
+.col-today-badge {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--accent);
+  background: var(--accent-dim); padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.col-meta { display: flex; align-items: center; gap: 6px; }
+.col-count { font-size: 10.5px; color: var(--text-4); font-family: var(--mono); }
+.col-progress-bar {
+  flex: 1; height: 2px; background: var(--border-strong);
+  border-radius: 99px; overflow: hidden;
+}
+.col-progress-fill {
+  height: 100%; background: var(--accent); border-radius: 99px;
+  transition: width 0.4s cubic-bezier(.34,1.56,.64,1);
+}
+
+.col-divider { height: 1px; background: var(--border); margin: 0 12px; flex-shrink: 0; }
+
+.col-body {
+  flex: 1; overflow-y: auto;
+  padding: 8px 8px 12px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+
+.col-add {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 10px; margin: 1px 0 0;
+  border-radius: 0; border: none; border-top: 1px solid var(--border);
+  background: transparent; color: var(--text-4);
+  font-family: var(--font); font-size: 11px;
+  cursor: pointer; transition: all 0.12s;
+  flex-shrink: 0;
+}
+.col-add:hover { background: var(--surface-2); color: var(--text-2); }
+
+/* ── TASK CARD ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  padding: 7px 9px;
+  cursor: grab;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.12s, transform 0.12s, opacity 0.12s;
+  user-select: none; position: relative;
+}
+.card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.2); transform: translateY(-1px); }
+.card:hover .card-actions { opacity: 1; }
+.card.dragging { opacity: 0.35; transform: scale(0.97); cursor: grabbing; }
+
+.card-top { display: flex; align-items: flex-start; gap: 7px; margin-bottom: 7px; }
+.card-check {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 1.5px solid var(--border-strong); flex-shrink: 0;
+  margin-top: 1px; cursor: pointer; transition: all 0.12s;
+  display: flex; align-items: center; justify-content: center; background: transparent;
+}
+.card-check:hover { border-color: var(--accent); }
+.card-check.done { background: var(--accent); border-color: var(--accent); }
+.card-check.done::after {
+  content: ''; width: 5px; height: 3px;
+  border-left: 1.5px solid #fff; border-bottom: 1.5px solid #fff;
+  transform: rotate(-45deg) translateY(-0.5px); display: block;
+}
+.card-title {
+  font-size: 12.5px; font-weight: 400; line-height: 1.4;
+  color: var(--text-1); flex: 1; text-wrap: pretty;
+}
+.card-title.done { text-decoration: line-through; color: var(--text-4); }
+.card-pri { flex-shrink: 0; display: flex; align-items: flex-end; gap: 1.5px; height: 12px; margin-top: 2px; }
+.pri-bar { width: 2.5px; border-radius: 1px; }
+
+.card-bottom { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.card-tag {
+  font-size: 10px; font-weight: 500; padding: 1.5px 5px;
+  border-radius: 2px; letter-spacing: 0.01em;
+}
+.card-project {
+  font-family: var(--mono); font-size: 9.5px;
+  color: var(--text-4); font-weight: 500;
+}
+.card-time { font-size: 10px; color: var(--text-4); margin-left: auto; display: flex; align-items: center; gap: 3px; }
+.card-time svg { width: 9px; height: 9px; }
+
+.card-actions {
+  position: absolute; top: 7px; right: 8px;
+  display: flex; gap: 2px; opacity: 0; transition: opacity 0.12s;
+}
+.card-action-btn {
+  width: 20px; height: 20px; border-radius: 2px;
+  background: var(--surface-3); border: none;
+  color: var(--text-3); cursor: pointer; font-size: 10px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.1s;
+}
+.card-action-btn:hover { background: var(--border-strong); }
+
+/* tag palettes */
+.tag-work    { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+.tag-health  { background: rgba(34,197,94,0.15);  color: #86efac; }
+.tag-mtg     { background: rgba(168,85,247,0.15); color: #d8b4fe; }
+.tag-focus   { background: rgba(245,158,11,0.15); color: #fcd34d; }
+.tag-code    { background: rgba(236,72,153,0.15); color: #f9a8d4; }
+.tag-docs    { background: rgba(148,163,184,0.15);color: #cbd5e1; }
+.tag-comm    { background: rgba(239,68,68,0.15);  color: #fca5a5; }
+.tag-admin   { background: rgba(100,116,139,0.15);color: #94a3b8; }
+.tag-learn   { background: rgba(20,184,166,0.15); color: #5eead4; }
+.tag-personal{ background: rgba(244,63,94,0.15);  color: #fda4af; }
+
+/* light-mode tag overrides */
+body[data-theme="light"] .tag-work    { background: #eef2ff; color: #4f46e5; }
+body[data-theme="light"] .tag-health  { background: #f0fdf4; color: #15803d; }
+body[data-theme="light"] .tag-mtg     { background: #faf5ff; color: #7c3aed; }
+body[data-theme="light"] .tag-focus   { background: #fffbeb; color: #b45309; }
+body[data-theme="light"] .tag-code    { background: #fdf2f8; color: #9d174d; }
+body[data-theme="light"] .tag-docs    { background: #f1f5f9; color: #475569; }
+body[data-theme="light"] .tag-comm    { background: #fef2f2; color: #b91c1c; }
+body[data-theme="light"] .tag-admin   { background: #f8fafc; color: #64748b; }
+body[data-theme="light"] .tag-learn   { background: #f0fdfa; color: #0f766e; }
+body[data-theme="light"] .tag-personal{ background: #fff1f2; color: #be123c; }
+
+/* ── DROP PLACEHOLDER ── */
+.drop-ph {
+  height: 40px; border-radius: 2px;
+  border: 2px dashed var(--accent); background: var(--accent-dim);
+  flex-shrink: 0; opacity: 0.7;
+}
+
+/* ── STATUS BAR ── */
+.statusbar {
+  height: 26px;
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 14px;
+  background: var(--bg-topbar);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  font-size: 10.5px; color: var(--text-4);
+}
+.statusbar-left { display: flex; align-items: center; gap: 10px; }
+.statusbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.statusbar kbd {
+  font-family: var(--mono); font-size: 9px;
+  padding: 1px 4px; border-radius: 1px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2); color: var(--text-3);
+}
+.status-divider { width: 1px; height: 10px; background: var(--border-strong); }
+
+/* ── COMMAND PALETTE ── */
+.palette-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(6px);
+  z-index: 200;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 120px;
+  animation: fadein 0.12s ease;
+}
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+
+.palette {
+  width: 520px;
+  background: var(--surface);
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: slidedown 0.15s ease;
+}
+@keyframes slidedown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+.palette-input-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.palette-search-icon { color: var(--text-3); flex-shrink: 0; }
+.palette-search-icon svg { width: 16px; height: 16px; }
+.palette-input {
+  flex: 1; border: none; outline: none; background: transparent;
+  font-family: var(--font); font-size: 14px; color: var(--text-1);
+}
+.palette-input::placeholder { color: var(--text-4); }
+.palette-esc {
+  font-family: var(--mono); font-size: 10px;
+  padding: 2px 6px; border-radius: 2px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2); color: var(--text-4);
+}
+
+.palette-section-label {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-4);
+  padding: 10px 16px 4px;
+}
+.palette-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px; cursor: pointer; transition: background 0.1s;
+}
+.palette-item:hover, .palette-item.selected {
+  background: var(--surface-2);
+}
+.palette-item-icon { color: var(--text-3); flex-shrink: 0; }
+.palette-item-icon svg { width: 14px; height: 14px; }
+.palette-item-label { font-size: 13px; color: var(--text-1); flex: 1; }
+.palette-item-sub { font-size: 11px; color: var(--text-4); }
+.palette-item-kbd { font-family: var(--mono); font-size: 9px; color: var(--text-4); }
+
+.palette-footer {
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 12px; font-size: 10px; color: var(--text-4);
+}
+.palette-footer kbd {
+  font-family: var(--mono); font-size: 9px;
+  padding: 1px 4px; border-radius: 1px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2); color: var(--text-3);
+  margin-right: 4px;
+}
+
+/* ── ADD TASK MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45); backdrop-filter: blur(5px);
+  z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  animation: fadein 0.12s ease;
+}
+.modal {
+  width: 420px;
+  background: var(--surface);
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: slidedown 0.15s ease;
+}
+.modal-header {
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+.modal-title { font-size: 14px; font-weight: 600; color: var(--text-1); }
+.modal-day-badge {
+  font-size: 11px; color: var(--accent); font-weight: 500;
+  background: var(--accent-dim); padding: 2px 8px; border-radius: 4px;
+  margin-left: 4px;
+}
+.modal-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.form-label {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--text-4); margin-bottom: 5px; display: block;
+}
+.form-input, .form-select {
+  width: 100%; padding: 8px 11px;
+  border-radius: 2px; border: 1px solid var(--border-strong);
+  background: var(--surface-2); color: var(--text-1);
+  font-family: var(--font); font-size: 13px; outline: none;
+  transition: border-color 0.12s;
+  appearance: none;
+}
+.form-input:focus, .form-select:focus { border-color: var(--accent); }
+.form-row { display: flex; gap: 10px; }
+.form-row > div { flex: 1; }
+.modal-footer {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 8px; justify-content: flex-end;
+}
+.btn-ghost {
+  padding: 7px 14px; border-radius: 2px;
+  border: 1px solid var(--border-strong); background: transparent;
+  color: var(--text-2); font-family: var(--font); font-size: 12px; cursor: pointer;
+  transition: background 0.1s;
+}
+.btn-ghost:hover { background: var(--surface-2); }
+.modal-submit {
+  padding: 7px 16px; border-radius: 2px; border: none;
+  background: var(--accent); color: #fff;
+  font-family: var(--font); font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: opacity 0.12s;
+}
+.modal-submit:hover { opacity: 0.88; }
+</style>
+</head>
+<body data-theme="dark">
+<script type="text/babel">
+// ── Data & helpers ──────────────────────────────────────────────────────
+const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const DAY_LONG  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MONTHS    = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function getWeekDates(offset = 0) {
+  const today = new Date();
+  const dow = today.getDay();
+  const mon = new Date(today);
+  mon.setDate(today.getDate() - dow + 1 + offset * 7);
+  return Array.from({length: 7}, (_, i) => { const d = new Date(mon); d.setDate(mon.getDate() + i); return d; });
+}
+function isToday(d) {
+  const t = new Date();
+  return d.getDate() === t.getDate() && d.getMonth() === t.getMonth() && d.getFullYear() === t.getFullYear();
+}
+function formatWeek(dates) {
+  const a = dates[0], b = dates[6];
+  return `${MONTHS[a.getMonth()]} ${a.getDate()} – ${a.getMonth() !== b.getMonth() ? MONTHS[b.getMonth()]+' ' : ''}${b.getDate()}, ${b.getFullYear()}`;
+}
+
+const TAGS = ['work','focus','mtg','health','code','docs','comm','admin','learn','personal'];
+const TAG_LABEL = { work:'Work',focus:'Deep Focus',mtg:'Meeting',health:'Health',code:'Code',docs:'Docs',comm:'Comms',admin:'Admin',learn:'Learning',personal:'Personal' };
+const PROJECTS = [
+  { id:'PLAT', label:'Platform', color:'#a5b4fc' },
+  { id:'TEAM', label:'Team',     color:'#fcd34d' },
+  { id:'DSGN', label:'Design',   color:'#f9a8d4' },
+  { id:'LIFE', label:'Life',     color:'#86efac' },
+];
+
+let _id = 100;
+const uid = () => `t${_id++}`;
+
+const INIT = {
+  0: [
+    { id:uid(), title:'Review Q2 roadmap doc', tag:'work', pri:'p1', time:'45m', project:'PLAT', done:false },
+    { id:uid(), title:'Morning run — 5k',      tag:'health', pri:'p3', time:'30m', project:'LIFE', done:true },
+  ],
+  1: [
+    { id:uid(), title:'1:1 with Sarah',        tag:'mtg',   pri:'p2', time:'30m', project:'TEAM', done:false },
+    { id:uid(), title:'Deep work: API design', tag:'focus', pri:'p1', time:'2h',  project:'PLAT', done:false },
+    { id:uid(), title:'Review pull requests',  tag:'code',  pri:'p2', time:'45m', project:'PLAT', done:false },
+  ],
+  2: [
+    { id:uid(), title:'Team standup',          tag:'mtg',   pri:'p3', time:'15m', project:'TEAM', done:true  },
+    { id:uid(), title:'Write release notes',   tag:'docs',  pri:'p2', time:'30m', project:'PLAT', done:false },
+    { id:uid(), title:'Reply design thread',   tag:'comm',  pri:'p2', time:'20m', project:'DSGN', done:false },
+    { id:uid(), title:'Schedule Q3 planning',  tag:'admin', pri:'p3', time:'10m', project:'TEAM', done:false },
+  ],
+  3: [
+    { id:uid(), title:'Dentist appointment',   tag:'health',pri:'p1', time:'1h',  project:'LIFE', done:false },
+    { id:uid(), title:'Read: Shape Up ch.5',   tag:'learn', pri:'p3', time:'40m', project:'LIFE', done:false },
+  ],
+  4: [
+    { id:uid(), title:'Weekly review',         tag:'focus', pri:'p2', time:'45m', project:'LIFE', done:false },
+  ],
+  5: [], 6: [],
+};
+
+// ── Icons ───────────────────────────────────────────────────────────────
+const Ico = {
+  Sun: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
+  Moon: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
+  Plus: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  Search: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+  Chevron: ({dir}) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points={dir==='left' ? '15 18 9 12 15 6' : '9 18 15 12 9 6'}/></svg>,
+  Calendar: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+  Inbox: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>,
+  Star: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+  Clock: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  Filter: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,
+  Lightning: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+};
+
+// ── Priority indicator ──────────────────────────────────────────────────
+function PriBars({ pri }) {
+  const cols = { p1: '#ef4444', p2: '#f59e0b', p3: 'var(--border-strong)' };
+  const heights = { p1: [8,10,12], p2: [5,7,9], p3: [3,5,7] };
+  const c = cols[pri]; const h = heights[pri];
+  return (
+    <div className="card-pri">
+      {h.map((ht, i) => (
+        <div key={i} className="pri-bar" style={{
+          height: ht, background: i < (pri==='p1'?3:pri==='p2'?2:1) ? c : 'var(--border-strong)',
+        }}/>
+      ))}
+    </div>
+  );
+}
+
+// ── Task Card ───────────────────────────────────────────────────────────
+function TaskCard({ task, colIdx, onToggle, onDragStart, onDragEnd, isDragging, onDelete }) {
+  const proj = PROJECTS.find(p => p.id === task.project);
+  return (
+    <div
+      className={`card${isDragging ? ' dragging' : ''}`}
+      draggable
+      onDragStart={e => onDragStart(e, task.id, colIdx)}
+      onDragEnd={onDragEnd}
+    >
+      <div className="card-top">
+        <div
+          className={`card-check${task.done ? ' done' : ''}`}
+          onClick={() => onToggle(task.id, colIdx)}
+        />
+        <div className={`card-title${task.done ? ' done' : ''}`}>{task.title}</div>
+        <PriBars pri={task.pri} />
+      </div>
+      <div className="card-bottom">
+        <span className={`card-tag tag-${task.tag}`}>{TAG_LABEL[task.tag]}</span>
+        {proj && <span className="card-project" style={{color: proj.color + 'aa'}}>{proj.id}</span>}
+        {task.time && (
+          <span className="card-time"><Ico.Clock />{task.time}</span>
+        )}
+      </div>
+      <div className="card-actions">
+        <button className="card-action-btn" onClick={() => onDelete(task.id, colIdx)} title="Delete">×</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Column ──────────────────────────────────────────────────────────────
+function Column({ date, colIdx, tasks, showWeekend, onAdd, onToggle, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, draggingOver, draggingId, onDelete }) {
+  const dow = date.getDay();
+  if (!showWeekend && (dow === 0 || dow === 6)) return null;
+  const today = isToday(date);
+  const done = tasks.filter(t => t.done).length;
+  const total = tasks.length;
+  const pct = total > 0 ? (done/total)*100 : 0;
+  return (
+    <div
+      className={`col${today?' is-today':''}${draggingOver===colIdx?' drag-over':''}`}
+      onDragOver={e => onDragOver(e, colIdx)}
+      onDrop={e => onDrop(e, colIdx)}
+      onDragLeave={onDragLeave}
+      data-screen-label={`${DAY_SHORT[dow]} ${date.getDate()}`}
+    >
+      <div className="col-header">
+        <div className="col-day">{DAY_SHORT[dow]}</div>
+        <div className="col-date-row">
+          <div className="col-date">{date.getDate()}</div>
+          {today && <span className="col-today-badge">Today</span>}
+        </div>
+        <div className="col-meta">
+          <span className="col-count">{done}/{total}</span>
+          <div className="col-progress-bar">
+            <div className="col-progress-fill" style={{width:`${pct}%`}}/>
+          </div>
+        </div>
+      </div>
+      <div className="col-divider"/>
+      <div className="col-body">
+        {tasks.map((task, i) => (
+          <React.Fragment key={task.id}>
+            {draggingOver === colIdx && draggingId && i === 0 && <div className="drop-ph"/>}
+            <TaskCard
+              task={task} colIdx={colIdx}
+              onToggle={onToggle} onDragStart={onDragStart}
+              onDragEnd={onDragEnd} onDelete={onDelete}
+              isDragging={draggingId === task.id}
+            />
+          </React.Fragment>
+        ))}
+        {draggingOver === colIdx && draggingId && tasks.length === 0 && <div className="drop-ph"/>}
+      </div>
+      <button className="col-add" onClick={() => onAdd(colIdx)}>
+        <Ico.Plus /> Add task
+      </button>
+    </div>
+  );
+}
+
+// ── Sidebar ─────────────────────────────────────────────────────────────
+function Sidebar({ tasks }) {
+  const all = Object.values(tasks).flat();
+  const remaining = all.filter(t => !t.done).length;
+  const totalMins = all.filter(t => !t.done && t.time).reduce((acc, t) => {
+    const h = t.time.match(/(\d+)h/); const m = t.time.match(/(\d+)m/);
+    return acc + (h ? parseInt(h[1])*60 : 0) + (m ? parseInt(m[1]) : 0);
+  }, 0);
+  const focusMins = all.filter(t => !t.done && t.tag==='focus' && t.time).reduce((acc, t) => {
+    const h = t.time.match(/(\d+)h/); const m = t.time.match(/(\d+)m/);
+    return acc + (h ? parseInt(h[1])*60 : 0) + (m ? parseInt(m[1]) : 0);
+  }, 0);
+  const fmt = (m) => m >= 60 ? `${Math.floor(m/60)}h${m%60?` ${m%60}m`:''}` : `${m}m`;
+
+  return (
+    <div className="sidebar">
+      <div className="sidebar-section">
+        <div className="sidebar-label">Views</div>
+        <div className="sidebar-item active"><Ico.Calendar /><span>This week</span><span className="sidebar-count">{remaining}</span></div>
+        <div className="sidebar-item"><Ico.Inbox /><span>Backlog</span><span className="sidebar-count">4</span></div>
+        <div className="sidebar-item"><Ico.Star /><span>Priorities</span></div>
+        <div className="sidebar-item"><Ico.Filter /><span>Filters</span></div>
+      </div>
+
+      <div className="sidebar-section">
+        <div className="sidebar-label">Projects</div>
+        {PROJECTS.map(p => {
+          const count = all.filter(t => t.project === p.id && !t.done).length;
+          return (
+            <div key={p.id} className="sidebar-item">
+              <div className="project-dot" style={{background: p.color}}/>
+              <span>{p.label}</span>
+              {count > 0 && <span className="sidebar-count">{count}</span>}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="sidebar-section">
+        <div className="sidebar-label">This week</div>
+        <div style={{padding:'8px 6px',display:'flex',flexDirection:'column',gap:5}}>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--text-3)'}}>
+            <span>Total time</span>
+            <span style={{fontFamily:'var(--mono)',color:'var(--text-2)',fontWeight:500}}>{totalMins>0?fmt(totalMins):'—'}</span>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--text-3)'}}>
+            <span>Deep focus</span>
+            <span style={{fontFamily:'var(--mono)',color:'var(--accent)',fontWeight:500}}>{focusMins>0?fmt(focusMins):'—'}</span>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--text-3)'}}>
+            <span>Remaining</span>
+            <span style={{fontFamily:'var(--mono)',color:'var(--text-2)',fontWeight:500}}>{remaining}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{flex:1}}/>
+      <div className="sync-indicator">
+        <div className="sync-dot"/>
+        <span>Synced · just now</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Add Task Modal ───────────────────────────────────────────────────────
+function AddModal({ dayLabel, colIdx, onAdd, onClose }) {
+  const [title, setTitle] = React.useState('');
+  const [tag, setTag]     = React.useState('work');
+  const [pri, setPri]     = React.useState('p2');
+  const [time, setTime]   = React.useState('');
+  const [proj, setProj]   = React.useState('PLAT');
+  const ref = React.useRef(null);
+  React.useEffect(() => { ref.current?.focus(); }, []);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') onClose();
+    if (e.key === 'Enter' && e.metaKey) submit();
+  };
+  const submit = () => {
+    if (!title.trim()) return;
+    onAdd(colIdx, { id: uid(), title: title.trim(), tag, pri, time: time||null, project: proj, done: false });
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target===e.currentTarget && onClose()} onKeyDown={handleKeyDown}>
+      <div className="modal">
+        <div className="modal-header">
+          <span className="modal-title">New task</span>
+          <span className="modal-day-badge">{dayLabel}</span>
+        </div>
+        <div className="modal-body">
+          <div>
+            <label className="form-label">Task title</label>
+            <input ref={ref} className="form-input" placeholder="What needs to get done?" value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e => e.key==='Enter' && !e.metaKey && submit()} />
+          </div>
+          <div className="form-row">
+            <div>
+              <label className="form-label">Tag</label>
+              <select className="form-select" value={tag} onChange={e=>setTag(e.target.value)}>
+                {TAGS.map(t => <option key={t} value={t}>{TAG_LABEL[t]}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Priority</label>
+              <select className="form-select" value={pri} onChange={e=>setPri(e.target.value)}>
+                <option value="p1">P1 — Urgent</option>
+                <option value="p2">P2 — Normal</option>
+                <option value="p3">P3 — Low</option>
+              </select>
+            </div>
+          </div>
+          <div className="form-row">
+            <div>
+              <label className="form-label">Project</label>
+              <select className="form-select" value={proj} onChange={e=>setProj(e.target.value)}>
+                {PROJECTS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Time estimate</label>
+              <input className="form-input" placeholder="e.g. 30m, 1h" value={time} onChange={e=>setTime(e.target.value)} />
+            </div>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="modal-submit" onClick={submit}>
+            Create task <span style={{opacity:.65,fontSize:10,fontFamily:'var(--mono)',marginLeft:4}}>↵</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Command Palette ──────────────────────────────────────────────────────
+const CMD_ITEMS = [
+  { icon: 'Plus',     label: 'Create new task',       sub: '',             shortcut: 'C' },
+  { icon: 'Calendar', label: 'Jump to today',         sub: '',             shortcut: 'T' },
+  { icon: 'Star',     label: 'View priorities',       sub: '',             shortcut: '' },
+  { icon: 'Filter',   label: 'Toggle weekends',       sub: '',             shortcut: 'W' },
+  { icon: 'Sun',      label: 'Toggle light mode',     sub: '',             shortcut: 'L' },
+  { icon: 'Lightning',label: 'Focus mode (collapse)', sub: 'Hide sidebar', shortcut: '' },
+];
+
+function CommandPalette({ onClose, onAction }) {
+  const [query, setQuery] = React.useState('');
+  const [sel, setSel]     = React.useState(0);
+  const ref = React.useRef(null);
+  React.useEffect(() => { ref.current?.focus(); }, []);
+
+  const filtered = CMD_ITEMS.filter(it => it.label.toLowerCase().includes(query.toLowerCase()));
+
+  const handleKey = (e) => {
+    if (e.key === 'Escape') onClose();
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSel(s => Math.min(s+1, filtered.length-1)); }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); setSel(s => Math.max(s-1, 0)); }
+    if (e.key === 'Enter')     { onAction(filtered[sel]); onClose(); }
+  };
+
+  return (
+    <div className="palette-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
+      <div className="palette" onKeyDown={handleKey}>
+        <div className="palette-input-row">
+          <div className="palette-search-icon"><Ico.Search/></div>
+          <input ref={ref} className="palette-input" placeholder="Search or run a command…" value={query} onChange={e=>{setQuery(e.target.value);setSel(0);}} />
+          <span className="palette-esc">esc</span>
+        </div>
+        <div className="palette-section-label">Commands</div>
+        {filtered.map((item, i) => {
+          const Icon = Ico[item.icon] || Ico.Star;
+          return (
+            <div key={i} className={`palette-item${i===sel?' selected':''}`} onClick={()=>{onAction(item);onClose();}}>
+              <div className="palette-item-icon"><Icon/></div>
+              <span className="palette-item-label">{item.label}</span>
+              {item.sub && <span className="palette-item-sub">{item.sub}</span>}
+              {item.shortcut && <span className="palette-item-kbd">{item.shortcut}</span>}
+            </div>
+          );
+        })}
+        <div className="palette-footer">
+          <span><kbd>↑↓</kbd> navigate</span>
+          <span><kbd>↵</kbd> run</span>
+          <span><kbd>esc</kbd> close</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── App ─────────────────────────────────────────────────────────────────
+function App() {
+  const [theme, setTheme]   = React.useState('dark');
+  const [weekOff, setWeekOff] = React.useState(0);
+  const [tasks, setTasks]   = React.useState(INIT);
+  const [addModal, setAddModal] = React.useState(null); // colIdx
+  const [palette, setPalette] = React.useState(false);
+  const [dragId,  setDragId]  = React.useState(null);
+  const [dragCol, setDragCol] = React.useState(null);
+  const [dragOver,setDragOver]= React.useState(null);
+  const [hideSidebar, setHideSidebar] = React.useState(false);
+
+  const [showWeekend, setShowWeekend] = React.useState(false);
+  const tweaks = { showWeekend, accentColor: '#6366f1', cardDensity: 'normal' };
+  const setTweak = (k, v) => { if (k === 'showWeekend') setShowWeekend(typeof v === 'function' ? v(showWeekend) : v); };
+
+  React.useEffect(() => { document.body.setAttribute('data-theme', theme); }, [theme]);
+  React.useEffect(() => {
+    document.documentElement.style.setProperty('--accent', tweaks.accentColor);
+    document.documentElement.style.setProperty('--accent-dim', tweaks.accentColor + '26');
+    document.documentElement.style.setProperty('--accent-border', tweaks.accentColor + '55');
+  }, [tweaks.accentColor]);
+
+  // keyboard shortcuts
+  React.useEffect(() => {
+    const handler = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setPalette(p => !p); return; }
+      if (e.key === 'Escape') { setPalette(false); setAddModal(null); return; }
+      if (e.key === 'c' || e.key === 'C') { const ti = weekDates.findIndex(d => isToday(d)); setAddModal(ti >= 0 ? ti : 0); }
+      if (e.key === 't' || e.key === 'T') setWeekOff(0);
+      if (e.key === 'l' || e.key === 'L') setTheme(t => t==='dark'?'light':'dark');
+      if (e.key === 'w' || e.key === 'W') setTweak('showWeekend', v => !v);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  const weekDates = getWeekDates(weekOff);
+
+  // drag handlers
+  const onDragStart = (e, id, col) => { setDragId(id); setDragCol(col); e.dataTransfer.effectAllowed = 'move'; };
+  const onDragEnd   = () => { setDragId(null); setDragCol(null); setDragOver(null); };
+  const onDragOver  = (e, col) => { e.preventDefault(); setDragOver(col); };
+  const onDragLeave = (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(null); };
+  const onDrop = (e, targetCol) => {
+    e.preventDefault();
+    if (dragId === null || dragCol === targetCol) { setDragOver(null); return; }
+    const task = tasks[dragCol]?.find(t => t.id === dragId);
+    if (!task) { setDragOver(null); return; }
+    setTasks(prev => ({
+      ...prev,
+      [dragCol]: prev[dragCol].filter(t => t.id !== dragId),
+      [targetCol]: [task, ...(prev[targetCol] || [])],
+    }));
+    onDragEnd();
+  };
+
+  const onToggle = (id, col) => setTasks(prev => ({
+    ...prev, [col]: prev[col].map(t => t.id===id ? {...t, done:!t.done} : t)
+  }));
+  const onDelete = (id, col) => setTasks(prev => ({
+    ...prev, [col]: prev[col].filter(t => t.id !== id)
+  }));
+  const onAddTask = (col, task) => setTasks(prev => ({
+    ...prev, [col]: [...(prev[col]||[]), task]
+  }));
+
+  const handlePaletteAction = (item) => {
+    if (item.label.includes('Create')) { const ti = weekDates.findIndex(d => isToday(d)); setAddModal(ti>=0?ti:0); }
+    if (item.label.includes('today')) setWeekOff(0);
+    if (item.label.includes('light')) setTheme(t => t==='dark'?'light':'dark');
+    if (item.label.includes('weekends')) setTweak('showWeekend', v => !v);
+    if (item.label.includes('Focus')) setHideSidebar(h => !h);
+  };
+
+  const all = Object.values(tasks).flat();
+  const totalDone = all.filter(t => t.done).length;
+  const totalTasks = all.length;
+
+  return (
+    <>
+      {/* TOPBAR */}
+      <div className="topbar">
+        <div className="topbar-logo">
+          <div className="logo-icon">K</div>
+          kanban
+        </div>
+        <div className="topbar-sep"/>
+        <div className="breadcrumb">
+          <span>Workspace</span>
+          <span>›</span>
+          <span className="breadcrumb-active">{formatWeek(weekDates)}</span>
+        </div>
+        <div className="topbar-spacer"/>
+        <div className="week-nav">
+          <button className="week-nav-btn" onClick={() => setWeekOff(o=>o-1)}><Ico.Chevron dir="left"/></button>
+          <button className="week-today-btn" onClick={() => setWeekOff(0)}>Today</button>
+          <button className="week-nav-btn" onClick={() => setWeekOff(o=>o+1)}><Ico.Chevron dir="right"/></button>
+        </div>
+        <div className="topbar-sep"/>
+        <button className="cmd-trigger" onClick={() => setPalette(true)}>
+          <Ico.Search/> Search commands<kbd>⌘K</kbd>
+        </button>
+        <button className="icon-btn" onClick={() => setTheme(t=>t==='dark'?'light':'dark')} title="Toggle theme (L)">
+          {theme==='dark' ? <Ico.Sun/> : <Ico.Moon/>}
+        </button>
+        <button className="btn-primary" onClick={() => { const ti = weekDates.findIndex(d=>isToday(d)); setAddModal(ti>=0?ti:0); }}>
+          <Ico.Plus/> New task<kbd>C</kbd>
+        </button>
+      </div>
+
+      {/* BODY */}
+      <div className="app-body">
+        {!hideSidebar && <Sidebar tasks={tasks}/>}
+        <div className="board">
+          {weekDates.map((date, i) => (
+            <Column
+              key={i} date={date} colIdx={i}
+              tasks={tasks[i]||[]}
+              showWeekend={tweaks.showWeekend}
+              onAdd={setAddModal}
+              onToggle={onToggle} onDelete={onDelete}
+              onDragStart={onDragStart} onDragEnd={onDragEnd}
+              onDragOver={onDragOver} onDrop={onDrop} onDragLeave={onDragLeave}
+              draggingOver={dragOver} draggingId={dragId}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* STATUS BAR */}
+      <div className="statusbar">
+        <div className="statusbar-left">
+          <span style={{color:'var(--text-3)'}}>{totalDone}/{totalTasks} tasks completed this week</span>
+          <div className="status-divider"/>
+          <span style={{color:'var(--accent)',fontFamily:'var(--mono)',fontSize:10}}>
+            {all.filter(t=>!t.done&&t.tag==='focus').length} focus blocks remaining
+          </span>
+        </div>
+        <div className="statusbar-right">
+          <span><kbd>C</kbd> new task</span>
+          <span><kbd>T</kbd> today</span>
+          <span><kbd>L</kbd> theme</span>
+          <span><kbd>W</kbd> weekends</span>
+          <span><kbd>⌘K</kbd> commands</span>
+        </div>
+      </div>
+
+      {/* MODALS */}
+      {addModal !== null && (
+        <AddModal
+          dayLabel={`${DAY_LONG[weekDates[addModal]?.getDay()]}`}
+          colIdx={addModal}
+          onAdd={onAddTask}
+          onClose={() => setAddModal(null)}
+        />
+      )}
+      {palette && (
+        <CommandPalette
+          onClose={() => setPalette(false)}
+          onAction={handlePaletteAction}
+        />
+      )}
+
+
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<div id="root" style="display:flex;flex-direction:column;height:100vh;overflow:hidden;"></div>
+<template id="__bundler_thumbnail">
+  <svg viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg">
+    <rect width="120" height="80" fill="#0e0f13"/>
+    <rect x="0" y="0" width="25" height="80" fill="#0a0b0e"/>
+    <rect x="4" y="14" width="17" height="5" rx="2" fill="#22232b"/>
+    <rect x="4" y="22" width="17" height="5" rx="2" fill="#1c1d24"/>
+    <rect x="4" y="30" width="17" height="5" rx="2" fill="#1c1d24"/>
+    <rect x="28" y="8" width="21" height="10" rx="2" fill="#11131a"/>
+    <rect x="28" y="20" width="21" height="8" rx="2" fill="#16171d"/>
+    <rect x="28" y="30" width="21" height="8" rx="2" fill="#16171d"/>
+    <rect x="52" y="8" width="21" height="8" rx="2" fill="#16171d"/>
+    <rect x="52" y="18" width="21" height="8" rx="2" fill="#16171d"/>
+    <rect x="52" y="28" width="21" height="8" rx="2" fill="#16171d"/>
+    <rect x="76" y="8" width="21" height="8" rx="2" fill="#16171d"/>
+    <rect x="76" y="18" width="21" height="8" rx="2" fill="#16171d"/>
+    <rect x="100" y="8" width="17" height="8" rx="2" fill="#16171d"/>
+    <rect x="4" y="10" width="8" height="2" rx="1" fill="#6366f1"/>
+  </svg>
+</template>
+</body>
+</html>
