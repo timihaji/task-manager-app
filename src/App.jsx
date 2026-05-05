@@ -35,9 +35,10 @@ import {
   buildExpiryTask,
   stretchSchedule,
   isStale,
-  PEOPLE_STORAGE_KEY,
   loadPeople,
   savePeople,
+  setPeopleCache,
+  setPeoplePersister,
   recordDelegation,
   adjustOpenCount,
   getPreferredCadence,
@@ -50,7 +51,12 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMe
 import ReactDOM from "react-dom/client";
 import { useAuth } from './auth/AuthProvider.jsx';
 import { useWorkspace } from './lib/WorkspaceProvider.jsx';
-import { fetchTasks, syncTaskDiff } from './lib/db.js';
+import {
+  fetchTasks, syncTaskDiff,
+  fetchSettings, saveSettings,
+  fetchTaxonomy, saveTaxonomy,
+  fetchPeople, upsertPerson,
+} from './lib/db.js';
 // ── extracted utilities ──────────────────────────────────────────────────
 import { I } from './utils/icons.jsx';
 import { TIME_PRESETS, TIME_MORE, PRI_INFO, SNOOZE_OPTS } from './utils/constants.js';
@@ -140,12 +146,10 @@ function App() {
     light_bg:'#f3f7f4', light_surface:'#fffdfa', light_sidebar:'#e7efe9', light_border:'#d5ded7', light_text:'#17211d',
     stackSort:'smart', stackShowCompleted:true, stackGroupByDate:false, stackCompactBelowDeck:true, stackShowSpine:true, stackOrder:[],
     newTaskPosition:'top',
-  };
-  const loadTM = () => {
-    try {
-      const stored = JSON.parse(localStorage.getItem('tm_settings')||'{}') || {};
-      return {...TM_DEFAULTS,...stored};
-    } catch { return {...TM_DEFAULTS}; }
+    // Bundled UI prefs that used to live in their own localStorage keys.
+    filterPrefs: { mode: 'and' },
+    groupPrefs: { global: 'project', inbox: 'none' },
+    recentBlockReasons: [],
   };
   const defaultTaxonomy = () => ({
     contexts: PROJ.map(p=>({...p})),
@@ -176,30 +180,92 @@ function App() {
       lifeAreas: normalizedLifeAreas,
     };
   };
-  const loadTaxonomy = () => {
-    try { return normalizeTaxonomy(JSON.parse(localStorage.getItem('tm_taxonomy')||'null')); }
-    catch { return normalizeTaxonomy(null); }
-  };
-  const [tweaks, setTweakState] = useState(loadTM);
-  const [taxonomy, setTaxonomyState] = useState(loadTaxonomy);
+  const [tweaks, setTweakState] = useState(() => ({...TM_DEFAULTS}));
+  const [taxonomy, setTaxonomyState] = useState(() => normalizeTaxonomy(null));
+  const [settingsReady, setSettingsReady] = useState(false);
+  const [taxonomyReady, setTaxonomyReady] = useState(false);
   syncTaxonomyGlobals(taxonomy);
   const setTweak = (key, val) => {
     setTweakState(prev => {
       const next = typeof key === 'object' ? {...prev,...key} : {...prev,[key]:val};
-      try { localStorage.setItem('tm_settings', JSON.stringify(next)); } catch {}
       return next;
     });
   };
   const setTaxonomy = (updater) => {
     setTaxonomyState(prev => {
       const next = normalizeTaxonomy(typeof updater === 'function' ? updater(prev) : updater);
-      try { localStorage.setItem('tm_taxonomy', JSON.stringify(next)); } catch {}
       return next;
     });
   };
-  useEffect(()=>{
-    try { localStorage.setItem('tm_taxonomy', JSON.stringify(taxonomy)); } catch {}
-  }, [taxonomy]);
+
+  // Initial load of settings, taxonomy, and people from Supabase once the
+  // workspace is ready. Local state is merged with the cloud values (cloud
+  // wins) so any transient defaults the user already saw stay consistent.
+  useEffect(() => {
+    if (!workspaceId || !userId) return;
+    let cancelled = false;
+    setSettingsReady(false);
+    setTaxonomyReady(false);
+    (async () => {
+      try {
+        const [cloudSettings, cloudTaxonomy, cloudPeople] = await Promise.all([
+          fetchSettings(userId),
+          fetchTaxonomy(workspaceId),
+          fetchPeople(workspaceId),
+        ]);
+        if (cancelled) return;
+        if (cloudSettings) {
+          setTweakState(prev => ({...TM_DEFAULTS, ...prev, ...cloudSettings}));
+        }
+        if (cloudTaxonomy) {
+          setTaxonomyState(normalizeTaxonomy(cloudTaxonomy));
+        }
+        // Hydrate the people cache, keyed by lowercase displayName, then
+        // install a persister that mirrors future savePeople() calls to
+        // Supabase. The persister carries the right userId/workspaceId in
+        // its closure so data.js stays decoupled from auth.
+        const peopleMap = {};
+        for (const p of cloudPeople || []) {
+          if (!p?.displayName) continue;
+          peopleMap[p.displayName.toLowerCase()] = p;
+        }
+        setPeopleCache(peopleMap);
+        setPeoplePersister((person) => upsertPerson(person, userId, workspaceId));
+        setSettingsReady(true);
+        setTaxonomyReady(true);
+      } catch (e) {
+        console.error('[settings/taxonomy/people] initial fetch failed', e);
+        setSettingsReady(true);
+        setTaxonomyReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      setPeoplePersister(null);
+    };
+  }, [workspaceId, userId]);
+
+  // Debounced cloud save of the settings blob.
+  useEffect(() => {
+    if (!settingsReady || !userId) return;
+    const handle = setTimeout(() => {
+      saveSettings(userId, tweaks).catch(e => {
+        console.error('[settings] save failed', e);
+      });
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [tweaks, settingsReady, userId]);
+
+  // Debounced cloud save of taxonomy.
+  useEffect(() => {
+    if (!taxonomyReady || !userId || !workspaceId) return;
+    const handle = setTimeout(() => {
+      saveTaxonomy(workspaceId, userId, taxonomy).catch(e => {
+        console.error('[taxonomy] save failed', e);
+      });
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [taxonomy, taxonomyReady, userId, workspaceId]);
   const theme = tweaks.theme;
   const setTheme = (fn) => setTweak('theme', typeof fn === 'function' ? fn(tweaks.theme) : fn);
   const showWknd = tweaks.showWeekend;
@@ -211,42 +277,31 @@ function App() {
   const [addModal,setAddModal]= useState(null); // {date,label}
   const [palette,setPalette] = useState(false);
   const [shortcuts,setShortcuts]=useState(false);
-  const loadFilterPrefs = () => {
-    try {
-      return { mode:'and', ...(JSON.parse(localStorage.getItem('tm_filter_prefs')||'{}') || {}) };
-    } catch {
-      return { mode:'and' };
-    }
-  };
-  const initialFilterPrefs = loadFilterPrefs();
   const [filters,setFilters] = useState({projects:[],tags:[],lifeAreas:[],priorities:[]});
-  const [filterMode,setFilterMode] = useState(initialFilterPrefs.mode === 'or' ? 'or' : 'and');
+  // filterMode / globalGroupBy / inboxGroupBy live inside `tweaks` so they
+  // ride the same cloud sync as the rest of the settings blob.
+  const filterMode = tweaks.filterPrefs?.mode === 'or' ? 'or' : 'and';
+  const setFilterMode = (m) => setTweak({ filterPrefs: { ...(tweaks.filterPrefs||{}), mode: m }});
   const [showWaitingOn,setShowWaitingOn] = useState(false);
   const [showStaleOnly,setShowStaleOnly] = useState(false);
   const [inboxFilters,setInboxFilters] = useState({projects:{},tags:{},lifeAreas:{},priorities:{}}); // val: 'inc' | 'exc'
   const [searchQuery,setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [filterOpen,setFilterOpen]=useState(false);
-  const loadGroupPrefs = () => {
-    try { return {global:'project', inbox:'none', ...JSON.parse(localStorage.getItem('tm_group_prefs')||'{}')}; }
-    catch { return {global:'project', inbox:'none'}; }
-  };
-  const initialGroupPrefs = loadGroupPrefs();
-  const [globalGroupBy,setGlobalGroupBy] = useState(initialGroupPrefs.global);
+  const globalGroupBy = tweaks.groupPrefs?.global || 'project';
+  const setGlobalGroupBy = (g) => setTweak({ groupPrefs: { ...(tweaks.groupPrefs||{}), global: g }});
   const [groupOpen,setGroupOpen] = useState(false);
-  const [inboxGroupBy,setInboxGroupBy] = useState(initialGroupPrefs.inbox);
-  useEffect(()=>{
-    try { localStorage.setItem('tm_group_prefs', JSON.stringify({global:globalGroupBy, inbox:inboxGroupBy})); } catch {}
-  },[globalGroupBy,inboxGroupBy]);
-  useEffect(()=>{
-    try { localStorage.setItem('tm_filter_prefs', JSON.stringify({mode:filterMode})); } catch {}
-  },[filterMode]);
+  const inboxGroupBy = tweaks.groupPrefs?.inbox || 'none';
+  const setInboxGroupBy = (g) => setTweak({ groupPrefs: { ...(tweaks.groupPrefs||{}), inbox: g }});
   const [collapsedGrps,setCollapsedGrps]=useState(new Set());
   const [completedOpen,setCompletedOpen]=useState(new Set()); // colKeys expanded
   const [blockedOpen,setBlockedOpen]=useState(()=>new Set()); // colKeys expanded for Blocked group
-  const [recentBlockReasons,setRecentBlockReasons]=useState(()=>{
-    try { return JSON.parse(localStorage.getItem('tm_recent_block_reasons')||'[]'); } catch { return []; }
-  });
+  const recentBlockReasons = Array.isArray(tweaks.recentBlockReasons) ? tweaks.recentBlockReasons : [];
+  const setRecentBlockReasons = (updater) => {
+    const prev = Array.isArray(tweaks.recentBlockReasons) ? tweaks.recentBlockReasons : [];
+    const next = typeof updater === 'function' ? updater(prev) : updater;
+    setTweak({ recentBlockReasons: next });
+  };
   const [drag,setDrag]       = useState(null); // {taskId,fromCol}
   const [dragOver,setDragOver]= useState(null);
   const [colDropIndex,setColDropIndex]=useState(null); // {col, index}
@@ -753,10 +808,8 @@ function App() {
   };
   const tasksForCol = (colKey) => applyFilters(tasksByDate.get(colKey) || []);
 
-  // Persist recent block reasons (LRU, max 8).
-  useEffect(()=>{
-    try { localStorage.setItem('tm_recent_block_reasons', JSON.stringify(recentBlockReasons.slice(0,8))); } catch {}
-  },[recentBlockReasons]);
+  // Append a reason to the recent-block-reasons LRU (max 8). Persistence
+  // rides the settings blob via setTweak; no separate storage hop.
   const rememberRecentReason = (reason) => {
     const r = (reason||'').trim(); if (!r) return;
     setRecentBlockReasons(prev => [r, ...prev.filter(x=>x!==r)].slice(0,8));
