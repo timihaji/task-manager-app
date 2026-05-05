@@ -118,7 +118,7 @@ const syncUidFromTasks = (tasks=[]) => {
 
 const D = {
   today: () => { const d=new Date(); d.setHours(0,0,0,0); return d; },
-  str:   (d) => d.toISOString().slice(0,10),
+  str:   (d) => { const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; },
   add:   (d,n) => { const r=new Date(d); r.setDate(r.getDate()+n); return r; },
   parse: (s) => new Date(s+'T00:00:00'),
   isPast:(s) => { if (!s) return false; const t=D.today(); return D.parse(s)<t; },

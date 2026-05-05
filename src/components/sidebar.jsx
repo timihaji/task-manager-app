@@ -52,6 +52,7 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, 
     completed: all.filter(t=>t.done).length,
     archived: tasks.filter(t=>t.archived).length,
     stack: all.filter(t=>!t.done&&!t.parentId&&!t.snoozedUntil&&!t.delegatedTo&&!t.checkInOf).length,
+    delegations: all.filter(t=>!!t.delegatedTo&&!t.done).length,
   };
   const viewIs = (v) => typeof view==='string'?view===v:(view?.type===v.type&&view?.id===v.id);
   const NavItem=({ico,label,v,cnt})=>{
@@ -73,6 +74,7 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, 
         <NavItem ico={I.Pause} label="Blocked" v="blocked" cnt={counts.blocked}/>
         <NavItem ico={I.Check} label="Completed" v="completed" cnt={counts.completed}/>
         <NavItem ico={I.Archive} label="Archived" v="archived" cnt={counts.archived}/>
+        <NavItem ico={I.Deleg} label="Delegations" v="delegations" cnt={counts.delegations}/>
       </div>
       <div className="lnav-sec">
         <div className="lnav-lbl">Location</div>

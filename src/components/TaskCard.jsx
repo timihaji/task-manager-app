@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_NAMES, fmtTimeEst, daysSince, isStale } from '../data.js';
+import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_NAMES, fmtTimeEst, daysSince, isStale, D } from '../data.js';
 import { I } from '../utils/icons.jsx';
 import { PRI_INFO } from '../utils/constants.js';
 import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from '../utils/colors.js';
@@ -7,6 +7,28 @@ import { groupTasksBy, getGLabel, getGColor } from '../utils/grouping.js';
 import { CardPopover } from './CardPopover.jsx';
 import { TagPicker, ProjPicker, TimePicker, DatePicker, PriPicker, SnoozePicker } from './pickers.jsx';
 import { PriBars } from './PriBars.jsx';
+
+const fmtStartDate = (s) => {
+  if (!s) return '';
+  const today = D.str(D.today());
+  const tomorrow = D.str(D.add(D.today(), 1));
+  if (s === today) return 'Today';
+  if (s === tomorrow) return 'Starts Tomorrow';
+  const d = D.parse(s);
+  const diff = Math.round((d - D.today()) / 86400000);
+  if (diff > 1 && diff <= 6) return d.toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'});
+  return d.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+};
+
+const fmtDueDate = (s) => {
+  if (!s) return '';
+  const today = D.str(D.today());
+  const tomorrow = D.str(D.add(D.today(), 1));
+  if (s < today) return `Overdue ${D.parse(s).toLocaleDateString(undefined, {month:'short', day:'numeric'})}`;
+  if (s === today) return 'Due Today';
+  if (s === tomorrow) return 'Due Tomorrow';
+  return `Due ${D.parse(s).toLocaleDateString(undefined, {month:'short', day:'numeric'})}`;
+};
 
 // ── TaskCard ─────────────────────────────────────────────────────────────
 function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, onOpen, onToggle, onDelete, onFocus, onSelect, onRename, onRenameDone, onDragStart, onDragEnd, isDragging,
@@ -184,18 +206,24 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
           <span ref={dateRef} className={`card-meta-btn${openPop==='date'?' act':''}`}
             title={task.date?`Start Date: ${task.date}`:'Set Start Date'}
             onClick={e=>{e.stopPropagation(); setOpenPop(o=>o==='date'?null:'date');}}>
-            <span className={`card-meta${task.date?'':' empty'}`}><I.Cal/>{task.date||''}</span>
+            <span className={`card-meta${task.date?'':' empty'}`}><I.Cal/>{task.date ? fmtStartDate(task.date) : ''}</span>
             <CardPopover open={openPop==='date'} onClose={()=>setOpenPop(null)} anchorRef={dateRef}>
               <DatePicker task={task} isBulk={isBulkEdit}
                 onChange={(p)=>applyChange(p)} onClose={()=>setOpenPop(null)}/>
             </CardPopover>
           </span>
         )}
-        {!renderAsProject && task.dueDate && (
-          <span className="card-tag" title={`Due Date: ${task.dueDate}`} style={{background:'rgba(239,68,68,.10)',color:'#ef4444'}}>
-            Due {task.dueDate}
-          </span>
-        )}
+        {!renderAsProject && task.dueDate && (() => {
+          const lbl = fmtDueDate(task.dueDate);
+          const today = D.str(D.today());
+          const urgent = task.dueDate <= today;
+          return (
+            <span className="card-tag" title={`Due Date: ${task.dueDate}`}
+              style={{background: urgent ? 'rgba(239,68,68,.18)' : 'rgba(239,68,68,.10)', color:'#ef4444', fontWeight: urgent ? 600 : undefined}}>
+              {lbl}
+            </span>
+          );
+        })()}
         {/* Snooze (visible only when set; reachable via right-click / shortcut otherwise) */}
         {task.snoozedUntil && (
           <span ref={snoozeRef} className={`card-meta-btn${openPop==='snooze'?' act':''}`}

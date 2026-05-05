@@ -258,16 +258,37 @@ function PriPicker({ task, onChange, onClose, isBulk }) {
 }
 
 function SnoozePicker({ task, onChange, onClose, isBulk }) {
-  const cur = task.snoozedUntil || null;
-
+  const cur = task.snoozedUntil || task.snoozeMode || null;
+  const [showCal, setShowCal] = useState(false);
+  const today = D.today();
+  const nextSat = () => { const d = new Date(today); const day = d.getDay(); d.setDate(d.getDate() + (day === 6 ? 7 : (6 - day))); return D.str(d); };
+  const nextMon = () => { const d = new Date(today); const day = d.getDay(); d.setDate(d.getDate() + (day === 1 ? 7 : (8 - day) % 7 || 7)); return D.str(d); };
+  const snoozeAbs = (dateStr) => { onChange({ snoozedUntil: dateStr, snoozeMode: 'absolute', snoozeOffsetDays: null }); onClose(); };
+  const OPTS = [
+    { l: 'Tomorrow',    fn: () => D.str(D.add(today, 1)) },
+    { l: 'In 2 days',   fn: () => D.str(D.add(today, 2)) },
+    { l: 'In 3 days',   fn: () => D.str(D.add(today, 3)) },
+    { l: 'This weekend',fn: nextSat },
+    { l: 'Next week',   fn: nextMon },
+    { l: 'In 2 weeks',  fn: () => D.str(D.add(today, 14)) },
+    { l: 'In 3 weeks',  fn: () => D.str(D.add(today, 21)) },
+    { l: 'Next month',  fn: () => { const d = new Date(today); d.setMonth(d.getMonth() + 1); return D.str(d); } },
+    { l: 'In 3 months', fn: () => { const d = new Date(today); d.setMonth(d.getMonth() + 3); return D.str(d); } },
+  ];
   return (
     <>
       {isBulk && <div className="card-pop-bulk-hd">Editing {isBulk} tasks</div>}
-      <div className="card-pop-row">
-        {SNOOZE_OPTS.map(o => (
-          <span key={o.l} className="card-pop-chip" onClick={() => { onChange({ snoozedUntil: o.fn(), snoozeMode: 'absolute', snoozeOffsetDays: null }); onClose(); }}>{o.l}</span>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'4px', padding:'4px 0'}}>
+        {OPTS.map(o => (
+          <span key={o.l} className="card-pop-chip" style={{textAlign:'center', justifyContent:'center'}}
+            onClick={() => snoozeAbs(o.fn())}>{o.l}</span>
         ))}
+        <span className="card-pop-chip" style={{textAlign:'center', justifyContent:'center', opacity:.8}}
+          onClick={() => setShowCal(v => !v)}>Pick date…</span>
       </div>
+      {showCal && (
+        <MiniCalendar value={task.snoozedUntil || null} onPick={snoozeAbs} />
+      )}
       {cur && (
         <div className="card-pop-foot">
           <button className="card-pop-clear" onClick={() => { onChange({ snoozedUntil: null, snoozeMode: null, snoozeOffsetDays: null }); onClose(); }}>Wake up now</button>
