@@ -51,7 +51,7 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, 
     blocked: all.filter(t=>t.blocked&&!t.done).length,
     completed: all.filter(t=>t.done).length,
     archived: tasks.filter(t=>t.archived).length,
-    stack: all.filter(t=>!t.done&&!t.parentId&&!t.snoozedUntil&&!t.delegatedTo).length,
+    stack: all.filter(t=>!t.done&&!t.parentId&&!t.snoozedUntil&&!t.delegatedTo&&!t.checkInOf).length,
   };
   const viewIs = (v) => typeof view==='string'?view===v:(view?.type===v.type&&view?.id===v.id);
   const NavItem=({ico,label,v,cnt})=>{
