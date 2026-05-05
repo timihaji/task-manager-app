@@ -96,6 +96,41 @@ import {
   rgbToHsl, hexToRgb, hexToRgba, readableInkFor, readableGlowFor,
 } from './utils/colors.js';
 
+const LAST_VIEW_STORAGE_KEY = 'tm_last_view_v1';
+const SIMPLE_VIEWS = new Set([
+  'week', 'list', 'stack', 'inbox', 'upcoming', 'backlog',
+  'snoozed', 'someday', 'blocked', 'completed', 'archived', 'delegations',
+]);
+
+function normalizeSavedView(value) {
+  if (typeof value === 'string') {
+    return SIMPLE_VIEWS.has(value) ? value : null;
+  }
+  if (!value || typeof value !== 'object') return null;
+  if (value.type === 'project' && typeof value.id === 'string') {
+    return { type: 'project', id: value.id };
+  }
+  if (value.type === 'tag' && typeof value.name === 'string') {
+    return { type: 'tag', name: value.name };
+  }
+  if (value.type === 'lifeArea' && typeof value.id === 'string') {
+    return { type: 'lifeArea', id: value.id };
+  }
+  return null;
+}
+
+function sameSavedView(a, b) {
+  return JSON.stringify(normalizeSavedView(a)) === JSON.stringify(normalizeSavedView(b));
+}
+
+function readSavedView() {
+  try {
+    return normalizeSavedView(JSON.parse(localStorage.getItem(LAST_VIEW_STORAGE_KEY) || 'null'));
+  } catch {
+    return null;
+  }
+}
+
 function App() {
   const { user } = useAuth();
   const { workspace, supabaseDisabled } = useWorkspace();
@@ -153,7 +188,7 @@ function App() {
     inboxWidth:178, projectPanelWidth:190, dayWindow:'auto', cardRadius:10, groupRadius:4, cardGap:3, shadowIntensity:.35,
     dark_bg:'#071512', dark_surface:'#10201d', dark_sidebar:'#06110f', dark_border:'#1d342f', dark_text:'#e6fffb',
     light_bg:'#f3f7f4', light_surface:'#fffdfa', light_sidebar:'#e7efe9', light_border:'#d5ded7', light_text:'#17211d',
-    stackSort:'smart', stackShowCompleted:true, stackGroupByDate:false, stackCompactBelowDeck:true, stackShowSpine:true, stackOrder:[],
+  stackSort:'smart', stackShowCompleted:true, stackGroupByDate:false, stackCompactBelowDeck:true, stackShowSpine:true, stackOrder:[], stackFilterOpen:false, stackFilters:{},
     newTaskPosition:'top',
     // Bundled UI prefs that used to live in their own localStorage keys.
     filterPrefs: { mode: 'and' },
@@ -364,7 +399,9 @@ function App() {
   const setTheme = (fn) => setTweak('theme', typeof fn === 'function' ? fn(tweaks.theme) : fn);
   const showWknd = tweaks.showWeekend;
   const setShowWknd = (fn) => setTweak('showWeekend', typeof fn === 'function' ? fn(tweaks.showWeekend) : fn);
-  const [view,setView]       = useState('week');
+  const initialSavedView = useRef(readSavedView());
+  const restoredSavedView = useRef(!!initialSavedView.current);
+  const [view,setView]       = useState(() => initialSavedView.current || 'week');
   const [sidePanelView,setSidePanelView] = useState('inbox');
   const [drawerId,setDrawerId]= useState(null);
   const [settingsOpen,setSettingsOpen]= useState(false);
@@ -410,9 +447,36 @@ function App() {
   const [toastUndoable,setToastUndoable]=useState(false);
   const [undoStack,setUndoStack]=useState([]);
   const [navCollapsed,setNavCollapsed]=useState(false);
+  const [isNarrowScreen,setIsNarrowScreen]=useState(() => window.innerWidth <= 640);
   const [recents,setRecents] = useState({tags:[], projects:[]});
   const [contextMenu,setContextMenu] = useState(null); // {task, x, y}
   const [popRequest,setPopRequest] = useState(null); // {id, field}
+  useEffect(() => {
+    const onResize = () => setIsNarrowScreen(window.innerWidth <= 640);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (restoredSavedView.current || !settingsReady) return;
+    const savedView = normalizeSavedView(tweaks.lastView);
+    restoredSavedView.current = true;
+    if (savedView) {
+      setView(prev => (sameSavedView(prev, savedView) ? prev : savedView));
+    }
+  }, [settingsReady, tweaks.lastView]);
+
+  useEffect(() => {
+    const savedView = normalizeSavedView(view);
+    if (!savedView) return;
+    try {
+      localStorage.setItem(LAST_VIEW_STORAGE_KEY, JSON.stringify(savedView));
+    } catch {}
+    setTweakState(prev => (
+      sameSavedView(prev.lastView, savedView) ? prev : { ...prev, lastView: savedView }
+    ));
+  }, [view]);
+
   const showToast = (msg, opts={}) => {
     setToast(msg);
     setToastUndoable(!!opts.undoable);
@@ -2357,10 +2421,10 @@ function App() {
     {/* BODY */}
     <div className="app-shell">
     <div className={`app-body${filtersActive?' chk-mode':''}${selectedIds.size?' chk-mode':''}`} onClick={e=>{ setFilterOpen(false); setGroupOpen(false); if(!e.target.closest('.card,.list-item,.side-panel,.lnav,.drawer,.bulk-bar')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); } }}>
-      <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false);}} collapsed={navCollapsed} theme={theme}
+      <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false); if (isNarrowScreen) setNavCollapsed(true);}} collapsed={navCollapsed} theme={theme}
         activeLifeAreas={filters.lifeAreas}
         onLifeAreaToggle={id=>toggleFilter('lifeAreas',id)}/>
-      {view==='stack' && !navCollapsed && (
+      {view==='stack' && isNarrowScreen && !navCollapsed && (
         <div className="lnav-scrim" onClick={()=>setNavCollapsed(true)}/>
       )}
       {view==='week' ? (
