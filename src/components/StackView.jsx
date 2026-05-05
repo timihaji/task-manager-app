@@ -299,7 +299,8 @@ function DoneTodayFooter({ items, onRestore }) {
 }
 
 export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onComplete, onOpen, theme,
-                             focusedId, setFocusedId, renamingId, setRenamingId, onContextMenu, onAddNew }) {
+                             focusedId, setFocusedId, renamingId, setRenamingId, onContextMenu, onAddNew,
+                             navCollapsed, onToggleNav }) {
   const sortMode = tweaks.stackSort || 'smart';
   const manualOrder = tweaks.stackOrder || [];
   const compactBelowDeck = tweaks.stackCompactBelowDeck !== false;
@@ -511,6 +512,13 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
   return (
     <div className="stack-shell">
       <div className="stack-toolbar">
+        {onToggleNav && (
+          <button className="stack-burger" onClick={onToggleNav}
+                  aria-label={navCollapsed ? 'Open menu' : 'Close menu'}
+                  title="Menu">
+            <span/><span/><span/>
+          </button>
+        )}
         <div className="stack-h1">
           <span className="stack-glyph"><i/><i/><i/><i/></span>
           Stack

@@ -2170,6 +2170,9 @@ function App() {
       <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false);}} collapsed={navCollapsed} theme={theme}
         activeLifeAreas={filters.lifeAreas}
         onLifeAreaToggle={id=>toggleFilter('lifeAreas',id)}/>
+      {view==='stack' && !navCollapsed && (
+        <div className="lnav-scrim" onClick={()=>setNavCollapsed(true)}/>
+      )}
       {view==='week' ? (
         <div className="board-area" ref={boardShellRef} style={{'--col-w':`${COL_W}px`}}>
           <InboxCol tasks={sidePanelCurrentTasks} theme={theme} focusedCardId={focusedId} spawning={spawning}
@@ -2246,7 +2249,9 @@ function App() {
           renamingId={renamingId}
           setRenamingId={setRenamingId}
           onContextMenu={onCardContextMenu}
-          onAddNew={()=>addTask('today', D.today(), 'Untitled')}/>
+          onAddNew={()=>addTask('today', D.today(), 'Untitled')}
+          navCollapsed={navCollapsed}
+          onToggleNav={()=>setNavCollapsed(c=>!c)}/>
       ) : view==='list' ? (
         <ListView title="List" tasks={allOpenTopLevel} onOpen={openTask} onFocus={setFocusedId}
           onSelect={toggleSelected} selectedIds={selectedIds}

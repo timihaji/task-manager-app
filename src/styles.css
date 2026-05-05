@@ -886,3 +886,75 @@ body[data-density="airy"] .scard-idx{left:26px;top:18px;width:32px;height:32px}
 .auth-toggle{font:400 12px var(--font);color:var(--t2);text-align:center;margin-top:16px}
 .auth-toggle button{background:none;border:0;padding:0;color:var(--accent);cursor:pointer;font:inherit}
 .scard.completed .scard-chk.done:hover .chk-dot{border-color:var(--accent)}
+
+/* === Stack mobile responsive === */
+.stack-burger{display:none}
+.lnav-scrim{display:none}
+
+@media (max-width: 640px){
+  .app-body:has(.stack-shell) .lnav{
+    position:fixed;top:0;left:0;bottom:0;z-index:60;
+    width:240px;min-width:240px;
+    box-shadow:var(--shadow-lg);
+    transform:translateX(0);transition:transform .2s ease;
+  }
+  .app-body:has(.stack-shell) .lnav.collapsed{
+    width:240px;min-width:240px;padding:10px 0;
+    transform:translateX(-100%);
+  }
+  .lnav-scrim{
+    display:block;position:fixed;
+    top:0;left:240px;right:0;bottom:0;
+    background:rgba(0,0,0,.45);z-index:55;
+  }
+
+  .stack-shell .stack-burger{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:36px;height:36px;padding:0;border-radius:6px;
+    background:transparent;border:1px solid var(--border-s);
+    cursor:pointer;flex-direction:column;gap:3px;
+  }
+  .stack-shell .stack-burger span{
+    display:block;width:16px;height:2px;background:var(--t2);border-radius:1px;
+  }
+
+  .stack-shell .stack-toolbar{padding:10px 12px;gap:8px;flex-wrap:wrap}
+  .stack-shell .stack-h1{font-size:16px}
+  .stack-shell .stack-sub{display:none}
+  .stack-shell .stack-stats{margin-left:auto;gap:8px;font-size:11px;width:100%}
+  .stack-shell .stack-stats-prog .stack-mini-prog{width:60px}
+  .stack-shell .stack-toolbar .seg{display:flex;flex-basis:100%;width:100%}
+  .stack-shell .stack-toolbar .seg button{flex:1;min-width:0;padding:8px 2px;font-size:11px}
+
+  .stack-shell .stack-body{padding:12px 0 160px}
+  .stack-shell .stack-inner{padding:0 10px;gap:10px}
+  .stack-shell .stack-inner::before{display:none}
+
+  .stack-shell .scard{padding:12px}
+  .stack-shell .scard-idx{
+    position:static;width:auto;height:auto;border:0;background:transparent;
+    color:var(--t4);font-size:11px;padding:0;
+  }
+  .stack-shell .scard-r1{align-items:center}
+  .stack-shell .scard-chk{width:24px;height:24px}
+  .stack-shell .scard-title{font-size:15px}
+  .stack-shell .scard.is-now .scard-title{font-size:17px}
+  .stack-shell .scard-r2{padding-left:0}
+  .stack-shell .scard-proj-prog{padding-left:0}
+  .stack-shell .scard.is-project::after{display:none}
+  .stack-shell .scard-subs{margin-left:6px;padding-left:10px}
+
+  .stack-shell .scard-actions{
+    position:static;opacity:1;transform:none;pointer-events:auto;
+    margin-top:6px;justify-content:flex-end;gap:8px;
+    order:99;flex-wrap:wrap;
+  }
+  .stack-shell .scard-act-btn{padding:8px 14px;font-size:13px;min-height:36px}
+  .stack-shell .scard-act-icon{width:36px;height:36px}
+  .stack-shell .scard-act-icon svg{width:16px;height:16px}
+  .stack-shell .scard-act-done{order:-1;margin-right:auto}
+
+  .stack-shell .scard:hover{transform:none}
+
+  .stack-shell .stack-add-top{padding:12px;min-height:44px}
+}
