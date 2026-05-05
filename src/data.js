@@ -238,21 +238,41 @@ const isStale = (task, now=Date.now()) => {
   return days > maxGap * 2;
 };
 
-// People store — keyed by lowercase name. Lightweight memory of who you delegate
-// to and what cadence you tend to use, so the next delegation pre-fills.
-const PEOPLE_STORAGE_KEY = 'tm_delegation_people_v1';
+// People store — keyed by lowercase name. Lightweight memory of who you
+// delegate to and what cadence you tend to use, so the next delegation
+// pre-fills.
+//
+// Backed by an in-memory cache that App hydrates from Supabase on workspace
+// bootstrap, plus an injected persister that mirrors writes back to the
+// cloud. The sync API (loadPeople / savePeople) is preserved so existing
+// callers don't need to await anything.
+let _peopleCache = {};
+let _peoplePersister = null;
 
-const loadPeople = () => {
-  try {
-    const raw = localStorage.getItem(PEOPLE_STORAGE_KEY);
-    if (!raw) return {};
-    const p = JSON.parse(raw);
-    return (p && typeof p === 'object') ? p : {};
-  } catch { return {}; }
-};
+const loadPeople = () => _peopleCache;
 
 const savePeople = (people) => {
-  try { localStorage.setItem(PEOPLE_STORAGE_KEY, JSON.stringify(people || {})); } catch {}
+  const next = (people && typeof people === 'object') ? people : {};
+  const prev = _peopleCache;
+  _peopleCache = next;
+  if (!_peoplePersister) return;
+  for (const [k, v] of Object.entries(next)) {
+    if (prev[k] === v) continue;
+    Promise.resolve(_peoplePersister(v)).catch((e) =>
+      console.error('[people] sync failed', e)
+    );
+  }
+};
+
+// Replace the in-memory map. Called on sign-in after fetching from Supabase.
+const setPeopleCache = (map) => {
+  _peopleCache = (map && typeof map === 'object') ? { ...map } : {};
+};
+
+// Install the cloud persister. `fn(person)` is invoked for each entry that
+// changed during a savePeople call. Pass null to clear (e.g. on sign-out).
+const setPeoplePersister = (fn) => {
+  _peoplePersister = typeof fn === 'function' ? fn : null;
 };
 
 const personKey = (name) => String(name||'').trim().toLowerCase();
@@ -585,9 +605,10 @@ export {
   buildExpiryTask,
   stretchSchedule,
   isStale,
-  PEOPLE_STORAGE_KEY,
   loadPeople,
   savePeople,
+  setPeopleCache,
+  setPeoplePersister,
   recordDelegation,
   adjustOpenCount,
   getPreferredCadence,
