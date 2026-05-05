@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  PROJ, ALL_TAGS, TAG_NAMES, LIFE_AREAS, LIFE_AREA_NAMES,
-  D, fmtWeek, MONTH_S, DAY_S, DAY_L, makeTask, parseTimeEst, fmtTimeEst,
+  PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_NAMES, LIFE_AREA_DARK, LIFE_AREA_LIGHT,
+  D, fmtWeek, MONTH_S, DAY_S, DAY_L, makeTask, parseTimeEst, fmtTimeEst, suggestLifeAreaFromTitle,
   CHECKIN_PRESETS, CHECKIN_PRESET_LABELS, matchPreset, isStale, daysSince,
   loadPeople, savePeople, getPreferredCadence, recordContact, peopleRollup, personKey,
   buildCheckInTasks, buildExpiryTask, stretchSchedule,
