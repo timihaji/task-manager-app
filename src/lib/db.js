@@ -47,11 +47,23 @@ const ROW_TO_TASK_KEYS = Object.fromEntries(
   Object.entries(TASK_TO_ROW_KEYS).map(([k, v]) => [v, k])
 );
 
-// Fields that are always present on every row (don't get mapped).
-const PASSTHROUGH_TASK_KEYS = new Set([
-  'id', 'title', 'description', 'project', 'tags', 'priority',
-  'date', 'done', 'recurrence', 'blocked', 'activity', 'archived', 'source',
-  'workspace_id', 'user_id',
+// Allow-list of columns that actually exist on public.tasks. Any other
+// fields on the JS task object are dropped on the way to Postgres —
+// older localStorage payloads (e.g. the long-defunct `importedAt`) can
+// otherwise fail the upsert with a "column not found" error.
+const TASK_DB_COLUMNS = new Set([
+  'id', 'workspace_id', 'user_id',
+  'title', 'description', 'card_type', 'parent_id', 'child_order',
+  'project', 'tags', 'priority', 'life_area', 'time_estimate',
+  'date', 'done', 'completed_at', 'snoozed_until', 'recurrence',
+  'blocked', 'blocked_reason', 'blocked_by', 'blocked_since', 'follow_up_at',
+  'delegated_to', 'delegated_at', 'delegation_status',
+  'check_in_schedule', 'check_in_task_ids', 'check_in_of', 'check_in_day_offset',
+  'expiry_date', 'expiry_task_id', 'expiry_of',
+  'last_contact_at', 'delegation_history',
+  'activity', 'archived', 'source', 'source_id',
+  'subtasks',
+  'created_at', 'updated_at',
 ]);
 
 // camelCase task object -> snake_case Postgres row.
@@ -62,6 +74,7 @@ export function taskToRow(task, userId, workspaceId) {
   for (const [k, v] of Object.entries(task || {})) {
     if (v === undefined) continue;
     const dbKey = TASK_TO_ROW_KEYS[k] || k;
+    if (!TASK_DB_COLUMNS.has(dbKey)) continue; // drop unknown legacy fields
     row[dbKey] = v;
   }
   return row;
