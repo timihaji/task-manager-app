@@ -83,6 +83,7 @@ import { SwatchPicker, SettingsScrollPane, TaxonomyManager, PRESETS_DATA, Settin
 import { ListTaskItem, ListView } from './components/ListView.jsx';
 import { StackView } from './components/StackView.jsx';
 import { AddModal } from './components/AddModal.jsx';
+import { MigrateFromLocal } from './components/MigrateFromLocal.jsx';
 
 // ── color/taxonomy helpers (used inside App body) ────────────────────────
 import {
@@ -95,9 +96,12 @@ import {
 
 function App() {
   const { user } = useAuth();
-  const { workspace } = useWorkspace();
+  const { workspace, supabaseDisabled } = useWorkspace();
   const userId = user?.id ?? null;
   const workspaceId = workspace?.id ?? null;
+  const [migrationDismissed, setMigrationDismissed] = useState(() => {
+    try { return !!localStorage.getItem('tm_migrated_to_cloud'); } catch { return true; }
+  });
   const TIMELINE_PAST_DAYS = 120;
   const TIMELINE_FUTURE_DAYS = 180;
   const TIMELINE_EXTEND_DAYS = 45;
@@ -2204,6 +2208,9 @@ function App() {
   })() : [];
 
   return <>
+    {!supabaseDisabled && tasksReady && !migrationDismissed && (
+      <MigrateFromLocal onComplete={() => setMigrationDismissed(true)} />
+    )}
     {/* TOPBAR */}
     <div className="topbar">
       <div className="tb-logo"><div className="tb-icon">K</div>kanban</div>

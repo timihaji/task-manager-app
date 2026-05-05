@@ -887,6 +887,27 @@ body[data-density="airy"] .scard-idx{left:26px;top:18px;width:32px;height:32px}
 .auth-toggle button{background:none;border:0;padding:0;color:var(--accent);cursor:pointer;font:inherit}
 .scard.completed .scard-chk.done:hover .chk-dot{border-color:var(--accent)}
 
+/* === Local-data migration banner (PR E) === */
+.migrate-banner{
+  display:flex;align-items:flex-start;gap:14px;
+  padding:12px 16px;
+  background:var(--surface);
+  border-bottom:1px solid var(--border-s);
+  box-shadow:0 1px 0 rgba(0,0,0,.04);
+  font:500 13px var(--font);color:var(--t1);
+}
+.migrate-icon{
+  flex:none;width:28px;height:28px;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--accent);color:#fff;font-weight:700;
+}
+.migrate-body{flex:1;min-width:0}
+.migrate-title{font-weight:600;margin-bottom:2px}
+.migrate-detail{color:var(--t2);font-weight:400;font-size:12px}
+.migrate-progress{margin-top:6px;color:var(--accent);font-size:12px}
+.migrate-error{margin-top:6px;color:#dc2626;font-size:12px}
+.migrate-actions{flex:none;display:flex;gap:8px;align-items:center}
+
 /* === Stack mobile responsive === */
 .stack-burger{display:none}
 .lnav-scrim{display:none}
