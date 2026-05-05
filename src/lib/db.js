@@ -66,15 +66,43 @@ const TASK_DB_COLUMNS = new Set([
   'created_at', 'updated_at',
 ]);
 
+// Defaults for NOT NULL columns. Required because the Supabase client
+// builds the batch `columns=...` parameter from the union of every
+// row's keys; any row missing a column gets `null` for it, which trips
+// the NOT NULL constraint. Older localStorage tasks predating fields
+// like `archived` are the common offenders. Setting them on every row
+// keeps the batch shape uniform.
+const TASK_NOT_NULL_DEFAULTS = {
+  title: '',
+  description: '',
+  card_type: 'task',
+  tags: [],
+  done: false,
+  blocked: false,
+  blocked_reason: '',
+  blocked_by: [],
+  check_in_task_ids: [],
+  delegation_history: [],
+  activity: [],
+  archived: false,
+  subtasks: [],
+};
+
 // camelCase task object -> snake_case Postgres row.
 // userId/workspaceId are added explicitly because the JS object doesn't
 // usually carry them.
 export function taskToRow(task, userId, workspaceId) {
-  const row = { user_id: userId, workspace_id: workspaceId };
+  const row = {
+    ...TASK_NOT_NULL_DEFAULTS,
+    user_id: userId,
+    workspace_id: workspaceId,
+  };
   for (const [k, v] of Object.entries(task || {})) {
     if (v === undefined) continue;
     const dbKey = TASK_TO_ROW_KEYS[k] || k;
-    if (!TASK_DB_COLUMNS.has(dbKey)) continue; // drop unknown legacy fields
+    if (!TASK_DB_COLUMNS.has(dbKey)) continue;
+    // Don't let an explicit null overwrite a NOT NULL default.
+    if (v === null && Object.prototype.hasOwnProperty.call(TASK_NOT_NULL_DEFAULTS, dbKey)) continue;
     row[dbKey] = v;
   }
   return row;
