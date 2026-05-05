@@ -56,6 +56,8 @@ import {
   fetchSettings, saveSettings,
   fetchTaxonomy, saveTaxonomy,
   fetchPeople, upsertPerson,
+  subscribeTasks, subscribeTaxonomy, subscribePeople,
+  rowToTask, rowToPerson,
 } from './lib/db.js';
 // ── extracted utilities ──────────────────────────────────────────────────
 import { I } from './utils/icons.jsx';
@@ -266,6 +268,91 @@ function App() {
     }, 500);
     return () => clearTimeout(handle);
   }, [taxonomy, taxonomyReady, userId, workspaceId]);
+
+  // Realtime subscriptions for cross-device sync. Loop avoidance: we
+  // compare the incoming row to local state and short-circuit if it's
+  // identical (which it will be for our own writes echoing back).
+  useEffect(() => {
+    if (!workspaceId) return;
+
+    const unsubTasks = subscribeTasks(workspaceId, (payload) => {
+      if (payload.eventType === 'DELETE') {
+        const id = payload.old?.id;
+        if (!id) return;
+        setTasks(prev => {
+          if (!prev.some(t => t.id === id)) return prev;
+          const next = prev.filter(t => t.id !== id);
+          lastSyncedTasksRef.current = next;
+          return next;
+        });
+        return;
+      }
+      const incoming = rowToTask(payload.new);
+      if (!incoming?.id) return;
+      setTasks(prev => {
+        const idx = prev.findIndex(t => t.id === incoming.id);
+        if (idx === -1) {
+          const next = [...prev, incoming];
+          lastSyncedTasksRef.current = next;
+          return next;
+        }
+        if (JSON.stringify(prev[idx]) === JSON.stringify(incoming)) {
+          // Echo of our own write — no-op so the sync effect doesn't fire.
+          return prev;
+        }
+        const next = prev.slice();
+        next[idx] = incoming;
+        lastSyncedTasksRef.current = next;
+        return next;
+      });
+    });
+
+    const unsubTaxonomy = subscribeTaxonomy(workspaceId, (payload) => {
+      if (payload.eventType === 'DELETE') return;
+      const row = payload.new;
+      if (!row) return;
+      const incoming = normalizeTaxonomy({
+        contexts: row.contexts,
+        tags: row.tags,
+        lifeAreas: row.life_areas,
+      });
+      setTaxonomyState(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(incoming)) return prev;
+        return incoming;
+      });
+    });
+
+    const unsubPeople = subscribePeople(workspaceId, (payload) => {
+      // Update the in-memory people cache directly. UI reads via
+      // loadPeople() inside render — fresh values appear on next render
+      // triggered by other state changes. Truly reactive UI for people
+      // is out of scope for this PR.
+      if (payload.eventType === 'DELETE') {
+        const old = payload.old;
+        const name = old?.name;
+        if (!name) return;
+        const cache = loadPeople();
+        const k = name.toLowerCase();
+        if (!cache[k]) return;
+        const next = { ...cache };
+        delete next[k];
+        setPeopleCache(next);
+        return;
+      }
+      const person = rowToPerson(payload.new);
+      if (!person?.displayName) return;
+      const cache = loadPeople();
+      const k = person.displayName.toLowerCase();
+      if (JSON.stringify(cache[k]) === JSON.stringify(person)) return;
+      setPeopleCache({ ...cache, [k]: person });
+    });
+
+    return () => {
+      unsubTasks?.();
+      unsubTaxonomy?.();
+      unsubPeople?.();
+    };
+  }, [workspaceId]);
   const theme = tweaks.theme;
   const setTheme = (fn) => setTweak('theme', typeof fn === 'function' ? fn(tweaks.theme) : fn);
   const showWknd = tweaks.showWeekend;
