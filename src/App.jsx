@@ -399,9 +399,7 @@ function App() {
   const setTheme = (fn) => setTweak('theme', typeof fn === 'function' ? fn(tweaks.theme) : fn);
   const showWknd = tweaks.showWeekend;
   const setShowWknd = (fn) => setTweak('showWeekend', typeof fn === 'function' ? fn(tweaks.showWeekend) : fn);
-  const initialSavedView = useRef(readSavedView());
-  const restoredSavedView = useRef(!!initialSavedView.current);
-  const [view,setView]       = useState(() => initialSavedView.current || 'week');
+  const [view,setView]       = useState(() => readSavedView() || 'week');
   const [sidePanelView,setSidePanelView] = useState('inbox');
   const [drawerId,setDrawerId]= useState(null);
   const [settingsOpen,setSettingsOpen]= useState(false);
@@ -458,23 +456,11 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (restoredSavedView.current || !settingsReady) return;
-    const savedView = normalizeSavedView(tweaks.lastView);
-    restoredSavedView.current = true;
-    if (savedView) {
-      setView(prev => (sameSavedView(prev, savedView) ? prev : savedView));
-    }
-  }, [settingsReady, tweaks.lastView]);
-
-  useEffect(() => {
     const savedView = normalizeSavedView(view);
     if (!savedView) return;
     try {
       localStorage.setItem(LAST_VIEW_STORAGE_KEY, JSON.stringify(savedView));
     } catch {}
-    setTweakState(prev => (
-      sameSavedView(prev.lastView, savedView) ? prev : { ...prev, lastView: savedView }
-    ));
   }, [view]);
 
   const showToast = (msg, opts={}) => {
