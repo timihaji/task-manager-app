@@ -1853,7 +1853,7 @@ function App() {
       if((e.key==='x'||e.key==='X')&&focusedId){ const t=taskById(focusedId); if(t) completeTask(t.id,t.date||'inbox'); }
       if((e.key==='e'||e.key==='E')&&focusedId){ e.preventDefault(); setDrawerId(null); setSettingsOpen(false); setRenamingId(focusedId); }
       if(e.key==='Enter'&&focusedId&&!drawerId){ setSettingsOpen(false); setRenamingId(null); setDrawerId(focusedId); }
-      if(e.key==='n'||e.key==='N'){ if(view==='stack'||view==='list'){ addTask('today',D.today(),'Untitled'); } else { const ci=getFocusedColIdx(); const ck=visColKeys[ci<0?1:ci]||visColKeys[1]; const date=ck&&ck!=='inbox'?D.parse(ck):null; addTask(ck||'inbox',date,'Untitled'); } }
+      if(e.key==='n'||e.key==='N'){ if(view==='stack'||view==='list'){ addTask('inbox',null,'Untitled'); } else { const ci=getFocusedColIdx(); const ck=visColKeys[ci<0?1:ci]||visColKeys[1]; const date=ck&&ck!=='inbox'?D.parse(ck):null; addTask(ck||'inbox',date,'Untitled'); } }
       if(e.key==='a'||e.key==='A'){
         e.preventDefault();
         const t = focusedId ? taskById(focusedId) : null;
@@ -1861,7 +1861,7 @@ function App() {
           if(t.parentId){
             addTask('inbox', null, 'Untitled', {parentId: t.parentId, afterId: t.id});
           } else {
-            const ck = (view==='stack'||view==='list') && !t.date ? D.str(D.today()) : (t.date || 'inbox');
+            const ck = (view==='stack'||view==='list') ? 'inbox' : (t.date || 'inbox');
             const date = ck!=='inbox' ? D.parse(ck) : null;
             addTask(ck, date, 'Untitled', {afterId: t.id});
           }
@@ -2409,7 +2409,7 @@ function App() {
           renamingId={renamingId}
           setRenamingId={setRenamingId}
           onContextMenu={onCardContextMenu}
-          onAddNew={()=>addTask('today', D.today(), 'Untitled')}
+          onAddNew={()=>addTask('inbox', null, 'Untitled')}
           navCollapsed={navCollapsed}
           onToggleNav={()=>setNavCollapsed(c=>!c)}/>
       ) : view==='list' ? (
