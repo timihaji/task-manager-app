@@ -76,7 +76,36 @@ authenticated user could read everyone's data. Don't disable it.
 
 A trigger on `auth.users` auto-creates a "Personal" workspace on signup.
 
+## Applying migrations via GitHub Actions
+
+A workflow exists at `.github/workflows/apply-migration-0005.yml` that applies
+migration 0005 against production using `psql`. It is triggered manually and
+does **not** run on push.
+
+**Secret required:**
+
+| Secret name            | Where to get it                                                        |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `SUPABASE_DB_PASSWORD` | Supabase dashboard → Project Settings → Database → Database password   |
+
+Add it at: GitHub repo → Settings → Secrets and variables → Actions → New repository secret.
+
+**To run:**
+
+1. GitHub → Actions → "Apply Migration 0005 (due\_date + snooze)" → Run workflow.
+2. Confirm the job succeeds and the new columns appear in Supabase Table Editor.
+3. The workflow file can be deleted after a successful run (or left — the SQL is
+   idempotent so re-running is harmless).
+
+The workflow does **not** use Supabase CLI migration tracking. Because migrations
+0001–0004 were applied manually via the SQL Editor (not via `supabase db push`),
+there is no remote migration-tracking table, and running `supabase db push` would
+attempt to replay all five migrations. The workflow therefore runs only the single
+SQL file directly via `psql`.
+
+---
+
 ## Future migrations
 
 Number sequentially: `0002_*.sql`, `0003_*.sql`, etc. Apply in order via the
-SQL Editor (or `supabase db push` if you set up the CLI).
+SQL Editor (or via a similar one-off GitHub Actions workflow as above).

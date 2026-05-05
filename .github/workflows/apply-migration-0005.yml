@@ -1,0 +1,35 @@
+name: Apply Migration 0005 (due_date + snooze)
+
+# Manual trigger only — this is a one-time migration workflow.
+# Run it once from: GitHub → Actions → "Apply Migration 0005" → Run workflow.
+# After a successful run, this file can be deleted or left in place
+# (the migration SQL is idempotent so re-running is harmless).
+on:
+  workflow_dispatch:
+
+jobs:
+  apply-migration:
+    name: Apply migration to production Supabase
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+
+      - name: Apply migration 0005
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          psql \
+            --host=db.luffkczrzqrmiamaitim.supabase.co \
+            --port=5432 \
+            --username=postgres \
+            --dbname=postgres \
+            --file=supabase/migrations/0005_add_due_date_and_relative_snooze.sql \
+            --echo-all \
+            --set ON_ERROR_STOP=1
