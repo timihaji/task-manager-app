@@ -172,6 +172,38 @@ export async function deleteTask(id) {
   if (error) throw error;
 }
 
+// Diff the previous task array against the next and persist only the
+// difference. Cheap structural equality is enough — task objects are
+// replaced, not mutated, so reference equality covers most no-ops; we
+// fall back to JSON.stringify for the rest.
+export async function syncTaskDiff(prev, next, userId, workspaceId) {
+  if (!supabase) return null;
+  if (!userId || !workspaceId) return null;
+  const prevById = new Map((prev || []).map((t) => [t.id, t]));
+  const nextById = new Map((next || []).map((t) => [t.id, t]));
+
+  const upserts = [];
+  for (const [id, task] of nextById) {
+    const old = prevById.get(id);
+    if (old === task) continue;
+    if (!old || JSON.stringify(old) !== JSON.stringify(task)) {
+      upserts.push(task);
+    }
+  }
+  const deleteIds = [];
+  for (const id of prevById.keys()) {
+    if (!nextById.has(id)) deleteIds.push(id);
+  }
+
+  if (!upserts.length && !deleteIds.length) return null;
+
+  const ops = [];
+  if (upserts.length) ops.push(upsertTasks(upserts, userId, workspaceId));
+  for (const id of deleteIds) ops.push(deleteTask(id));
+  await Promise.all(ops);
+  return { upserts: upserts.length, deletes: deleteIds.length };
+}
+
 // ---------------------------------------------------------------------------
 // Settings (PR C)
 // ---------------------------------------------------------------------------

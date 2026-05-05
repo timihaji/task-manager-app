@@ -48,6 +48,9 @@ import {
 
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, useDeferredValue  } from "react";
 import ReactDOM from "react-dom/client";
+import { useAuth } from './auth/AuthProvider.jsx';
+import { useWorkspace } from './lib/WorkspaceProvider.jsx';
+import { fetchTasks, syncTaskDiff } from './lib/db.js';
 // ── extracted utilities ──────────────────────────────────────────────────
 import { I } from './utils/icons.jsx';
 import { TIME_PRESETS, TIME_MORE, PRI_INFO, SNOOZE_OPTS } from './utils/constants.js';
@@ -83,42 +86,21 @@ import {
 } from './utils/colors.js';
 
 function App() {
-  const TASK_STORAGE_KEY = 'tm_tasks_v2';
-  const mergeImportedTasks = (base) => {
-    const importKey = `tm_import_${window.SUNSAMA_IMPORT_ID || 'sunsama'}`;
-    try { if (localStorage.getItem(importKey)==='done') return base; } catch {}
-    const imported = Array.isArray(window.SUNSAMA_IMPORT_TASKS) ? window.SUNSAMA_IMPORT_TASKS : [];
-    if (!imported.length) return base;
-    const ids = new Set(base.map(t=>t.id));
-    const sourceIds = new Set(base.filter(t=>t.source==='sunsama').map(t=>t.sourceId));
-    const additions = imported.filter(t=>!ids.has(t.id)&&!sourceIds.has(t.sourceId));
-    const merged = additions.length ? [...base, ...additions] : base;
-    try { localStorage.setItem(importKey, 'done'); } catch {}
-    return merged;
-  };
-  const loadTasks = () => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(TASK_STORAGE_KEY) || 'null');
-      if (Array.isArray(saved)) {
-        const merged = migrateTasks(mergeImportedTasks(saved));
-        syncUidFromTasks(merged);
-        return merged;
-      }
-      const merged = migrateTasks(mergeImportedTasks(INIT_TASKS));
-      syncUidFromTasks(merged);
-      return merged;
-    } catch {
-      const merged = migrateTasks(mergeImportedTasks(INIT_TASKS));
-      syncUidFromTasks(merged);
-      return merged;
-    }
-  };
+  const { user } = useAuth();
+  const { workspace } = useWorkspace();
+  const userId = user?.id ?? null;
+  const workspaceId = workspace?.id ?? null;
   const TIMELINE_PAST_DAYS = 120;
   const TIMELINE_FUTURE_DAYS = 180;
   const TIMELINE_EXTEND_DAYS = 45;
   const TIMELINE_MAX_DAYS = 730;
   const INITIAL_TIMELINE_DAYS = TIMELINE_PAST_DAYS + TIMELINE_FUTURE_DAYS + 1;
-  const [tasks,setTasks]     = useState(loadTasks);
+  const [tasks,setTasks]     = useState([]);
+  const [tasksReady, setTasksReady] = useState(false);
+  // Last array we successfully synced to the cloud. The sync effect diffs
+  // against this — not against React's previous render — so debounced
+  // edits coalesce correctly.
+  const lastSyncedTasksRef = useRef([]);
   const [weekOff,setWeekOff] = useState(-TIMELINE_PAST_DAYS);
   const [timelineDays,setTimelineDays] = useState(INITIAL_TIMELINE_DAYS);
   const [boardMetrics,setBoardMetrics] = useState({scrollLeft:0,width:1200,boardWidth:1200});
@@ -298,12 +280,43 @@ function App() {
     });
   };
 
-  useEffect(()=>{
-    const id = setTimeout(()=>{
-      try { localStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(tasks)); } catch {}
-    }, 250);
-    return ()=>clearTimeout(id);
-  },[tasks]);
+  // Initial load from Supabase once the workspace is ready.
+  useEffect(() => {
+    if (!workspaceId) {
+      setTasksReady(false);
+      return;
+    }
+    let cancelled = false;
+    setTasksReady(false);
+    (async () => {
+      try {
+        const fetched = await fetchTasks(workspaceId);
+        if (cancelled) return;
+        const merged = migrateTasks(fetched);
+        syncUidFromTasks(merged);
+        lastSyncedTasksRef.current = merged;
+        setTasks(merged);
+        setTasksReady(true);
+      } catch (e) {
+        console.error('[tasks] initial fetch failed', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [workspaceId]);
+
+  // Debounced diff-sync of local mutations to Supabase.
+  useEffect(() => {
+    if (!tasksReady || !userId || !workspaceId) return;
+    const handle = setTimeout(() => {
+      const prev = lastSyncedTasksRef.current;
+      if (prev === tasks) return;
+      lastSyncedTasksRef.current = tasks;
+      syncTaskDiff(prev, tasks, userId, workspaceId).catch((e) => {
+        console.error('[tasks] sync failed', e);
+      });
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [tasks, tasksReady, userId, workspaceId]);
 
   useEffect(()=>{
     const sync = () => {
