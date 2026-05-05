@@ -26,9 +26,9 @@ jobs:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           psql \
-            --host=db.luffkczrzqrmiamaitim.supabase.co \
+            --host=aws-1-ap-northeast-1.pooler.supabase.com \
             --port=5432 \
-            --username=postgres \
+            --username=postgres.luffkczrzqrmiamaitim \
             --dbname=postgres \
             --file=supabase/migrations/0005_add_due_date_and_relative_snooze.sql \
             --echo-all \
