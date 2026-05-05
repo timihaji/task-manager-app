@@ -295,20 +295,42 @@ export async function deletePerson(id) {
 // Returns an unsubscribe function. `onChange` receives the raw Supabase
 // payload — the consumer is responsible for diffing and applying to local
 // state without re-broadcasting its own writes.
-export function subscribeTasks(workspaceId, onChange) {
+function subscribeTable(channelName, table, filter, onChange) {
   if (!supabase) return () => {};
   const channel = supabase
-    .channel(`tasks:${workspaceId}`)
+    .channel(channelName)
     .on(
       'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'tasks',
-        filter: `workspace_id=eq.${workspaceId}`,
-      },
+      { event: '*', schema: 'public', table, filter },
       onChange
     )
     .subscribe();
   return () => supabase.removeChannel(channel);
+}
+
+export function subscribeTasks(workspaceId, onChange) {
+  return subscribeTable(
+    `tasks:${workspaceId}`,
+    'tasks',
+    `workspace_id=eq.${workspaceId}`,
+    onChange
+  );
+}
+
+export function subscribeTaxonomy(workspaceId, onChange) {
+  return subscribeTable(
+    `taxonomy:${workspaceId}`,
+    'taxonomy',
+    `workspace_id=eq.${workspaceId}`,
+    onChange
+  );
+}
+
+export function subscribePeople(workspaceId, onChange) {
+  return subscribeTable(
+    `people:${workspaceId}`,
+    'people',
+    `workspace_id=eq.${workspaceId}`,
+    onChange
+  );
 }
