@@ -8,12 +8,12 @@ const PROJ = [
   { id:'ADMIN', label:'Admin', color:'#94a3b8' },
 ];
 
-const ALL_TAGS = ['sunsama','work','focus','mtg','health','code','docs','comm','admin','learn','personal','blocked'];
+const ALL_TAGS = ['sunsama','work','focus','mtg','health','code','docs','comm','admin','learn','blocked'];
 
 const TAG_NAMES = {
   sunsama:'Sunsama', work:'Work', focus:'Deep Focus', mtg:'Meeting', health:'Health',
   code:'Code', docs:'Docs', comm:'Comms', admin:'Admin',
-  learn:'Learning', personal:'Personal', blocked:'Blocked',
+  learn:'Learning', blocked:'Blocked',
 };
 
 const TAG_DARK = {
@@ -27,7 +27,6 @@ const TAG_DARK = {
   comm:{bg:'rgba(239,68,68,.15)',fg:'#fca5a5'},
   admin:{bg:'rgba(100,116,139,.15)',fg:'#94a3b8'},
   learn:{bg:'rgba(20,184,166,.15)',fg:'#5eead4'},
-  personal:{bg:'rgba(244,63,94,.15)',fg:'#fda4af'},
   blocked:{bg:'rgba(245,158,11,.18)',fg:'#fcd34d'},
 };
 
@@ -42,7 +41,6 @@ const TAG_LIGHT = {
   comm:{bg:'#fef2f2',fg:'#b91c1c'},
   admin:{bg:'#f8fafc',fg:'#64748b'},
   learn:{bg:'#f0fdfa',fg:'#0f766e'},
-  personal:{bg:'#fff1f2',fg:'#be123c'},
   blocked:{bg:'#fffbeb',fg:'#b45309'},
 };
 
@@ -346,7 +344,7 @@ const peopleRollup = (tasks=[]) => {
 
 const makeTask = (overrides={}) => ({
   id:mkid(), title:'Untitled task', description:'', subtasks:[],
-  project:'LIFE', tags:['personal'], priority:'p3', date:null,
+  project:'LIFE', tags:[], priority:'p3', date:null,
   lifeArea:null,
   timeEstimate:null, done:false, completedAt:null, snoozedUntil:null,
   recurrence:null, activity:[{type:'created',at:new Date().toISOString()}],
