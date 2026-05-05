@@ -1968,6 +1968,7 @@ function App() {
 
   // Stack/List task pool — all open top-level tasks, ignoring topbar filters by design
   const allOpenTopLevel = activeTasks.filter(t=>!t.done&&!t.parentId&&!t.snoozedUntil&&!t.delegatedTo&&!t.checkInOf);
+  const stackOpenTopLevel = allOpenTopLevel.filter(t=>!t.someday);
 
   // non-week view tasks
   const listTasks = ()=>{
@@ -2423,7 +2424,7 @@ function App() {
         </div>
       ) : view==='stack' ? (
         <StackView
-          tasks={allOpenTopLevel}
+          tasks={stackOpenTopLevel}
           allTasks={activeTasks}
           tweaks={tweaks}
           setTweak={setTweak}
