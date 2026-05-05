@@ -20,6 +20,8 @@ import {
   DAY_L,
   fmtWeek,
   nextOccurrence,
+  rollTaskDateForward,
+  rollIncompleteTasksToToday,
   makeTask,
   migrateTasks,
   parseTimeEst,
@@ -109,6 +111,7 @@ function App() {
   const INITIAL_TIMELINE_DAYS = TIMELINE_PAST_DAYS + TIMELINE_FUTURE_DAYS + 1;
   const [tasks,setTasks]     = useState([]);
   const [tasksReady, setTasksReady] = useState(false);
+  const [todayKey, setTodayKey] = useState(() => D.str(D.today()));
   // Last array we successfully synced to the cloud. The sync effect diffs
   // against this — not against React's previous render — so debounced
   // edits coalesce correctly.
@@ -291,7 +294,7 @@ function App() {
         });
         return;
       }
-      const incoming = rowToTask(payload.new);
+      const incoming = rollTaskDateForward(rowToTask(payload.new));
       if (!incoming?.id) return;
       setTasks(prev => {
         const idx = prev.findIndex(t => t.id === incoming.id);
@@ -438,7 +441,7 @@ function App() {
       try {
         const fetched = await fetchTasks(workspaceId);
         if (cancelled) return;
-        const merged = migrateTasks(fetched);
+        const merged = rollIncompleteTasksToToday(migrateTasks(fetched));
         syncUidFromTasks(merged);
         lastSyncedTasksRef.current = merged;
         setTasks(merged);
@@ -449,6 +452,23 @@ function App() {
     })();
     return () => { cancelled = true; };
   }, [workspaceId]);
+
+  useEffect(() => {
+    const now = new Date();
+    const nextMidnight = new Date(now);
+    nextMidnight.setHours(24, 0, 0, 0);
+    const delay = Math.max(1000, nextMidnight.getTime() - now.getTime());
+    const handle = setTimeout(() => {
+      setTodayKey(D.str(D.today()));
+    }, delay);
+    return () => clearTimeout(handle);
+  }, [todayKey]);
+
+  useEffect(() => {
+    if (!tasksReady) return;
+    const next = rollIncompleteTasksToToday(tasks, todayKey);
+    if (next !== tasks) setTasks(next);
+  }, [tasks, todayKey, tasksReady]);
 
   // Debounced diff-sync of local mutations to Supabase.
   useEffect(() => {
@@ -580,6 +600,12 @@ function App() {
     setTimelineDays(INITIAL_TIMELINE_DAYS);
     setTodayJumpSeq(n=>n+1);
   };
+  const lastRolledTodayRef = useRef(todayKey);
+  useEffect(() => {
+    if (lastRolledTodayRef.current === todayKey) return;
+    lastRolledTodayRef.current = todayKey;
+    resetTimelineToToday();
+  }, [todayKey]);
   useLayoutEffect(()=>{
     if(!pendingTodayJump.current) return;
     const el = boardRef.current;
@@ -1312,7 +1338,7 @@ function App() {
       return {...t, done:true, completedAt: ts,
         blocked:false, blockedReason:'', blockedBy:[], blockedSince:null, followUpAt:null, tags};
     }
-    return {...t, done:false, completedAt: null};
+    return {...rollTaskDateForward(t), done:false, completedAt: null};
   });
 
   // Sweep tasks: drop `completedId` from any blocker list; if a task's blockedBy empties, auto-unblock.
@@ -1463,17 +1489,17 @@ function App() {
     const completedIds = [];
     setTasks(prev => {
       let next = prev.map(t => {
-        if(t.id===projectId) {
-          if (nowDone) completedIds.push(t.id);
-          const cleared = nowDone ? {blocked:false, blockedReason:'', blockedBy:[], blockedSince:null, followUpAt:null, tags:(t.tags||[]).filter(x=>x!=='blocked')} : {};
-          projectAfter = {...t, done:nowDone, completedAt: nowDone?ts:null, ...cleared};
-          return projectAfter;
-        }
-        if(t.parentId===projectId) {
-          if (nowDone) completedIds.push(t.id);
-          const cleared = nowDone ? {blocked:false, blockedReason:'', blockedBy:[], blockedSince:null, followUpAt:null, tags:(t.tags||[]).filter(x=>x!=='blocked')} : {};
-          return {...t, done:nowDone, completedAt: nowDone?ts:null, ...cleared};
-        }
+          if(t.id===projectId) {
+            if (nowDone) completedIds.push(t.id);
+            const cleared = nowDone ? {blocked:false, blockedReason:'', blockedBy:[], blockedSince:null, followUpAt:null, tags:(t.tags||[]).filter(x=>x!=='blocked')} : {};
+            projectAfter = {...(nowDone ? t : rollTaskDateForward(t)), done:nowDone, completedAt: nowDone?ts:null, ...cleared};
+            return projectAfter;
+          }
+          if(t.parentId===projectId) {
+            if (nowDone) completedIds.push(t.id);
+            const cleared = nowDone ? {blocked:false, blockedReason:'', blockedBy:[], blockedSince:null, followUpAt:null, tags:(t.tags||[]).filter(x=>x!=='blocked')} : {};
+            return {...(nowDone ? t : rollTaskDateForward(t)), done:nowDone, completedAt: nowDone?ts:null, ...cleared};
+          }
         return t;
       });
       // Auto-unblock anything waiting on these.
@@ -2043,7 +2069,10 @@ function App() {
     setToast(doneMsg);
     setTimeout(()=>setToast(null),1400);
   };
-  const bulkSet = (changes, label='Updated') => bulkUpdate(t=>({...t,...changes}), label);
+  const bulkSet = (changes, label='Updated') => bulkUpdate(t=>{
+    const next = {...t,...changes};
+    return changes.done === false ? {...rollTaskDateForward(next), completedAt: null} : next;
+  }, label);
   const bulkAddTag = (tag) => {
     if(!tag) return;
     bulkUpdate(t=>({...t,tags:[...new Set([...(t.tags||[]), tag])]}), 'Tag added');

@@ -153,6 +153,23 @@ const nextOccurrence = (task, fromDateStr) => {
   return null;
 };
 
+const rollTaskDateForward = (task, todayStr = D.str(D.today())) => {
+  if (!task?.date) return task;
+  if (task.done) return task;
+  if (!D.isPast(task.date)) return task;
+  return { ...task, date: todayStr };
+};
+
+const rollIncompleteTasksToToday = (tasks = [], todayStr = D.str(D.today())) => {
+  let changed = false;
+  const next = tasks.map(task => {
+    const rolled = rollTaskDateForward(task, todayStr);
+    if (rolled !== task) changed = true;
+    return rolled;
+  });
+  return changed ? next : tasks;
+};
+
 // === Delegation: presets, spawn helpers, staleness, people store ===
 
 const CHECKIN_PRESETS = {
@@ -588,6 +605,8 @@ export {
   DAY_L,
   fmtWeek,
   nextOccurrence,
+  rollTaskDateForward,
+  rollIncompleteTasksToToday,
   makeTask,
   migrateTasks,
   parseTimeEst,
