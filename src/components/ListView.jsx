@@ -36,7 +36,8 @@ function ListTaskItem({ task, focused, selected, renaming, onOpen, onFocus, onSe
         const cls = d>=7?'crit':d>=3?'warn':'';
         return <span className={`card-aging ${cls}`} title={task.blockedReason||`Blocked ${d}d`}>{d}d</span>;
       })()}
-      {task.date && <span className="list-item-date">{task.date}</span>}
+      {task.date && <span className="list-item-date" title={`Start Date: ${task.date}`}>Start {task.date}</span>}
+      {task.dueDate && <span className="list-item-date" title={`Due Date: ${task.dueDate}`}>Due {task.dueDate}</span>}
     </div>
   );
 }

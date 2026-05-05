@@ -478,7 +478,7 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
             <Card>
               <SRow label="Compact below deck" desc="Cards in positions 4+ render in a denser style to keep focus on the top three."><Tog id="stackCompactBelowDeck"/></SRow>
               <SRow label="Show completed today" desc="Expandable footer listing tasks you ticked off today, with a one-click restore."><Tog id="stackShowCompleted"/></SRow>
-              <SRow label="Group by date" desc="Insert sticky section headers (Overdue, Today, Tomorrow, This week, Later, No date) between cards. Only takes effect when sort is set to Date."><Tog id="stackGroupByDate"/></SRow>
+              <SRow label="Group by start date" desc="Insert sticky section headers (Overdue, Today, Tomorrow, This week, Later, No start date) between cards. Only takes effect when sort is set to Start."><Tog id="stackGroupByDate"/></SRow>
               <SRow label="Show spine line" desc="Vertical accent line running down the left edge of the stack."><Tog id="stackShowSpine"/></SRow>
             </Card>
           </>}

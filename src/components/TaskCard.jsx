@@ -179,16 +179,21 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
             </CardPopover>
           </span>
         )}
-        {/* Date */}
+        {/* Start Date */}
         {!renderAsProject && (
           <span ref={dateRef} className={`card-meta-btn${openPop==='date'?' act':''}`}
-            title={task.date?`Date: ${task.date}`:'Set date'}
+            title={task.date?`Start Date: ${task.date}`:'Set Start Date'}
             onClick={e=>{e.stopPropagation(); setOpenPop(o=>o==='date'?null:'date');}}>
             <span className={`card-meta${task.date?'':' empty'}`}><I.Cal/>{task.date||''}</span>
             <CardPopover open={openPop==='date'} onClose={()=>setOpenPop(null)} anchorRef={dateRef}>
               <DatePicker task={task} isBulk={isBulkEdit}
                 onChange={(p)=>applyChange(p)} onClose={()=>setOpenPop(null)}/>
             </CardPopover>
+          </span>
+        )}
+        {!renderAsProject && task.dueDate && (
+          <span className="card-tag" title={`Due Date: ${task.dueDate}`} style={{background:'rgba(239,68,68,.10)',color:'#ef4444'}}>
+            Due {task.dueDate}
           </span>
         )}
         {/* Snooze (visible only when set; reachable via right-click / shortcut otherwise) */}

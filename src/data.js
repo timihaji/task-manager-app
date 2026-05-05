@@ -153,6 +153,43 @@ const nextOccurrence = (task, fromDateStr) => {
   return null;
 };
 
+const resolveRelativeSnoozeDate = (task) => {
+  if (!task?.snoozeMode) return task?.snoozedUntil ?? null;
+  if (task.snoozeMode === 'absolute') return task.snoozedUntil ?? null;
+  const anchor = task.snoozeMode === 'before_due' ? task.dueDate : task.date;
+  const offset = Number.isFinite(task.snoozeOffsetDays) ? task.snoozeOffsetDays : null;
+  if (!anchor || offset == null) return null;
+  return D.str(D.add(D.parse(anchor), -offset));
+};
+
+const syncTaskSnooze = (task) => {
+  if (!task) return task;
+  if (!task.snoozeMode) {
+    if (task.snoozeOffsetDays == null) return task;
+    return { ...task, snoozeOffsetDays: null };
+  }
+  if (task.snoozeMode === 'absolute') {
+    return {
+      ...task,
+      snoozeOffsetDays: task.snoozeOffsetDays == null ? null : task.snoozeOffsetDays,
+    };
+  }
+  const snoozedUntil = resolveRelativeSnoozeDate(task);
+  if (!snoozedUntil) {
+    return {
+      ...task,
+      snoozedUntil: null,
+      snoozeMode: null,
+      snoozeOffsetDays: null,
+    };
+  }
+  return {
+    ...task,
+    snoozedUntil,
+    snoozeOffsetDays: Number.isFinite(task.snoozeOffsetDays) ? task.snoozeOffsetDays : null,
+  };
+};
+
 const rollTaskDateForward = (task, todayStr = D.str(D.today())) => {
   if (!task?.date) return task;
   if (task.done) return task;
@@ -359,11 +396,13 @@ const peopleRollup = (tasks=[]) => {
   return Array.from(byName.values()).sort((a,b) => b.oldestDays - a.oldestDays);
 };
 
-const makeTask = (overrides={}) => ({
+const makeTask = (overrides={}) => syncTaskSnooze({
   id:mkid(), title:'Untitled task', description:'', subtasks:[],
   project:'LIFE', tags:[], priority:'p3', date:null,
+  dueDate:null,
   lifeArea:null,
   timeEstimate:null, done:false, completedAt:null, snoozedUntil:null,
+  snoozeMode:null, snoozeOffsetDays:null,
   recurrence:null, activity:[{type:'created',at:new Date().toISOString()}],
   createdAt:new Date().toISOString(),
   cardType:'task', parentId:null, childOrder:null,
@@ -382,6 +421,9 @@ const migrateTasks = (tasks=[]) => tasks.map(t => ({
   parentId: t.parentId === undefined ? null : t.parentId,
   childOrder: t.childOrder === undefined ? null : t.childOrder,
   lifeArea: t.lifeArea === undefined ? null : t.lifeArea,
+  dueDate: t.dueDate === undefined ? null : t.dueDate,
+  snoozeMode: t.snoozeMode === undefined ? null : t.snoozeMode,
+  snoozeOffsetDays: t.snoozeOffsetDays === undefined ? null : t.snoozeOffsetDays,
   blocked: t.blocked === undefined ? false : t.blocked,
   blockedReason: t.blockedReason === undefined ? '' : t.blockedReason,
   blockedBy: t.blockedBy === undefined ? [] : t.blockedBy,
@@ -400,7 +442,7 @@ const migrateTasks = (tasks=[]) => tasks.map(t => ({
   lastContactAt: t.lastContactAt === undefined ? null : t.lastContactAt,
   delegationHistory: t.delegationHistory === undefined ? [] : t.delegationHistory,
   ...t,
-}));
+})).map(syncTaskSnooze);
 
 // Whole-days elapsed since an ISO timestamp; 0 for null/today.
 const daysSince = (iso) => {
@@ -605,10 +647,12 @@ export {
   DAY_L,
   fmtWeek,
   nextOccurrence,
+  resolveRelativeSnoozeDate,
   rollTaskDateForward,
   rollIncompleteTasksToToday,
   makeTask,
   migrateTasks,
+  syncTaskSnooze,
   parseTimeEst,
   fmtTimeEst,
   INIT_TASKS,

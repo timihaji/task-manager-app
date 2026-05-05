@@ -51,6 +51,18 @@ const effectiveDate = (t, allTasks) => {
   return t.date || null;
 };
 
+const effectiveDueDate = (t, allTasks) => {
+  if (t.cardType === 'project') {
+    const kids = (allTasks || [])
+      .filter(c => c.parentId === t.id && !c.done && (c.dueDate || c.date))
+      .map(c => c.dueDate || c.date)
+      .filter(Boolean)
+      .sort((a,b)=>a.localeCompare(b));
+    if (kids.length) return kids[0];
+  }
+  return t.dueDate || t.date || null;
+};
+
 function sortStack(arr, mode, allTasks, manualOrder=[]) {
   const list = arr.slice();
   if (mode === 'date') {
@@ -95,7 +107,7 @@ function sortStack(arr, mode, allTasks, manualOrder=[]) {
 }
 
 function ChipRow({ task, isProject, allTasks, theme }) {
-  const due = dueLabel(effectiveDate(task, allTasks));
+  const due = dueLabel(effectiveDueDate(task, allTasks));
   const proj = PROJ.find(p=>p.id === task.project);
   const tags = task.tags || [];
   const life = task.lifeArea;
@@ -115,7 +127,7 @@ function ChipRow({ task, isProject, allTasks, theme }) {
       {due && due.kind === 'today' && <span className="schip schip-due-today">● {due.label}</span>}
       {due && due.kind === 'soon' && <span className="schip"><I.Cal/>{due.label}</span>}
       {due && due.kind === 'later' && <span className="schip"><I.Cal/>{due.label}</span>}
-      {!due && <span className="schip" style={{opacity:.6}}><I.Cal/>No date</span>}
+      {!due && <span className="schip" style={{opacity:.6}}><I.Cal/>No start date</span>}
 
       {proj && <span className="schip schip-proj" style={{color:proj.color, borderColor:proj.color+'55'}}>{proj.id}</span>}
 
@@ -311,7 +323,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
 
   const bucketOf = (t) => {
     const d = effectiveDate(t, allTasks);
-    if (!d) return 'No date';
+    if (!d) return 'No start date';
     const r = dateRank(d);
     if (r < 0) return 'Overdue';
     if (r === 0) return 'Today';
@@ -537,7 +549,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
           </div>
           <div className="seg" role="group" aria-label="Sort">
             <button className={sortMode==='smart' ? 'act' : ''} onClick={()=>setTweak('stackSort','smart')} title="Smart: balance urgency + priority">Smart</button>
-            <button className={sortMode==='date' ? 'act' : ''} onClick={()=>setTweak('stackSort','date')} title="By due date">Date</button>
+            <button className={sortMode==='date' ? 'act' : ''} onClick={()=>setTweak('stackSort','date')} title="By start date">Start</button>
             <button className={sortMode==='priority' ? 'act' : ''} onClick={()=>setTweak('stackSort','priority')} title="By priority">Priority</button>
             <button className={sortMode==='manual' ? 'act' : ''} onClick={()=>setTweak('stackSort','manual')} title="Manual order">Manual</button>
           </div>

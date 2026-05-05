@@ -20,6 +20,7 @@ import {
   DAY_L,
   fmtWeek,
   nextOccurrence,
+  syncTaskSnooze,
   rollTaskDateForward,
   rollIncompleteTasksToToday,
   makeTask,
@@ -118,6 +119,12 @@ function normalizeSavedView(value) {
   }
   return null;
 }
+
+const clearSnoozePatch = {
+  snoozedUntil: null,
+  snoozeMode: null,
+  snoozeOffsetDays: null,
+};
 
 function sameSavedView(a, b) {
   return JSON.stringify(normalizeSavedView(a)) === JSON.stringify(normalizeSavedView(b));
@@ -329,7 +336,7 @@ function App() {
         });
         return;
       }
-      const incoming = rollTaskDateForward(rowToTask(payload.new));
+      const incoming = rollTaskDateForward(syncTaskSnooze(rowToTask(payload.new)));
       if (!incoming?.id) return;
       setTasks(prev => {
         const idx = prev.findIndex(t => t.id === incoming.id);
@@ -707,6 +714,18 @@ function App() {
   },[view, weekOff, timelineDays, COL_W, showWknd, boardMetrics.width, goToSeq]);
 
   const taskMap = useMemo(()=>new Map(tasks.map(t=>[t.id,t])), [tasks]);
+  const applyTaskPatch = useCallback((task, changes) => {
+    if (!changes) return task;
+    let normalized = changes;
+    if (Object.prototype.hasOwnProperty.call(changes, 'snoozedUntil')) {
+      if (changes.snoozedUntil == null && !Object.prototype.hasOwnProperty.call(changes, 'snoozeMode')) {
+        normalized = { ...normalized, ...clearSnoozePatch };
+      } else if (changes.snoozedUntil && !Object.prototype.hasOwnProperty.call(changes, 'snoozeMode')) {
+        normalized = { ...normalized, snoozeMode: 'absolute', snoozeOffsetDays: null };
+      }
+    }
+    return syncTaskSnooze({ ...task, ...normalized });
+  }, []);
   const taskById = (id) => taskMap.get(id);
   function getEffectiveLifeArea(task, seen=new Set()) {
     if(!task) return null;
@@ -724,7 +743,7 @@ function App() {
     const lifeAreaId = getEffectiveLifeArea(t);
     const lifeAreaLabel = lifeAreaId ? (LIFE_AREA_NAMES[lifeAreaId] || lifeAreaId) : 'Unassigned';
     const tags = (t.tags||[]).map(tg=>TAG_NAMES[tg]||tg).join(' ');
-    return [t.title,t.description,projLabel,t.project,t.priority,t.pri,t.date,tags,lifeAreaLabel,lifeAreaId].filter(Boolean).join(' ').toLowerCase().includes(searchNeedle);
+    return [t.title,t.description,projLabel,t.project,t.priority,t.pri,t.date,t.dueDate,tags,lifeAreaLabel,lifeAreaId].filter(Boolean).join(' ').toLowerCase().includes(searchNeedle);
   };
   const taskOwnFilters = (t) => {
     if(!taskMatchesSearch(t)) return false;
@@ -1190,7 +1209,7 @@ function App() {
     const delegationOutcome = applyDelegationChanges(tasks, before, changes);
     if (delegationOutcome.tasks) {
       setUndoStack(s=>[...s.slice(-9),{id,before}]);
-      setTasks(prev => delegationOutcome.tasks.map(t => t.id===id ? {...t, ...delegationOutcome.mergedChanges} : t));
+      setTasks(prev => delegationOutcome.tasks.map(t => t.id===id ? applyTaskPatch(t, delegationOutcome.mergedChanges) : t));
       return;
     }
     // Convert project → task: promote children up to parent's column.
@@ -1198,8 +1217,8 @@ function App() {
       const kids = tasks.filter(t=>t.parentId===id);
       pushSnapshotUndo();
       setTasks(prev=>prev.map(t=>{
-        if(t.id===id) return {...t,...changes,childOrder:null};
-        if(t.parentId===id) return {...t, parentId:null, date: before.date || null};
+        if(t.id===id) return applyTaskPatch(t, {...changes, childOrder:null});
+        if(t.parentId===id) return applyTaskPatch(t, { parentId:null, date: before.date || null });
         return t;
       }));
       return;
@@ -1207,17 +1226,17 @@ function App() {
     // Convert task → project: ensure childOrder is initialized.
     if(before.cardType!=='project' && changes.cardType==='project') {
       setUndoStack(s=>[...s.slice(-9),{id,before}]);
-      setTasks(prev=>prev.map(t=>t.id===id?{...t,...changes,childOrder:t.childOrder||[]}:t));
+      setTasks(prev=>prev.map(t=>t.id===id ? applyTaskPatch(t, {...changes, childOrder:t.childOrder||[]}) : t));
       return;
     }
     setUndoStack(s=>[...s.slice(-9),{id,before}]);
-    setTasks(prev=>prev.map(t=>t.id===id?{...t,...changes}:t));
+    setTasks(prev=>prev.map(t=>t.id===id ? applyTaskPatch(t, changes) : t));
   };
   const bulkUpdateTasks = (ids, changes) => {
     if (!ids || !ids.length) return;
     pushSnapshotUndo();
     const idSet = new Set(ids);
-    setTasks(prev => prev.map(t => idSet.has(t.id) ? {...t, ...changes} : t));
+    setTasks(prev => prev.map(t => idSet.has(t.id) ? applyTaskPatch(t, changes) : t));
     if (changes.tags) (changes.tags||[]).forEach(t => pushRecent('tags', t));
     if (changes.project) pushRecent('projects', changes.project);
     showToast(`Updated ${ids.length} task${ids.length===1?'':'s'}`, {undoable:true});
@@ -1230,7 +1249,7 @@ function App() {
       pushSnapshotUndo();
       setTasks(prev => prev
         .filter(t=>t.id!==id)
-        .map(t => t.parentId===id ? {...t, parentId:null, date: task.date || null} : t));
+        .map(t => t.parentId===id ? applyTaskPatch(t, { parentId:null, date: task.date || null }) : t));
       setSelectedIds(prev=>{const next=new Set(prev);next.delete(id);return next;});
       if(drawerId===id) setDrawerId(null);
       if(focusedId===id) setFocusedId(null);
@@ -1285,14 +1304,14 @@ function App() {
       const idMap = new Map(); // oldChildId -> newChildId
       kids.forEach(k => idMap.set(k.id, mkid()));
       const newProjectId = mkid();
-      const newProject = {
+      const newProject = syncTaskSnooze({
         ...t,
         id: newProjectId,
         title: t.title + ' (copy)',
         createdAt: now,
         childOrder: (t.childOrder||[]).map(cid => idMap.get(cid)).filter(Boolean),
-      };
-      const newKids = kids.map(k => ({
+      });
+      const newKids = kids.map(k => syncTaskSnooze({
         ...k,
         id: idMap.get(k.id),
         parentId: newProjectId,
@@ -1302,7 +1321,7 @@ function App() {
       setTasks(prev => [...prev, newProject, ...newKids]);
       return;
     }
-    const nt={...t,id:mkid(),title:t.title+' (copy)',createdAt:now};
+    const nt=syncTaskSnooze({...t,id:mkid(),title:t.title+' (copy)',createdAt:now});
     setTasks(prev=>[...prev,nt]);
   };
   const addTask = (colKey, date, title, position={}) => {
@@ -1496,6 +1515,13 @@ function App() {
     return { tasks: prev };
   };
 
+  const shiftDueDateForRecurrence = (item, nextDate) => {
+    if (!item?.dueDate) return null;
+    if (!item.date) return item.dueDate;
+    const delta = Math.round((D.parse(item.dueDate) - D.parse(item.date)) / 86400000);
+    return D.str(D.add(D.parse(nextDate), delta));
+  };
+
   // Spawn the next recurrence of a task (deep-copy children if it's a project).
   const spawnRecurrence = (task, nextDate, prevTasks) => {
     const now = new Date().toISOString();
@@ -1505,28 +1531,31 @@ function App() {
       const idMap = new Map();
       kids.forEach(k => idMap.set(k.id, mkid()));
       const newProjectId = mkid();
-      additions.push({
+      additions.push(syncTaskSnooze({
         ...task,
         id: newProjectId,
         done: false, completedAt: null,
         date: nextDate,
+        dueDate: shiftDueDateForRecurrence(task, nextDate),
         childOrder: (task.childOrder||[]).map(cid => idMap.get(cid)).filter(Boolean),
         activity: [{type:'created',at:now}],
-      });
-      kids.forEach(k => additions.push({
+      }));
+      kids.forEach(k => additions.push(syncTaskSnooze({
         ...k,
         id: idMap.get(k.id),
         parentId: newProjectId,
         done: false, completedAt: null,
+        dueDate: shiftDueDateForRecurrence(k, k.date || nextDate),
         activity: [{type:'created',at:now}],
-      }));
+      })));
     } else {
-      additions.push({
+      additions.push(syncTaskSnooze({
         ...task, id: mkid(),
         done:false, completedAt:null,
         date: nextDate,
+        dueDate: shiftDueDateForRecurrence(task, nextDate),
         activity:[{type:'created',at:now}],
-      });
+      }));
     }
     return additions;
   };
@@ -1760,7 +1789,7 @@ function App() {
       const parent = taskById(task.parentId);
       pushSnapshotUndo();
       setTasks(prev => prev.map(t => {
-        if(t.id===task.id) return {...t, date:newDate, parentId:null};
+        if(t.id===task.id) return applyTaskPatch(t, { date:newDate, parentId:null });
         if(parent && t.id===parent.id) return {...t, childOrder:(t.childOrder||[]).filter(cid=>cid!==task.id)};
         return t;
       }));
@@ -2121,8 +2150,8 @@ function App() {
     setTimeout(()=>setToast(null),1400);
   };
   const bulkSet = (changes, label='Updated') => bulkUpdate(t=>{
-    const next = {...t,...changes};
-    return changes.done === false ? {...rollTaskDateForward(next), completedAt: null} : next;
+      const next = applyTaskPatch(t, changes);
+      return changes.done === false ? {...rollTaskDateForward(next), completedAt: null} : next;
   }, label);
   const bulkAddTag = (tag) => {
     if(!tag) return;
@@ -2149,6 +2178,7 @@ function App() {
       cardType: 'project',
       childOrder: sel.map(s=>s.id),
       date: first.date || null,
+      dueDate: first.dueDate || null,
       project: first.project,
       lifeArea: getEffectiveLifeArea(first),
       tags: [...(first.tags||[])],
@@ -2156,7 +2186,7 @@ function App() {
     });
     pushSnapshotUndo();
     const ids = new Set(sel.map(s=>s.id));
-    setTasks(prev => [...prev.map(t => ids.has(t.id) ? {...t, parentId:newProject.id, date:null} : t), newProject]);
+    setTasks(prev => [...prev.map(t => ids.has(t.id) ? applyTaskPatch(t, { parentId:newProject.id, date:null }) : t), newProject]);
     setSelectedIds(new Set());
     setRenamingId(null);
     setTimeout(()=>{ setDrawerId(newProject.id); setFocusedId(newProject.id); }, 60);
@@ -2273,20 +2303,19 @@ function App() {
       {label:'Tag…',      onClick:()=>open('tag'),    kbd:'T'},
       {label:'Location…', onClick:()=>open('proj'),   kbd:'P'},
       {label:'Time…',     onClick:()=>open('time'),   kbd:'M'},
-      {label:'Date…',     onClick:()=>open('date'),   kbd:'⇧D'},
+      {label:'Start Date…', onClick:()=>open('date'),   kbd:'⇧D'},
       {label:'Priority…', onClick:()=>open('pri'),    kbd:'⇧R'},
       {label:'Snooze…',   onClick:()=>open('snooze'), kbd:'S'},
       {type:'sep'},
       {label:'Open in drawer', onClick:()=>openTask(t.id), kbd:'↵'},
       {label:'Rename',         onClick:()=>setRenamingId(t.id), kbd:'E'},
       {label:'Duplicate',      onClick:()=>duplicateTask(t.id), kbd:'D'},
-      {label:'Move to inbox',  onClick:()=>updateTask(t.id,{date:null,someday:false,snoozedUntil:null})},
+      {label:'Move to inbox',  onClick:()=>updateTask(t.id,{date:null,someday:false,...clearSnoozePatch})},
       {type:'sep'},
       {label:'Archive', onClick:()=>archiveTask(t.id), kbd:'C'},
       {label:'Delete',  onClick:()=>deleteTask(t.id), danger:true, kbd:'⌫'},
     ];
   })() : [];
-
   return <>
     {!supabaseDisabled && tasksReady && !migrationDismissed && (
       <MigrateFromLocal onComplete={() => setMigrationDismissed(true)} />
@@ -2532,7 +2561,7 @@ function App() {
           <option value="">Add tag</option>
           {ALL_TAGS.map(t=><option key={t} value={t}>{TAG_NAMES[t]||t}</option>)}
         </select>
-        <input className="bulk-input" type="date" onChange={e=>{bulkSet({date:e.target.value||null}, e.target.value?'Date updated':'Moved to inbox'); e.target.value='';}}/>
+        <input className="bulk-input" type="date" aria-label="Start Date" title="Set Start Date" onChange={e=>{bulkSet({date:e.target.value||null}, e.target.value?'Start Date updated':'Moved to inbox'); e.target.value='';}}/>
         <button className="tb-btn" onClick={bulkGroupIntoProject} disabled={selectedTasks.length<2}>Group into project</button>
         <button className="tb-btn" onClick={()=>{
           const ts = new Date().toISOString();
@@ -2577,7 +2606,7 @@ function App() {
       onClose={()=>setDrawerId(null)}
       onDelete={deleteTask}
       onDuplicate={duplicateTask}
-      onMoveToInbox={id=>updateTask(id,{date:null,someday:false,snoozedUntil:null})}
+      onMoveToInbox={id=>updateTask(id,{date:null,someday:false,...clearSnoozePatch})}
       onSetBlocked={setBlocked}
       onClearBlocked={clearBlocked}
       recentBlockReasons={recentBlockReasons}

@@ -102,6 +102,11 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onClose, onDelete, onDuplica
     {l:'In 6 months', fn:()=>{ const d=new Date(D.today()); d.setMonth(d.getMonth()+6); return D.str(d); }},
     {l:'Next year',   fn:()=>{ const d=new Date(D.today()); d.setFullYear(d.getFullYear()+1); return D.str(d); }},
   ];
+  const RELATIVE_SNOOZE_OPTS = [
+    { l:'1 day before', days:1 },
+    { l:'3 days before', days:3 },
+    { l:'1 week before', days:7 },
+  ];
   const FREQ_OPTS = [
     {v:'none',l:'Does not repeat'},{v:'daily',l:'Daily'},
     {v:'weekdays',l:'Every weekday'},{v:'weekly',l:'Weekly'},{v:'monthly',l:'Monthly'},
@@ -118,6 +123,13 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onClose, onDelete, onDuplica
   const priInfo = { p1:{l:'Urgent',c:'#ef4444'}, p2:{l:'Normal',c:'#f59e0b'}, p3:{l:'Low',c:'#71717a'} };
   const doneCount = (task.subtasks||[]).filter(s=>s.done).length;
   const subCount  = (task.subtasks||[]).length;
+  const snoozeSummary = task.snoozeMode === 'before_start'
+    ? `${task.snoozeOffsetDays || '?'}d before Start Date`
+    : task.snoozeMode === 'before_due'
+      ? `${task.snoozeOffsetDays || '?'}d before Due Date`
+      : task.snoozedUntil
+        ? `Until ${task.snoozedUntil}`
+        : 'Not snoozed';
 
   return (
     <div className={`drawer open${fromLeft?' from-left':''}`} onClick={e=>e.stopPropagation()}>
@@ -192,7 +204,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onClose, onDelete, onDuplica
           <div className="dr-chip">↻ {FREQ_OPTS.find(f=>f.v===task.recurrence.freq)?.l||'Recurring'}</div>
         )}
         {task.snoozedUntil && (
-          <div className="dr-chip snooze">⏸ Snoozed until {task.snoozedUntil}</div>
+          <div className="dr-chip snooze">⏸ Snoozed · {snoozeSummary}</div>
         )}
         {task.someday && (
           <div className="dr-chip someday">☾ Someday</div>
@@ -416,8 +428,11 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onClose, onDelete, onDuplica
               })}
             </div>
           </DRow>
-          <DRow label="Date">
+          <DRow label="Start Date">
             <input type="date" className="dr-inp" value={task.date||''} onChange={e=>upd({date:e.target.value||null})}/>
+          </DRow>
+          <DRow label="Due Date">
+            <input type="date" className="dr-inp" value={task.dueDate||''} onChange={e=>upd({dueDate:e.target.value||null})}/>
           </DRow>
           <DRow label="Time est.">
             <div className="dr-time-grp">
@@ -451,12 +466,23 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onClose, onDelete, onDuplica
           <DRow label="Snooze">
             <div style={{position:'relative'}}>
               <button className="dr-sel dr-sel-btn" onClick={()=>setSnoozeOpen(o=>!o)}>
-                {task.snoozedUntil?`Until ${task.snoozedUntil}`:'Not snoozed'} ▾
+                {snoozeSummary} ▾
               </button>
               {snoozeOpen && (
                 <div className="dr-dd" style={{position:'absolute',left:0,top:'calc(100% + 4px)',zIndex:200,minWidth:160}}>
-                  {task.snoozedUntil && <div className="dr-dd-item" onClick={()=>{upd({snoozedUntil:null});setSnoozeOpen(false);}}>Remove snooze</div>}
-                  {SNOOZE_OPTS.map(o=><div key={o.l} className="dr-dd-item" onClick={()=>{upd({snoozedUntil:o.fn()});setSnoozeOpen(false);}}>{o.l}</div>)}
+                  {(task.snoozedUntil || task.snoozeMode) && <div className="dr-dd-item" onClick={()=>{upd({snoozedUntil:null, snoozeMode:null, snoozeOffsetDays:null});setSnoozeOpen(false);}}>Remove snooze</div>}
+                  <div className="dr-dd-item" style={{opacity:.65,pointerEvents:'none'}}>From today</div>
+                  {SNOOZE_OPTS.map(o=><div key={o.l} className="dr-dd-item" onClick={()=>{upd({snoozedUntil:o.fn(), snoozeMode:'absolute', snoozeOffsetDays:null});setSnoozeOpen(false);}}>{o.l}</div>)}
+                  <div className="dr-dd-sep"/>
+                  <div className="dr-dd-item" style={{opacity:.65,pointerEvents:'none'}}>Before Start Date</div>
+                  {task.date
+                    ? RELATIVE_SNOOZE_OPTS.map(o => <div key={`start-${o.days}`} className="dr-dd-item" onClick={()=>{upd({snoozeMode:'before_start', snoozeOffsetDays:o.days});setSnoozeOpen(false);}}>{o.l}</div>)
+                    : <div className="dr-dd-item" style={{opacity:.55,pointerEvents:'none'}}>Set a Start Date first</div>}
+                  <div className="dr-dd-sep"/>
+                  <div className="dr-dd-item" style={{opacity:.65,pointerEvents:'none'}}>Before Due Date</div>
+                  {task.dueDate
+                    ? RELATIVE_SNOOZE_OPTS.map(o => <div key={`due-${o.days}`} className="dr-dd-item" onClick={()=>{upd({snoozeMode:'before_due', snoozeOffsetDays:o.days});setSnoozeOpen(false);}}>{o.l}</div>)
+                    : <div className="dr-dd-item" style={{opacity:.55,pointerEvents:'none'}}>Set a Due Date first</div>}
                 </div>
               )}
             </div>

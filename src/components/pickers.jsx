@@ -265,12 +265,12 @@ function SnoozePicker({ task, onChange, onClose, isBulk }) {
       {isBulk && <div className="card-pop-bulk-hd">Editing {isBulk} tasks</div>}
       <div className="card-pop-row">
         {SNOOZE_OPTS.map(o => (
-          <span key={o.l} className="card-pop-chip" onClick={() => { onChange({ snoozedUntil: o.fn() }); onClose(); }}>{o.l}</span>
+          <span key={o.l} className="card-pop-chip" onClick={() => { onChange({ snoozedUntil: o.fn(), snoozeMode: 'absolute', snoozeOffsetDays: null }); onClose(); }}>{o.l}</span>
         ))}
       </div>
       {cur && (
         <div className="card-pop-foot">
-          <button className="card-pop-clear" onClick={() => { onChange({ snoozedUntil: null }); onClose(); }}>Wake up now</button>
+          <button className="card-pop-clear" onClick={() => { onChange({ snoozedUntil: null, snoozeMode: null, snoozeOffsetDays: null }); onClose(); }}>Wake up now</button>
         </div>
       )}
     </>
