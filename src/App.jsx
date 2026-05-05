@@ -70,6 +70,7 @@ import { ProjectSidePanel, LeftNav } from './components/sidebar.jsx';
 import { CMDS, CommandPalette, SC_ROWS, ShortcutsOverlay } from './components/modals.jsx';
 import { SwatchPicker, SettingsScrollPane, TaxonomyManager, PRESETS_DATA, SettingsView, SettingsDrawer } from './components/settings.jsx';
 import { ListTaskItem, ListView } from './components/ListView.jsx';
+import { StackView } from './components/StackView.jsx';
 import { AddModal } from './components/AddModal.jsx';
 
 // ── color/taxonomy helpers (used inside App body) ────────────────────────
@@ -155,6 +156,8 @@ function App() {
     inboxWidth:178, projectPanelWidth:190, dayWindow:'auto', cardRadius:10, groupRadius:4, cardGap:3, shadowIntensity:.35,
     dark_bg:'#071512', dark_surface:'#10201d', dark_sidebar:'#06110f', dark_border:'#1d342f', dark_text:'#e6fffb',
     light_bg:'#f3f7f4', light_surface:'#fffdfa', light_sidebar:'#e7efe9', light_border:'#d5ded7', light_text:'#17211d',
+    stackSort:'smart', stackShowCompleted:true, stackGroupByDate:false, stackCompactBelowDeck:true, stackShowSpine:true, stackOrder:[],
+    newTaskPosition:'top',
   };
   const loadTM = () => {
     try {
@@ -1096,6 +1099,7 @@ function App() {
       lifeArea: nextLifeArea,
       ...inherit,
     });
+    const placeAtTop = (tweaks.newTaskPosition || 'top') === 'top';
     setTasks(prev=>{
       let next = [...prev, nt];
       if(parentId) {
@@ -1112,6 +1116,8 @@ function App() {
             } else {
               order.push(nt.id);
             }
+          } else if (placeAtTop) {
+            order.unshift(nt.id);
           } else {
             order.push(nt.id);
           }
@@ -1120,12 +1126,20 @@ function App() {
         return next;
       }
       const targetId = position.beforeId || position.afterId;
-      if(!targetId) return next;
-      const idx = prev.findIndex(t=>t.id===targetId);
-      if(idx<0) return next;
-      const insertAt = position.afterId ? idx + 1 : idx;
-      return [...prev.slice(0,insertAt),nt,...prev.slice(insertAt)];
+      if(targetId) {
+        const idx = prev.findIndex(t=>t.id===targetId);
+        if(idx<0) return next;
+        const insertAt = position.afterId ? idx + 1 : idx;
+        return [...prev.slice(0,insertAt),nt,...prev.slice(insertAt)];
+      }
+      return placeAtTop ? [nt, ...prev] : next;
     });
+    if (view === 'stack' && !parentId && !(position.beforeId || position.afterId)) {
+      const order = tweaks.stackOrder || [];
+      const filtered = order.filter(id => id !== nt.id);
+      setTweak('stackOrder', placeAtTop ? [nt.id, ...filtered] : [...filtered, nt.id]);
+      if ((tweaks.stackSort || 'smart') !== 'manual') setTweak('stackSort', 'manual');
+    }
     setSettingsOpen(false);
     setDrawerId(null);
     setFocusedId(nt.id);
@@ -1767,7 +1781,10 @@ function App() {
   const timelineStartDate = visibleDates[0] || D.today();
   const timelineEndDate = visibleDates[visibleDates.length-1] || D.today();
   const timelineTitle = `Timeline ${MONTH_S[timelineStartDate.getMonth()]} ${timelineStartDate.getDate()} - ${timelineStartDate.getMonth()!==timelineEndDate.getMonth()?MONTH_S[timelineEndDate.getMonth()]+' ':''}${timelineEndDate.getDate()}, ${timelineEndDate.getFullYear()}`;
-  const viewTitle = view==='week'?timelineTitle:view==='inbox'?'Inbox':view==='upcoming'?'Upcoming':view==='backlog'?'Backlog':view==='snoozed'?'Snoozed':view==='someday'?'Someday':view==='blocked'?'Blocked':view==='completed'?'Completed':view==='archived'?'Archived':view==='delegations'?'Delegations':view?.type==='project'?PROJ.find(p=>p.id===view.id)?.label||'Location':view?.type==='tag'?TAG_NAMES[view.name]||view.name:view?.type==='lifeArea'?lifeAreaOptionLabel(view.id):'Tasks';
+  const viewTitle = view==='week'?timelineTitle:view==='stack'?'Stack':view==='list'?'List':view==='inbox'?'Inbox':view==='upcoming'?'Upcoming':view==='backlog'?'Backlog':view==='snoozed'?'Snoozed':view==='someday'?'Someday':view==='blocked'?'Blocked':view==='completed'?'Completed':view==='archived'?'Archived':view==='delegations'?'Delegations':view?.type==='project'?PROJ.find(p=>p.id===view.id)?.label||'Location':view?.type==='tag'?TAG_NAMES[view.name]||view.name:view?.type==='lifeArea'?lifeAreaOptionLabel(view.id):'Tasks';
+
+  // Stack/List task pool — all open top-level tasks, ignoring topbar filters by design
+  const allOpenTopLevel = activeTasks.filter(t=>!t.done&&!t.parentId&&!t.snoozedUntil);
 
   // non-week view tasks
   const listTasks = ()=>{
@@ -2042,6 +2059,12 @@ function App() {
         <span>Workspace</span><span>›</span>
         <span className="tb-crumb-active">{viewTitle}</span>
       </div>
+      <div className="tb-sep"/>
+      <div className="tb-btn-group" title="Switch view layout">
+        <button className={`tb-btn${view==='week'?' active':''}`} onClick={()=>setView('week')} title="Cards (Timeline)"><I.Cards/></button>
+        <button className={`tb-btn${view==='list'?' active':''}`} onClick={()=>setView('list')} title="List"><I.List/></button>
+        <button className={`tb-btn${view==='stack'?' active':''}`} onClick={()=>setView('stack')} title="Stack"><I.Stack/></button>
+      </div>
       {view==='week' && <>
         <div className="tb-sep"/>
         <button className="tb-btn" onClick={()=>setWeekOff(o=>o-30)}><I.Chv d="l"/></button>
@@ -2206,6 +2229,28 @@ function App() {
             onDelete={deleteTask}
             onCheckIn={(id, mode)=>{ const t=taskById(id); if(t && !t.done) completeTask(id, t.date||'inbox', mode); }}/>
         </div>
+      ) : view==='stack' ? (
+        <StackView
+          tasks={allOpenTopLevel}
+          allTasks={activeTasks}
+          tweaks={tweaks}
+          setTweak={setTweak}
+          onUpdate={updateTask}
+          onComplete={(id)=>{ completeTask(id, taskById(id)?.date||'inbox'); showToast('Completed', {undoable:true, timeout:4500}); }}
+          onDelete={deleteTask}
+          onOpen={openTask}
+          theme={theme}
+          taxonomy={taxonomy}
+          focusedId={focusedId}
+          setFocusedId={setFocusedId}
+          renamingId={renamingId}
+          setRenamingId={setRenamingId}
+          onContextMenu={onCardContextMenu}
+          onAddNew={()=>addTask('today', D.today(), 'Untitled')}/>
+      ) : view==='list' ? (
+        <ListView title="List" tasks={allOpenTopLevel} onOpen={openTask} onFocus={setFocusedId}
+          onSelect={toggleSelected} selectedIds={selectedIds}
+          focusedCardId={focusedId} renamingId={renamingId} onRename={updateTask} onRenameDone={()=>setRenamingId(null)}/>
       ) : (
         <ListView title={viewTitle} tasks={listTasks()} onOpen={openTask} onFocus={setFocusedId}
           onSelect={toggleSelected} selectedIds={selectedIds}

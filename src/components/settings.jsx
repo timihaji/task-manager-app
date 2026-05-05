@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_NAMES, LIFE_AREA_DARK, LIFE_AREA_LIGHT } from '../data.js';
 import { I } from '../utils/icons.jsx';
+import { useAuth } from '../auth/AuthProvider.jsx';
 import {
   slugId, tagColors, lifeAreaPalette, UNASSIGNED_LIFE_AREA,
   syncTaxonomyGlobals, NICE_SWATCH_GROUPS,
@@ -283,6 +284,7 @@ const PRESETS_DATA = [
 ];
 function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
   const [tab, setTab] = useState('appearance');
+  const { user, signOut, supabaseDisabled } = useAuth();
   const SRow = ({label,desc,children}) => (
     <div style={{display:'flex',alignItems:'center',gap:16,padding:'12px 16px',borderBottom:'1px solid var(--border)'}}>
       <div style={{flex:1}}>
@@ -442,6 +444,7 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
           {tab==='layout' && <>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Board</div>
             <Card>
+              <SRow label="New tasks appear at" desc="Where new tasks land when you press A or click + New task. Top puts them at the start; Bottom appends to the end."><Seg id="newTaskPosition" opts={['top','bottom']}/></SRow>
               <SRow label="Show weekends" desc="Display Saturday and Sunday columns."><Tog id="showWeekend"/></SRow>
               <SRow label="Day window" desc="How many day columns fit on screen, including the pinned Today column. Auto picks by width; 4 is focused, 5 is workweek, 7 is full week."><Seg id="dayWindow" opts={['auto',4,5,7]}/></SRow>
               <SRow label="Location side panel" desc="Show a resizable location filter panel beside the inbox."><Tog id="showProjectPanel"/></SRow>
@@ -471,6 +474,13 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
                 <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--t4)',minWidth:34,textAlign:'right'}}>{Math.round((tweaks.shadowIntensity ?? 0) * 100)}%</span>
               </SRow>
             </Card>
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,marginTop:24,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Stack view</div>
+            <Card>
+              <SRow label="Compact below deck" desc="Cards in positions 4+ render in a denser style to keep focus on the top three."><Tog id="stackCompactBelowDeck"/></SRow>
+              <SRow label="Show completed today" desc="Expandable footer listing tasks you ticked off today, with a one-click restore."><Tog id="stackShowCompleted"/></SRow>
+              <SRow label="Group by date" desc="Insert sticky section headers (Overdue, Today, Tomorrow, This week, Later, No date) between cards. Only takes effect when sort is set to Date."><Tog id="stackGroupByDate"/></SRow>
+              <SRow label="Show spine line" desc="Vertical accent line running down the left edge of the stack."><Tog id="stackShowSpine"/></SRow>
+            </Card>
           </>}
           {tab==='taxonomy' && <TaxonomyManager taxonomy={taxonomy} actions={taxonomyActions}/>}
           {tab==='data' && <>
@@ -499,6 +509,19 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
                 <div style={{padding:'10px 16px',font:'12px var(--mono)',color:'var(--t3)'}}>{importMsg}</div>
               )}
             </Card>
+            {!supabaseDisabled && (
+              <>
+                <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,marginTop:24,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Account</div>
+                <Card>
+                  <SRow label="Signed in as" desc={user?.email ? `Authenticated via Supabase as ${user.email}.` : 'Authenticated via Supabase.'}>
+                    <button onClick={()=>signOut()}
+                      style={{padding:'6px 14px',border:'1px solid var(--border-s)',borderRadius:3,background:'var(--surface-2)',color:'var(--t1)',font:'500 12.5px var(--font)',cursor:'pointer'}}>
+                      Sign out
+                    </button>
+                  </SRow>
+                </Card>
+              </>
+            )}
           </>}
       </SettingsScrollPane>
     </div>
