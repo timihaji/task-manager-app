@@ -1768,6 +1768,18 @@ function App() {
       const r = cards[i].getBoundingClientRect();
       if(e.clientY < r.top + r.height/2) { index = i; break; }
     }
+    // Suppress the drop placeholder when the proposed position is exactly
+    // where the dragged card already sits — both the slot above and the slot
+    // below itself are no-op moves, so showing a placeholder there is
+    // misleading.
+    const draggedId = drag?.taskId;
+    if (draggedId && drag?.fromCol === col) {
+      const draggedDomIdx = cards.findIndex(c => c.dataset.cardId === draggedId);
+      if (draggedDomIdx !== -1 && (index === draggedDomIdx || index === draggedDomIdx + 1)) {
+        setColDropIndex(prev => prev ? null : prev);
+        return;
+      }
+    }
     setColDropIndex(prev => (prev?.col===col && prev?.index===index) ? prev : {col, index});
   };
   const onDragLeave=e=>{ if(!e.currentTarget.contains(e.relatedTarget)) { setDragOver(null); setColDropIndex(null); } };
