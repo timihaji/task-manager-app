@@ -65,7 +65,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
               )}
               {open && grp.tasks.map((task,i)=>(
                 <React.Fragment key={task.id}>
-                  {dragOver===colKey && draggingId && !cardDragOver && colDropIndex?.col===colKey && colDropIndex?.index===i && <div className="drop-ph drop-ph-sm"/>}
+                  {dragOver===colKey && draggingId && !cardDragOver && colDropIndex?.col===colKey && colDropIndex?.index===i && <div className="drop-ph"/>}
                   <div className="card-add-zone" title="Add above" onClick={e=>{e.stopPropagation();onAdd(colKey,date,{beforeId:task.id});}}>
                     <button tabIndex={-1}>+</button>
                   </div>
