@@ -168,6 +168,9 @@ function App() {
   const pendingTodayJump = useRef(true);
   const pendingTodayJumpBehavior = useRef('auto');
   const pendingTodayJumpTimer = useRef(null);
+  // Set true once the user pans/wheels/touches the board, so the post-mount
+  // settle loop stops fighting their scroll position.
+  const userScrolledRef = useRef(false);
   // Refs so the rAF re-anchor in the today-jump effect uses the LATEST values,
   // not the ones captured by the closure of the render that scheduled it.
   const colWRef = useRef(0);
@@ -670,6 +673,30 @@ function App() {
     lastRolledTodayRef.current = todayKey;
     resetTimelineToToday();
   }, [todayKey]);
+
+  // Belt-and-braces: on first mount, the board's measured width can settle in
+  // stages (initial paint → font load → sidebar/inbox width applied), and a
+  // single layout-effect pass anchors against a stale COL_W. Re-anchor today
+  // across the first ~700ms unless the user has actively scrolled.
+  useEffect(() => {
+    const tries = [80, 220, 450, 750];
+    const timers = tries.map(ms => setTimeout(() => {
+      if (userScrolledRef.current) return;
+      const el = boardRef.current;
+      if (!el) return;
+      const idx = todayIdxRef.current;
+      const cw = colWRef.current;
+      if (idx < 0 || !cw) return;
+      const target = Math.max(0, idx * cw);
+      if (Math.abs(el.scrollLeft - target) <= 1) return;
+      if (typeof el.scrollTo === 'function') el.scrollTo({left:target, behavior:'auto'});
+      else el.scrollLeft = target;
+      const shell = boardShellRef.current;
+      setBoardMetrics({scrollLeft: el.scrollLeft, width: el.clientWidth, boardWidth: shell?.clientWidth||el.clientWidth});
+    }, ms));
+    return () => timers.forEach(clearTimeout);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useLayoutEffect(()=>{
     if(!pendingTodayJump.current) return;
     const el = boardRef.current;
@@ -2312,6 +2339,7 @@ function App() {
     if (e.button !== 0) return;
     if (e.target.closest('.card,.col-add,.col-groupby,.col-groupby-wrap,.card-add-zone,.side-panel,.col-hdr,.grp-hdr,.done-grp-hdr,.tb-btn,.lnav-item,.drawer')) return;
     const el = boardRef.current; if (!el) return;
+    userScrolledRef.current = true;
     panState.current = {isPanning:true, startX:e.clientX, scrollLeft:el.scrollLeft};
     el.classList.add('panning');
     const onMove = ev => {
@@ -2592,7 +2620,9 @@ function App() {
             onCollapse={()=>setTweak('projectPanelCollapsed',!tweaks.projectPanelCollapsed)}
             onResizeStart={resizeSidePanel}
             onProjectToggle={id=>toggleFilter('projects',id)}/>}
-          <div className="timeline-scroll" ref={boardRef} onMouseDown={onBoardMouseDown} onScroll={onBoardScroll}>
+          <div className="timeline-scroll" ref={boardRef} onMouseDown={onBoardMouseDown} onScroll={onBoardScroll}
+            onWheel={()=>{userScrolledRef.current=true;}}
+            onTouchStart={()=>{userScrolledRef.current=true;}}>
           {beforeTimelineSpacerWidth>0 && <div className="col-spacer" style={{width:beforeTimelineSpacerWidth}}/>}
           {renderTodayBefore && renderTimelineColumn(D.today(), 'sticky-')}
           {betweenTodayAndRenderWidth>0 && <div className="col-spacer" style={{width:betweenTodayAndRenderWidth}}/>}
