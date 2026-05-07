@@ -2179,15 +2179,15 @@ function App() {
     if(view==='inbox') return applyFilters(activeTasks.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.snoozedUntil&&!t.someday&&!t.blocked&&!t.delegatedTo));
     if(view==='upcoming') return applyFilters(activeTasks.filter(t=>D.isFut(t.date)&&!t.done&&!t.parentId&&!t.blocked&&!t.delegatedTo));
     if(view==='backlog') return applyFilters(activeTasks.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.someday&&!t.blocked&&!t.delegatedTo));
-    if(view==='snoozed') return applyFilters(activeTasks.filter(t=>!!t.snoozedUntil&&!t.parentId));
-    if(view==='someday') return applyFilters(activeTasks.filter(t=>!!t.someday&&!t.parentId));
-    if(view==='blocked') return applyFilters(activeTasks.filter(t=>t.blocked&&!t.done&&!t.parentId));
+    if(view==='snoozed') return applyFilters(activeTasks.filter(t=>!!t.snoozedUntil&&!t.parentId&&!t.delegatedTo));
+    if(view==='someday') return applyFilters(activeTasks.filter(t=>!!t.someday&&!t.parentId&&!t.delegatedTo));
+    if(view==='blocked') return applyFilters(activeTasks.filter(t=>t.blocked&&!t.done&&!t.parentId&&!t.delegatedTo));
     if(view==='completed') return applyFilters(activeTasks.filter(t=>t.done&&!t.parentId));
     if(view==='archived') return applyFilters(tasks.filter(t=>t.archived&&!t.parentId));
-    if(view?.type==='project') return applyFilters(activeTasks.filter(t=>t.project===view.id&&!t.done&&!t.parentId));
-    if(view?.type==='tag') return applyFilters(activeTasks.filter(t=>(t.tags||[]).includes(view.name)&&!t.done&&!t.parentId));
+    if(view?.type==='project') return applyFilters(activeTasks.filter(t=>t.project===view.id&&!t.done&&!t.parentId&&!t.delegatedTo));
+    if(view?.type==='tag') return applyFilters(activeTasks.filter(t=>(t.tags||[]).includes(view.name)&&!t.done&&!t.parentId&&!t.delegatedTo));
     if(view?.type==='lifeArea') return applyFilters(activeTasks.filter(t=>{
-      if(t.done || t.parentId) return false;
+      if(t.done || t.parentId || t.delegatedTo) return false;
       const lifeArea = getEffectiveLifeArea(t);
       return view.id===UNASSIGNED_LIFE_AREA ? !lifeArea : lifeArea===view.id;
     }));
@@ -2222,12 +2222,12 @@ function App() {
   const sidePanelTasks = ()=>{
     let list;
     if(sidePanelView==='timeline') list = visColKeys.filter(k=>k!=='inbox').flatMap(k=>tasksForCol(k));
-    else if(sidePanelView==='inbox') list = applyFilters(activeTasks.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.snoozedUntil&&!t.someday&&!t.blocked));
-    else if(sidePanelView==='upcoming') list = applyFilters(activeTasks.filter(t=>D.isFut(t.date)&&!t.done&&!t.parentId&&!t.blocked));
-    else if(sidePanelView==='backlog') list = applyFilters(activeTasks.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.someday&&!t.blocked));
-    else if(sidePanelView==='snoozed') list = applyFilters(activeTasks.filter(t=>!!t.snoozedUntil&&!t.parentId));
-    else if(sidePanelView==='someday') list = applyFilters(activeTasks.filter(t=>!!t.someday&&!t.parentId));
-    else if(sidePanelView==='blocked') list = applyFilters(activeTasks.filter(t=>t.blocked&&!t.done&&!t.parentId));
+    else if(sidePanelView==='inbox') list = applyFilters(activeTasks.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.snoozedUntil&&!t.someday&&!t.blocked&&!t.delegatedTo));
+    else if(sidePanelView==='upcoming') list = applyFilters(activeTasks.filter(t=>D.isFut(t.date)&&!t.done&&!t.parentId&&!t.blocked&&!t.delegatedTo));
+    else if(sidePanelView==='backlog') list = applyFilters(activeTasks.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.someday&&!t.blocked&&!t.delegatedTo));
+    else if(sidePanelView==='snoozed') list = applyFilters(activeTasks.filter(t=>!!t.snoozedUntil&&!t.parentId&&!t.delegatedTo));
+    else if(sidePanelView==='someday') list = applyFilters(activeTasks.filter(t=>!!t.someday&&!t.parentId&&!t.delegatedTo));
+    else if(sidePanelView==='blocked') list = applyFilters(activeTasks.filter(t=>t.blocked&&!t.done&&!t.parentId&&!t.delegatedTo));
     else if(sidePanelView==='completed') list = applyFilters(activeTasks.filter(t=>t.done&&!t.parentId));
     else if(sidePanelView==='archived') list = applyFilters(tasks.filter(t=>t.archived&&!t.parentId));
     else list = [];
