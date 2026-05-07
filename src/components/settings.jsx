@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_NAMES, LIFE_AREA_DARK, LIFE_AREA_LIGHT } from '../data.js';
 import { I } from '../utils/icons.jsx';
 import { useAuth } from '../auth/AuthProvider.jsx';
