@@ -1387,10 +1387,12 @@ function App() {
       return placeAtTop ? [nt, ...prev] : next;
     });
     if (view === 'stack' && !parentId && !(position.beforeId || position.afterId)) {
+      // Record the new task's slot in manualOrder so it lands sensibly when the
+      // user later switches to Manual sort. Don't flip the active sort — that
+      // silently reorders the whole list out from under the user.
       const order = tweaks.stackOrder || [];
       const filtered = order.filter(id => id !== nt.id);
       setTweak('stackOrder', placeAtTop ? [nt.id, ...filtered] : [...filtered, nt.id]);
-      if ((tweaks.stackSort || 'smart') !== 'manual') setTweak('stackSort', 'manual');
     }
     setSettingsOpen(false);
     setDrawerId(null);
