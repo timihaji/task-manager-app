@@ -71,6 +71,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
   const [localReason,setLocalReason]= useState('');
   const [newSub,     setNewSub]     = useState('');
   const [snoozeOpen, setSnoozeOpen] = useState(false);
+  const [snoozeMode, setSnoozeMode] = useState('today'); // 'today' | 'before_start' | 'before_due'
   const [menuOpen,   setMenuOpen]   = useState(false);
   const [timeMoreOpen, setTimeMoreOpen] = useState(false);
   const [blockerQuery,setBlockerQuery] = useState('');
@@ -129,10 +130,20 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
     d.setDate(d.getDate() + (dow === 1 ? 7 : (8 - dow) % 7 || 7));
     return D.str(d);
   };
+  const nextSatStr = () => {
+    const d = new Date(D.today());
+    const dow = d.getDay();
+    d.setDate(d.getDate() + (dow === 6 ? 7 : (6 - dow + 7) % 7 || 7));
+    return D.str(d);
+  };
   const SNOOZE_OPTS = [
     {l:'Tomorrow',    fn:()=>D.str(D.add(D.today(),1))},
+    {l:'In 2 days',   fn:()=>D.str(D.add(D.today(),2))},
+    {l:'In 3 days',   fn:()=>D.str(D.add(D.today(),3))},
+    {l:'This weekend',fn:nextSatStr},
     {l:'Next week',   fn:nextMondayStr},
     {l:'In 2 weeks',  fn:()=>D.str(D.add(D.today(),14))},
+    {l:'In 3 weeks',  fn:()=>D.str(D.add(D.today(),21))},
     {l:'Next month',  fn:()=>{ const d=new Date(D.today()); d.setMonth(d.getMonth()+1); return D.str(d); }},
     {l:'In 2 months', fn:()=>{ const d=new Date(D.today()); d.setMonth(d.getMonth()+2); return D.str(d); }},
     {l:'In 3 months', fn:()=>{ const d=new Date(D.today()); d.setMonth(d.getMonth()+3); return D.str(d); }},
@@ -140,9 +151,11 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
     {l:'Next year',   fn:()=>{ const d=new Date(D.today()); d.setFullYear(d.getFullYear()+1); return D.str(d); }},
   ];
   const RELATIVE_SNOOZE_OPTS = [
-    { l:'1 day before', days:1 },
+    { l:'1 day before',  days:1 },
     { l:'3 days before', days:3 },
     { l:'1 week before', days:7 },
+    { l:'2 weeks before', days:14 },
+    { l:'1 month before', days:30 },
   ];
   const FREQ_OPTS = [
     {v:'none',l:'Does not repeat'},{v:'daily',l:'Daily'},
@@ -505,20 +518,38 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                 {snoozeSummary} ▾
               </button>
               {snoozeOpen && (
-                <div className="dr-dd" style={{position:'absolute',left:0,top:'calc(100% + 4px)',zIndex:200,minWidth:160}}>
+                <div className="dr-dd" style={{position:'absolute',left:0,top:'calc(100% + 4px)',zIndex:200,minWidth:200}}>
+                  {/* Mode toggle: choose what the offset is relative to */}
+                  <div style={{display:'flex',gap:2,padding:'4px',borderBottom:'1px solid var(--border)'}}>
+                    {[{v:'today',l:'Today'},{v:'before_start',l:'Start',disabled:!task.date},{v:'before_due',l:'Due',disabled:!task.dueDate}].map(m => (
+                      <button key={m.v} disabled={m.disabled}
+                        onClick={()=>setSnoozeMode(m.v)}
+                        title={m.disabled ? `Set a ${m.v==='before_start'?'Start':'Due'} Date first` : ''}
+                        style={{flex:1,border:'none',cursor:m.disabled?'default':'pointer',padding:'4px 6px',borderRadius:2,fontSize:10.5,
+                          background:snoozeMode===m.v?'var(--accent-dim)':'transparent',
+                          color:m.disabled?'var(--t4)':snoozeMode===m.v?'var(--accent)':'var(--t2)',
+                          fontWeight:snoozeMode===m.v?600:400}}>{m.l}</button>
+                    ))}
+                  </div>
                   {(task.snoozedUntil || task.snoozeMode) && <div className="dr-dd-item" onClick={()=>{upd({snoozedUntil:null, snoozeMode:null, snoozeOffsetDays:null});setSnoozeOpen(false);}}>Remove snooze</div>}
-                  <div className="dr-dd-item" style={{opacity:.65,pointerEvents:'none'}}>From today</div>
-                  {SNOOZE_OPTS.map(o=><div key={o.l} className="dr-dd-item" onClick={()=>{upd({snoozedUntil:o.fn(), snoozeMode:'absolute', snoozeOffsetDays:null});setSnoozeOpen(false);}}>{o.l}</div>)}
-                  <div className="dr-dd-sep"/>
-                  <div className="dr-dd-item" style={{opacity:.65,pointerEvents:'none'}}>Before Start Date</div>
-                  {task.date
-                    ? RELATIVE_SNOOZE_OPTS.map(o => <div key={`start-${o.days}`} className="dr-dd-item" onClick={()=>{upd({snoozeMode:'before_start', snoozeOffsetDays:o.days});setSnoozeOpen(false);}}>{o.l}</div>)
-                    : <div className="dr-dd-item" style={{opacity:.55,pointerEvents:'none'}}>Set a Start Date first</div>}
-                  <div className="dr-dd-sep"/>
-                  <div className="dr-dd-item" style={{opacity:.65,pointerEvents:'none'}}>Before Due Date</div>
-                  {task.dueDate
-                    ? RELATIVE_SNOOZE_OPTS.map(o => <div key={`due-${o.days}`} className="dr-dd-item" onClick={()=>{upd({snoozeMode:'before_due', snoozeOffsetDays:o.days});setSnoozeOpen(false);}}>{o.l}</div>)
-                    : <div className="dr-dd-item" style={{opacity:.55,pointerEvents:'none'}}>Set a Due Date first</div>}
+                  {snoozeMode === 'today' && SNOOZE_OPTS.map(o => (
+                    <div key={o.l} className="dr-dd-item"
+                      onClick={()=>{upd({snoozedUntil:o.fn(), snoozeMode:'absolute', snoozeOffsetDays:null});setSnoozeOpen(false);}}>
+                      {o.l}
+                    </div>
+                  ))}
+                  {snoozeMode === 'before_start' && RELATIVE_SNOOZE_OPTS.map(o => (
+                    <div key={`start-${o.days}`} className="dr-dd-item"
+                      onClick={()=>{upd({snoozeMode:'before_start', snoozeOffsetDays:o.days});setSnoozeOpen(false);}}>
+                      {o.l}
+                    </div>
+                  ))}
+                  {snoozeMode === 'before_due' && RELATIVE_SNOOZE_OPTS.map(o => (
+                    <div key={`due-${o.days}`} className="dr-dd-item"
+                      onClick={()=>{upd({snoozeMode:'before_due', snoozeOffsetDays:o.days});setSnoozeOpen(false);}}>
+                      {o.l}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
