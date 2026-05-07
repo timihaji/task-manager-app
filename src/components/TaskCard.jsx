@@ -12,7 +12,7 @@ const fmtStartDate = (s) => {
   if (!s) return '';
   const today = D.str(D.today());
   const tomorrow = D.str(D.add(D.today(), 1));
-  if (s === today) return 'Today';
+  if (s === today) return 'Starts Today';
   if (s === tomorrow) return 'Starts Tomorrow';
   const d = D.parse(s);
   const diff = Math.round((d - D.today()) / 86400000);
