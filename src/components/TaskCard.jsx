@@ -166,9 +166,9 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
               title={visibleTags.length ? `Tags: ${visibleTags.map(t=>TAG_NAMES[t]||t).join(', ')}` : 'Set tag'}
               onClick={e=>{e.stopPropagation(); setOpenPop(o=>o==='tag'?null:'tag');}}>
               {visibleTags.length ? (
-                visibleTags.map((tg,i)=>{
+                visibleTags.map((tg)=>{
                   const p = tagPalette[tg];
-                  return <span key={tg} className="card-tag" style={{background:p.bg,color:p.fg}}>{i===0 && <I.Tag/>}{TAG_NAMES[tg]||tg}</span>;
+                  return <span key={tg} className="card-tag" style={{background:p.bg,color:p.fg}}>{TAG_NAMES[tg]||tg}</span>;
                 })
               ) : (
                 <span className="card-meta empty"><I.Tag/></span>
