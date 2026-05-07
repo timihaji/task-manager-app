@@ -156,22 +156,30 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
           </span>
         )}
         {/* Tag */}
-        <span ref={tagRef} className={`card-meta-btn${openPop==='tag'?' act':''}`}
-          title={task.tags?.length ? `Tags: ${task.tags.map(t=>TAG_NAMES[t]||t).join(', ')}` : 'Set tag'}
-          onClick={e=>{e.stopPropagation(); setOpenPop(o=>o==='tag'?null:'tag');}}>
-          {task.tags?.length ? (
-            task.tags.map((tg,i)=>{
-              const p = tagPalette[tg] || tagPalette.admin;
-              return <span key={tg} className="card-tag" style={{background:p.bg,color:p.fg}}>{i===0 && <I.Tag/>}{TAG_NAMES[tg]||tg}</span>;
-            })
-          ) : (
-            <span className="card-meta empty"><I.Tag/></span>
-          )}
-          <CardPopover open={openPop==='tag'} onClose={()=>setOpenPop(null)} anchorRef={tagRef}>
-            <TagPicker task={task} theme={theme} recents={recents?.tags} isBulk={isBulkEdit}
-              onChange={(p,rv)=>applyChange(p,rv)} onClose={()=>setOpenPop(null)}/>
-          </CardPopover>
-        </span>
+        {(() => {
+          // Only render tags that exist in the current taxonomy. Orphan tags
+          // (e.g. legacy values left on tasks after a tag was deleted) are
+          // hidden so the card doesn't show a chip the user can't manage.
+          const visibleTags = (task.tags || []).filter(tg => tagPalette[tg]);
+          return (
+            <span ref={tagRef} className={`card-meta-btn${openPop==='tag'?' act':''}`}
+              title={visibleTags.length ? `Tags: ${visibleTags.map(t=>TAG_NAMES[t]||t).join(', ')}` : 'Set tag'}
+              onClick={e=>{e.stopPropagation(); setOpenPop(o=>o==='tag'?null:'tag');}}>
+              {visibleTags.length ? (
+                visibleTags.map((tg,i)=>{
+                  const p = tagPalette[tg];
+                  return <span key={tg} className="card-tag" style={{background:p.bg,color:p.fg}}>{i===0 && <I.Tag/>}{TAG_NAMES[tg]||tg}</span>;
+                })
+              ) : (
+                <span className="card-meta empty"><I.Tag/></span>
+              )}
+              <CardPopover open={openPop==='tag'} onClose={()=>setOpenPop(null)} anchorRef={tagRef}>
+                <TagPicker task={task} theme={theme} recents={recents?.tags} isBulk={isBulkEdit}
+                  onChange={(p,rv)=>applyChange(p,rv)} onClose={()=>setOpenPop(null)}/>
+              </CardPopover>
+            </span>
+          );
+        })()}
         {/* Project */}
         <span ref={projRef} className={`card-meta-btn${openPop==='proj'?' act':''}`}
           title={proj?`Location: ${proj.label}`:'Set location'}

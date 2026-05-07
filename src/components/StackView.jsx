@@ -148,7 +148,7 @@ function ChipRow({ task, isProject, allTasks, theme }) {
         </span>
       )}
 
-      {tags.slice(0,2).map(tg => {
+      {tags.filter(tg => tagPalette[tg]).slice(0,2).map(tg => {
         const p = tagPalette[tg];
         if (!p) return null;
         return <span key={tg} className="schip schip-tag" style={{background:p.bg, color:p.fg, borderLeftColor:p.fg, borderColor:p.fg+'40'}}>{TAG_NAMES[tg] || tg}</span>;
