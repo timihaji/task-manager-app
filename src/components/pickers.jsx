@@ -32,7 +32,7 @@ function TagPicker({ task, theme, recents, onChange, onClose, isBulk }) {
                 <span
                   key={`r${t}`}
                   className={`card-pop-chip${act ? ' act' : ''}`}
-                  style={act ? { background: c.bg, color: c.fg, borderColor: `${c.fg}66` } : {}}
+                  style={{ background: c.bg, color: c.fg, borderColor: act ? `${c.fg}aa` : `${c.fg}55`, boxShadow: act ? `inset 0 0 0 1px ${c.fg}55` : undefined, fontWeight: act ? 600 : undefined }}
                   onClick={() => toggle(t)}
                 >
                   {TAG_NAMES[t] || t}
@@ -89,7 +89,7 @@ function ProjPicker({ task, recents, onChange, onClose, isBulk }) {
                 <span
                   key={`r${pid}`}
                   className={`card-pop-chip${act ? ' act' : ''}`}
-                  style={act ? { background: `${p.color}22`, color: p.color, borderColor: `${p.color}66` } : {}}
+                  style={{ background: `${p.color}${act ? '33' : '14'}`, color: p.color, borderColor: act ? `${p.color}aa` : `${p.color}55`, boxShadow: act ? `inset 0 0 0 1px ${p.color}66` : undefined, fontWeight: act ? 600 : undefined }}
                   onClick={() => pick(p.id)}
                 >
                   <span className="card-pop-chip-dot" style={{ background: p.color }} />
@@ -108,7 +108,7 @@ function ProjPicker({ task, recents, onChange, onClose, isBulk }) {
             <span
               key={p.id}
               className={`card-pop-chip${act ? ' act' : ''}`}
-              style={act ? { background: `${p.color}22`, color: p.color, borderColor: `${p.color}66` } : {}}
+              style={{ background: `${p.color}${act ? '33' : '14'}`, color: p.color, borderColor: act ? `${p.color}aa` : `${p.color}55`, boxShadow: act ? `inset 0 0 0 1px ${p.color}66` : undefined, fontWeight: act ? 600 : undefined }}
               onClick={() => pick(p.id)}
             >
               <span className="card-pop-chip-dot" style={{ background: p.color }} />

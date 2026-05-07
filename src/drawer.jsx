@@ -367,7 +367,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onClose, onDelete, onDuplica
               {PROJ.map(p=>{
                 const act = task.project===p.id;
                 return <button key={p.id} className={`dr-pick${act?' act':''}`}
-                  style={act?{background:p.color+'22',color:p.color,borderColor:p.color+'66'}:{}}
+                  style={{background:`${p.color}${act?'33':'14'}`, color:p.color, borderColor:act?p.color+'aa':p.color+'55', boxShadow: act ? `inset 0 0 0 1px ${p.color}66` : undefined}}
                   onClick={()=>upd({project:act?null:p.id})}>
                   <span className="dr-pick-dot" style={{background:p.color}}/>{p.label}
                 </button>;
@@ -393,11 +393,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onClose, onDelete, onDuplica
                   const explicit = task.lifeArea===id;
                   const inherited = inheritedLifeArea===id;
                   return <button key={id} className={`dr-pick${explicit?' act':''}`}
-                    style={explicit
-                      ? {background:c.bg,color:c.fg,borderColor:c.fg+'55'}
-                      : inherited
-                        ? {color:c.fg,borderColor:c.fg+'44',boxShadow:`inset 0 0 0 1px ${c.fg}22`}
-                        : {}}
+                    style={{background:c.bg, color:c.fg, borderColor:explicit?c.fg+'aa':c.fg+'55', boxShadow: explicit ? `inset 0 0 0 1px ${c.fg}66` : inherited ? `inset 0 0 0 1px ${c.fg}33` : undefined}}
                     onClick={()=>upd({lifeArea: explicit ? null : id})}>
                     {LIFE_AREA_NAMES[id] || id}
                   </button>;
@@ -427,7 +423,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onClose, onDelete, onDuplica
                 const c = tp[t] || tp['admin'];
                 const act = (task.tags||[]).includes(t);
                 return <button key={t} className={`dr-pick${act?' act':''}`}
-                  style={act?{background:c.bg,color:c.fg,borderColor:c.fg+'55'}:{}}
+                  style={{background:c.bg, color:c.fg, borderColor:act?c.fg+'aa':c.fg+'55', boxShadow: act?`inset 0 0 0 1px ${c.fg}66`:undefined}}
                   onClick={()=>act?removeTag(t):addTag(t)}>
                   {TAG_NAMES[t]||t}
                 </button>;
