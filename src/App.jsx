@@ -2045,8 +2045,9 @@ function App() {
   const timelineTitle = `Timeline ${MONTH_S[timelineStartDate.getMonth()]} ${timelineStartDate.getDate()} - ${timelineStartDate.getMonth()!==timelineEndDate.getMonth()?MONTH_S[timelineEndDate.getMonth()]+' ':''}${timelineEndDate.getDate()}, ${timelineEndDate.getFullYear()}`;
   const viewTitle = view==='week'?timelineTitle:view==='stack'?'Stack':view==='list'?'List':view==='inbox'?'Inbox':view==='upcoming'?'Upcoming':view==='backlog'?'Backlog':view==='snoozed'?'Snoozed':view==='someday'?'Someday':view==='blocked'?'Blocked':view==='completed'?'Completed':view==='archived'?'Archived':view==='delegations'?'Delegations':view?.type==='project'?PROJ.find(p=>p.id===view.id)?.label||'Location':view?.type==='tag'?TAG_NAMES[view.name]||view.name:view?.type==='lifeArea'?lifeAreaOptionLabel(view.id):'Tasks';
 
-  // Stack/List task pool — all open top-level tasks, ignoring topbar filters by design
-  const allOpenTopLevel = activeTasks.filter(t=>!t.done&&!t.parentId&&!t.snoozedUntil&&!t.delegatedTo&&!t.checkInOf);
+  // Stack/List task pool — all open top-level tasks, ignoring topbar pill filters by design.
+  // Search still applies so users can find tasks in these views.
+  const allOpenTopLevel = activeTasks.filter(t=>!t.done&&!t.parentId&&!t.snoozedUntil&&!t.delegatedTo&&!t.checkInOf&&taskMatchesSearch(t));
   const stackOpenTopLevel = allOpenTopLevel.filter(t=>!t.someday);
 
   // non-week view tasks
