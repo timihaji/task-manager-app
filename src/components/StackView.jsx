@@ -207,7 +207,11 @@ function StackCard({ task, idx, isNow, isDeck, isLater, completing, allTasks, th
     if (e.target.closest('.scard-sub-chk')) return false;
     return true;
   };
-  const handleCardClick = (e) => { if (isCardSurface(e)) onFocus?.(task.id); };
+  const handleCardClick = (e) => {
+    if (!isCardSurface(e)) return;
+    onFocus?.(task.id);
+    onOpen?.(task.id);
+  };
   const handleCardDoubleClick = (e) => { if (isCardSurface(e)) onOpen?.(task.id); };
 
   return (
