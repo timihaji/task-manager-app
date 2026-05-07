@@ -92,9 +92,15 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onClose, onDelete, onDuplica
   const inheritedLifeArea = task.lifeArea == null && effectiveLifeArea ? effectiveLifeArea : null;
   const suggestedLifeArea = task.lifeArea == null && !inheritedLifeArea ? suggestLifeAreaFromTitle(task.title || localTitle) : null;
 
+  const nextMondayStr = () => {
+    const d = new Date(D.today());
+    const dow = d.getDay();
+    d.setDate(d.getDate() + (dow === 1 ? 7 : (8 - dow) % 7 || 7));
+    return D.str(d);
+  };
   const SNOOZE_OPTS = [
     {l:'Tomorrow',    fn:()=>D.str(D.add(D.today(),1))},
-    {l:'Next week',   fn:()=>D.str(D.add(D.today(),7))},
+    {l:'Next week',   fn:nextMondayStr},
     {l:'In 2 weeks',  fn:()=>D.str(D.add(D.today(),14))},
     {l:'Next month',  fn:()=>{ const d=new Date(D.today()); d.setMonth(d.getMonth()+1); return D.str(d); }},
     {l:'In 2 months', fn:()=>{ const d=new Date(D.today()); d.setMonth(d.getMonth()+2); return D.str(d); }},

@@ -167,10 +167,11 @@ function DatePicker({ task, onChange, onClose, isBulk }) {
   const nlValue = nl.trim().toLowerCase();
   const isSomeday = nlValue === 'someday';
   const isInbox = ['inbox', 'backlog', 'no date', 'nodate', 'clear'].includes(nlValue);
+  const nextMon = () => { const d = new Date(today); const day = d.getDay(); d.setDate(d.getDate() + (day === 1 ? 7 : (8 - day) % 7 || 7)); return D.str(d); };
   const quick = [
     { l: 'Today', fn: () => D.str(today) },
     { l: 'Tomorrow', fn: () => D.str(D.add(today, 1)) },
-    { l: 'Next week', fn: () => D.str(D.add(today, 7)) },
+    { l: 'Next week', fn: nextMon },
     { l: 'Inbox', fn: () => null },
   ];
   const preview = parseNLDate(nl);
