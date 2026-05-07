@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 
 // ── CardPopover primitive ────────────────────────────────────────────────
 // Uses position:fixed with viewport-relative coordinates and renders into
