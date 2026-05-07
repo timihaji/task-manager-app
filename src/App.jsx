@@ -354,12 +354,16 @@ function App() {
           lastSyncedTasksRef.current = next;
           return next;
         }
-        if (JSON.stringify(prev[idx]) === JSON.stringify(incoming)) {
+        // Merge incoming over local instead of replacing. rowToTask only sets
+        // keys for columns that exist in the row, so any client-only fields
+        // (e.g. `groupId` before the group_id SQL migration runs) are preserved.
+        const merged = { ...prev[idx], ...incoming };
+        if (JSON.stringify(prev[idx]) === JSON.stringify(merged)) {
           // Echo of our own write — no-op so the sync effect doesn't fire.
           return prev;
         }
         const next = prev.slice();
-        next[idx] = incoming;
+        next[idx] = merged;
         lastSyncedTasksRef.current = next;
         return next;
       });
