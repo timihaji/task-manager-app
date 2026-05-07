@@ -73,6 +73,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [snoozeMode, setSnoozeMode] = useState('today'); // 'today' | 'before_start' | 'before_due'
   const [dueOpen, setDueOpen] = useState(false);
+  const [dueMode, setDueMode] = useState('today'); // 'today' | 'after_start'
   const dueRef = useRef(null);
   useEffect(() => {
     if (!dueOpen) return;
@@ -168,6 +169,21 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
     {l:'In 1 month',   fn:()=>{ const d=new Date(D.today()); d.setMonth(d.getMonth()+1); return D.str(d); }},
     {l:'In 3 months',  fn:()=>{ const d=new Date(D.today()); d.setMonth(d.getMonth()+3); return D.str(d); }},
   ];
+  // When a Start Date is set, the user can pick a due date relative to it.
+  const RELATIVE_DUE_OPTS = [
+    { l:'Same day',       days:0 },
+    { l:'1 day after',    days:1 },
+    { l:'3 days after',   days:3 },
+    { l:'1 week after',   days:7 },
+    { l:'2 weeks after',  days:14 },
+    { l:'1 month after',  days:30 },
+  ];
+  const dueFromStart = (days) => {
+    if (!task?.date) return null;
+    const d = D.parse(task.date);
+    d.setDate(d.getDate() + days);
+    return D.str(d);
+  };
   const fmtDueLabel = (s) => {
     if (!s) return 'No due date';
     const today = D.str(D.today());
@@ -528,13 +544,31 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                 {fmtDueLabel(task.dueDate)} ▾
               </button>
               {dueOpen && (
-                <div className="dr-dd" style={{position:'absolute',left:0,top:'calc(100% + 4px)',zIndex:200,minWidth:200}}>
+                <div className="dr-dd" style={{position:'absolute',left:0,top:'calc(100% + 4px)',zIndex:200,minWidth:220}}>
+                  {/* Mode toggle: choose what the offset is relative to */}
+                  <div style={{display:'flex',gap:2,padding:'4px',borderBottom:'1px solid var(--border)'}}>
+                    {[{v:'today',l:'From today'},{v:'after_start',l:'From start',disabled:!task.date}].map(m => (
+                      <button key={m.v} disabled={m.disabled}
+                        onClick={()=>setDueMode(m.v)}
+                        title={m.disabled ? 'Set a Start Date first' : ''}
+                        style={{flex:1,border:'none',cursor:m.disabled?'default':'pointer',padding:'4px 6px',borderRadius:2,fontSize:10.5,
+                          background:dueMode===m.v?'var(--accent-dim)':'transparent',
+                          color:m.disabled?'var(--t4)':dueMode===m.v?'var(--accent)':'var(--t2)',
+                          fontWeight:dueMode===m.v?600:400}}>{m.l}</button>
+                    ))}
+                  </div>
                   {task.dueDate && (
                     <div className="dr-dd-item" onClick={()=>{upd({dueDate:null});setDueOpen(false);}}>Remove due date</div>
                   )}
-                  {DUE_OPTS.map(o => (
+                  {dueMode === 'today' && DUE_OPTS.map(o => (
                     <div key={o.l} className="dr-dd-item"
                       onClick={()=>{upd({dueDate:o.fn()});setDueOpen(false);}}>
+                      {o.l}
+                    </div>
+                  ))}
+                  {dueMode === 'after_start' && RELATIVE_DUE_OPTS.map(o => (
+                    <div key={`start-${o.days}`} className="dr-dd-item"
+                      onClick={()=>{ const d = dueFromStart(o.days); if(d) upd({dueDate:d}); setDueOpen(false); }}>
                       {o.l}
                     </div>
                   ))}
