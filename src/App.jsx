@@ -2337,6 +2337,13 @@ function App() {
       {label:'Rename',         onClick:()=>setRenamingId(t.id), kbd:'E'},
       {label:'Duplicate',      onClick:()=>duplicateTask(t.id), kbd:'D'},
       {label:'Move to inbox',  onClick:()=>updateTask(t.id,{date:null,someday:false,...clearSnoozePatch})},
+      {label: t.someday ? 'Remove from Someday' : 'Move to Someday',
+        onClick:()=>updateTask(t.id,{someday:!t.someday}), kbd:'Z'},
+      {label: t.cardType==='project' ? 'Convert to task' : 'Convert to project',
+        onClick:()=>{
+          if (t.parentId) { setToast('Already inside a project'); setTimeout(()=>setToast(null),1400); return; }
+          updateTask(t.id, {cardType: t.cardType==='project' ? 'task' : 'project'});
+        }, kbd:'⇧G'},
       {type:'sep'},
       {label:'Archive', onClick:()=>archiveTask(t.id), kbd:'C'},
       {label:'Delete',  onClick:()=>deleteTask(t.id), danger:true, kbd:'⌫'},
