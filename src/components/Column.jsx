@@ -4,27 +4,7 @@ import { I } from '../utils/icons.jsx';
 import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from '../utils/colors.js';
 import { groupTasksBy, getGLabel, getGColor } from '../utils/grouping.js';
 import { TaskCard } from './TaskCard.jsx';
-
-// A card-shaped placeholder shown at the drop slot during drag. Mirrors the
-// dragged card's title + key chips so the user sees a preview of the
-// post-drop layout instead of a generic blue rectangle.
-function DropPreview({ task, theme }) {
-  if (!task) return <div className="drop-ph"/>;
-  const proj = task.project ? PROJ.find(p => p.id === task.project) : null;
-  return (
-    <div className="drop-ph drop-ph-preview">
-      <div className="drop-ph-title">{task.title || 'Untitled'}</div>
-      <div className="drop-ph-meta">
-        {(task.tags||[]).slice(0,2).map(tg => (
-          <span key={tg} className="drop-ph-chip">{TAG_NAMES[tg]||tg}</span>
-        ))}
-        {task.lifeArea && <span className="drop-ph-chip">{LIFE_AREA_NAMES[task.lifeArea]||task.lifeArea}</span>}
-        {proj && <span className="drop-ph-chip" style={{color:proj.color}}>{proj.id}</span>}
-        {task.timeEstimate && <span className="drop-ph-chip">{task.timeEstimate}</span>}
-      </div>
-    </div>
-  );
-}
+import { DropPreview } from './DropPreview.jsx';
 
 function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, groupBy, collapsedGrps, completedOpen, blockedOpen,
   onToggleGrp, onToggleCompleted, onToggleBlocked, onAdd, onOpen, onToggle, onDelete,
@@ -99,7 +79,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                     collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
                     forceOpenProjects={forceOpenProjects}
                     onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-                    cardDragOver={cardDragOver}
+                    cardDragOver={cardDragOver} draggingTask={draggingTask}
                     selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawning} focusedId={focusedCardId}
                     onAdd={onAdd}
                     blockingCountFor={blockingCountFor} taskTitleById={taskTitleById}
@@ -134,7 +114,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                 collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
                 forceOpenProjects={forceOpenProjects}
                 onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-                cardDragOver={cardDragOver}
+                cardDragOver={cardDragOver} draggingTask={draggingTask}
                 selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawning} focusedId={focusedCardId}
                 onAdd={onAdd}
                 blockingCountFor={blockingCountFor} taskTitleById={taskTitleById}
@@ -161,7 +141,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                 collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
                 forceOpenProjects={forceOpenProjects}
                 onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-                cardDragOver={cardDragOver}
+                cardDragOver={cardDragOver} draggingTask={draggingTask}
                 selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawning} focusedId={focusedCardId}
                 onAdd={onAdd}
                 blockingCountFor={blockingCountFor} taskTitleById={taskTitleById}
@@ -343,7 +323,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
                       collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
                       forceOpenProjects={forceOpenProjects}
                       onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-                      cardDragOver={cardDragOver}
+                      cardDragOver={cardDragOver} draggingTask={draggingTask}
                       selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawning} focusedId={focusedCardId}
                       onAdd={onAdd}
                       getEffectiveLifeArea={cardExtras?.getEffectiveLifeArea}
@@ -370,7 +350,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
                 collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
                 forceOpenProjects={forceOpenProjects}
                 onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-                cardDragOver={cardDragOver}
+                cardDragOver={cardDragOver} draggingTask={draggingTask}
                 selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawning} focusedId={focusedCardId}
                 onAdd={onAdd}
                 getEffectiveLifeArea={cardExtras?.getEffectiveLifeArea}

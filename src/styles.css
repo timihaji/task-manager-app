@@ -754,20 +754,7 @@ body[data-theme="light"] .schip-recurring{color:#7c3aed;background:#faf5ff;borde
 .scard{user-select:none}
 .scard.is-dragging{opacity:.4;transform:scale(.985);box-shadow:var(--shadow-lg);cursor:grabbing}
 .scard.is-dragging:hover{transform:scale(.985)}
-.scard.drop-before::before,
-.scard.drop-after::before{
-  content:'';
-  position:absolute;
-  left:8px;right:8px;
-  height:2px;
-  background:var(--accent);
-  border-radius:2px;
-  box-shadow:0 0 6px var(--accent);
-  z-index:5;
-  pointer-events:none;
-}
-.scard.drop-before::before{top:-5px}
-.scard.drop-after::before{bottom:-5px}
+/* Drop indicator is now a card-shaped DropPreview rendered between cards. */
 .stack-body.is-dragging .scard-subs{pointer-events:none}
 .stack-body.is-dragging .scard:hover{transform:none;box-shadow:var(--shadow);border-color:var(--border-s)}
 .stack-body.is-dragging .scard.is-dragging{transform:scale(.985)}

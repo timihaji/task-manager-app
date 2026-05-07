@@ -5,6 +5,7 @@ import { PRI_INFO } from '../utils/constants.js';
 import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from '../utils/colors.js';
 import { groupTasksBy, getGLabel, getGColor } from '../utils/grouping.js';
 import { CardPopover } from './CardPopover.jsx';
+import { DropPreview } from './DropPreview.jsx';
 import { TagPicker, ProjPicker, TimePicker, DatePicker, PriPicker, SnoozePicker } from './pickers.jsx';
 import { PriBars } from './PriBars.jsx';
 
@@ -33,7 +34,7 @@ const fmtDueDate = (s) => {
 // ── TaskCard ─────────────────────────────────────────────────────────────
 function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, onOpen, onToggle, onDelete, onFocus, onSelect, onRename, onRenameDone, onDragStart, onDragEnd, isDragging,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
-  onCardDragOver, onCardDragLeave, onCardDrop, cardDragOver,
+  onCardDragOver, onCardDragLeave, onCardDrop, cardDragOver, draggingTask,
   selectedIds, renamingId, spawningSet, focusedId, onAdd, depth=0, blockingCountFor, taskTitleById,
   onContextMenu, onBulkUpdate, recents, onRecentTag, onRecentProj, openPopRequest, onPopHandled, getEffectiveLifeArea, onAddTaxonomy, onStartRename }) {
   const tagPalette = theme==='dark'?TAG_DARK:TAG_LIGHT;
@@ -283,7 +284,7 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
           )}
           {kids.map((child,i)=>(
             <React.Fragment key={child.id}>
-              {isDropTarget && dropIndex===i && <div className="drop-ph drop-ph-sm"/>}
+              {isDropTarget && dropIndex===i && <DropPreview task={draggingTask} theme={theme}/>}
               <div className="card-add-zone" title="Add above"
                 onClick={e=>{e.stopPropagation();onAdd?.(task.id,null,{beforeId:child.id, parentId:task.id});}}>
                 <button tabIndex={-1}>+</button>
@@ -301,7 +302,7 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
                 collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
                 forceOpenProjects={forceOpenProjects}
                 onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-                cardDragOver={cardDragOver}
+                cardDragOver={cardDragOver} draggingTask={draggingTask}
                 selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawningSet} focusedId={focusedId}
                 onAdd={onAdd}
                 depth={depth+1}
@@ -315,7 +316,7 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
                 />
             </React.Fragment>
           ))}
-          {isDropTarget && dropIndex===kids.length && <div className="drop-ph drop-ph-sm"/>}
+          {isDropTarget && dropIndex===kids.length && <DropPreview task={draggingTask} theme={theme}/>}
           <div className="card-add-zone" title="Add card to project"
             onClick={e=>{e.stopPropagation();onAdd?.(task.id,null,{parentId:task.id});}}>
             <button tabIndex={-1}>+</button>

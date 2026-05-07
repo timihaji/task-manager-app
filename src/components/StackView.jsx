@@ -3,6 +3,7 @@ import { I } from '../utils/icons.jsx';
 import { D, parseTimeEst, fmtTimeEst, PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREA_NAMES } from '../data.js';
 import { lifeAreaPalette } from '../utils/colors.js';
 import { PriBars } from './PriBars.jsx';
+import { DropPreview } from './DropPreview.jsx';
 
 const PRI_RANK = { p1:0, p2:1, p3:2, p4:3 };
 const COMPLETE_ANIM_MS = 320;
@@ -449,6 +450,25 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     }
     e.dataTransfer.effectAllowed = 'move';
     try { e.dataTransfer.setData('text/plain', id); } catch {}
+    // Trello-style drag image: clean clone of the card with a slight tilt.
+    const card = e.currentTarget;
+    if (card && e.dataTransfer.setDragImage) {
+      const rect = card.getBoundingClientRect();
+      const clone = card.cloneNode(true);
+      clone.classList.remove('is-dragging','focused','renaming','drop-before','drop-after');
+      clone.style.position = 'fixed';
+      clone.style.top = '-9999px';
+      clone.style.left = '-9999px';
+      clone.style.width = rect.width + 'px';
+      clone.style.transform = 'rotate(3deg)';
+      clone.style.opacity = '1';
+      clone.style.boxShadow = '0 12px 28px rgba(0,0,0,.35)';
+      clone.style.pointerEvents = 'none';
+      clone.style.background = getComputedStyle(card).backgroundColor || 'var(--surface)';
+      document.body.appendChild(clone);
+      try { e.dataTransfer.setDragImage(clone, e.clientX - rect.left, e.clientY - rect.top); } catch {}
+      setTimeout(() => { try { clone.remove(); } catch {} }, 0);
+    }
     dragRef.current.id = id;
     setDrag(d => ({ ...d, id }));
   };
@@ -618,6 +638,9 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
               const bucket = showDividers ? bucketOf(t) : null;
               const dividerNeeded = bucket && bucket !== lastBucket;
               if (bucket) lastBucket = bucket;
+              const draggingTask = drag.id ? sorted.find(x => x.id === drag.id) : null;
+              const showBefore = drag.overId === t.id && drag.overPos === 'before' && drag.id !== t.id;
+              const showAfter  = drag.overId === t.id && drag.overPos === 'after'  && drag.id !== t.id;
               return (
                 <React.Fragment key={t.id}>
                   {dividerNeeded && (
@@ -626,6 +649,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                       <span className="rule"/>
                     </div>
                   )}
+                  {showBefore && <DropPreview task={draggingTask} theme={theme}/>}
                   <StackCard
                     task={t}
                     idx={idx}
@@ -658,6 +682,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                     onStartRename={setRenamingId}
                     onRenameDone={()=>setRenamingId?.(null)}
                   />
+                  {showAfter && <DropPreview task={draggingTask} theme={theme}/>}
                 </React.Fragment>
               );
             });
