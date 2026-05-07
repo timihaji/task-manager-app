@@ -479,7 +479,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                   const explicit = task.lifeArea===id;
                   const inherited = inheritedLifeArea===id;
                   return <button key={id} className={`dr-pick${explicit?' act':''}`}
-                    style={{background:c.bg, color:c.fg, borderColor:explicit?c.fg+'aa':c.fg+'55', boxShadow: explicit ? `inset 0 0 0 1px ${c.fg}66` : inherited ? `inset 0 0 0 1px ${c.fg}33` : undefined}}
+                    style={{background:c.bg, color:c.fg, borderColor:explicit?c.fg+'aa':c.fg+'55', boxShadow: explicit ? `inset 0 0 0 1px ${c.fg}66` : inherited ? `inset 0 0 0 1px ${c.fg}33` : undefined, opacity: explicit ? 1 : (inherited ? .8 : .5)}}
                     onClick={()=>upd({lifeArea: explicit ? null : id})}>
                     {LIFE_AREA_NAMES[id] || id}
                   </button>;
@@ -510,7 +510,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                 const c = tp[t] || tp['admin'];
                 const act = (task.tags||[]).includes(t);
                 return <button key={t} className={`dr-pick${act?' act':''}`}
-                  style={{background:c.bg, color:c.fg, borderColor:act?c.fg+'aa':c.fg+'55', boxShadow: act?`inset 0 0 0 1px ${c.fg}66`:undefined}}
+                  style={{background:c.bg, color:c.fg, borderColor:act?c.fg+'aa':c.fg+'55', boxShadow: act?`inset 0 0 0 1px ${c.fg}66`:undefined, opacity: act ? 1 : .5}}
                   onClick={()=>act?removeTag(t):addTag(t)}>
                   {TAG_NAMES[t]||t}
                 </button>;
