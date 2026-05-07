@@ -10,7 +10,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
   onFocus, onSelect, renamingId, onRename, onRenameDone,
   onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, dragOver, draggingId,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
-  onCardDragOver, onCardDragLeave, onCardDrop, cardDragOver, blockingCountFor, taskTitleById,
+  onCardDragOver, onCardDragLeave, onCardDrop, cardDragOver, colDropIndex, blockingCountFor, taskTitleById,
   cardExtras, className='', style }) {
   const dow = date.getDay();
   const colKey = D.str(date);
@@ -65,7 +65,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
               )}
               {open && grp.tasks.map((task,i)=>(
                 <React.Fragment key={task.id}>
-                  {dragOver===colKey && draggingId && !cardDragOver && i===0 && <div className="drop-ph"/>}
+                  {dragOver===colKey && draggingId && !cardDragOver && colDropIndex?.col===colKey && colDropIndex?.index===i && <div className="drop-ph drop-ph-sm"/>}
                   <div className="card-add-zone" title="Add above" onClick={e=>{e.stopPropagation();onAdd(colKey,date,{beforeId:task.id});}}>
                     <button tabIndex={-1}>+</button>
                   </div>
@@ -89,6 +89,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                       <button tabIndex={-1}>+</button>
                     </div>
                   )}
+                  {dragOver===colKey && draggingId && !cardDragOver && colDropIndex?.col===colKey && colDropIndex?.index===i+1 && i===grp.tasks.length-1 && <div className="drop-ph drop-ph-sm"/>}
                 </React.Fragment>
               ))}
             </div>

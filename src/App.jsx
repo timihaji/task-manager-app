@@ -1768,6 +1768,36 @@ function App() {
   };
   const onDragLeave=e=>{ if(!e.currentTarget.contains(e.relatedTarget)) { setDragOver(null); setColDropIndex(null); } };
 
+  // Reorder a task within a specific date column to position `index` among
+  // the cards currently visible in that column. Mirrors `reorderToInbox` but
+  // for a YYYY-MM-DD column key.
+  const reorderInDate = (taskId, dateKey, index) => {
+    setTasks(prev => {
+      const next = [...prev];
+      const fromIdx = next.findIndex(t => t.id === taskId);
+      if (fromIdx < 0) return prev;
+      const moved = next[fromIdx];
+      let oldParentId = null;
+      if (moved.parentId) oldParentId = moved.parentId;
+      next.splice(fromIdx, 1);
+      const newMoved = {...moved, date: dateKey, parentId: null};
+      const inCol = next.filter(t => t.date===dateKey && !t.done && !t.parentId && !t.archived && !t.snoozedUntil && !t.someday);
+      const targetTask = inCol[index];
+      let insertAt;
+      if (!targetTask) {
+        const last = inCol[inCol.length - 1];
+        insertAt = last ? next.indexOf(last) + 1 : next.length;
+      } else {
+        insertAt = next.indexOf(targetTask);
+      }
+      next.splice(insertAt, 0, newMoved);
+      if (oldParentId) {
+        return next.map(t => t.id===oldParentId ? {...t, childOrder:(t.childOrder||[]).filter(cid=>cid!==taskId)} : t);
+      }
+      return next;
+    });
+  };
+
   // Reorder a task within the inbox to position `index` among current inbox tasks.
   // If task is from elsewhere (date, project), strip date/parent first.
   const reorderToInbox = (taskId, index) => {
@@ -1810,6 +1840,14 @@ function App() {
     if(targetCol === 'inbox' && colDropIndex && colDropIndex.col === 'inbox') {
       pushSnapshotUndo();
       reorderToInbox(drag.taskId, colDropIndex.index);
+      setDrag(null); setDragOver(null); setCardDragOver(null); setColDropIndex(null);
+      return;
+    }
+    // Date column reorder (Trello-style within-column move): drop into a
+    // specific slot of a YYYY-MM-DD column.
+    if (targetCol !== 'inbox' && colDropIndex && colDropIndex.col === targetCol) {
+      pushSnapshotUndo();
+      reorderInDate(drag.taskId, targetCol, colDropIndex.index);
       setDrag(null); setDragOver(null); setCardDragOver(null); setColDropIndex(null);
       return;
     }
@@ -2335,7 +2373,7 @@ function App() {
       collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
       forceOpenProjects={forceOpenProjects}
       onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-      cardDragOver={cardDragOver}
+      cardDragOver={cardDragOver} colDropIndex={colDropIndex}
       blockingCountFor={blockingCountFor} taskTitleById={taskTitleById}
       cardExtras={cardExtras}/>;
   };
