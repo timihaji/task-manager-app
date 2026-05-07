@@ -43,9 +43,9 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, 
     return getLifeAreaForTask(byId.get(task.parentId), seen);
   };
   const counts = {
-    inbox: all.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.snoozedUntil&&!t.someday&&!t.blocked).length,
-    today: all.filter(t=>D.isTdy(t.date)&&!t.done&&!t.parentId&&!t.blocked).length,
-    upcoming: all.filter(t=>D.isFut(t.date)&&!t.done&&!t.parentId&&!t.blocked).length,
+    inbox: all.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.snoozedUntil&&!t.someday&&!t.blocked&&!t.delegatedTo).length,
+    today: all.filter(t=>D.isTdy(t.date)&&!t.done&&!t.parentId&&!t.blocked&&!t.delegatedTo).length,
+    upcoming: all.filter(t=>D.isFut(t.date)&&!t.done&&!t.parentId&&!t.blocked&&!t.delegatedTo).length,
     snoozed: all.filter(t=>!!t.snoozedUntil&&!t.done&&!t.parentId).length,
     someday: all.filter(t=>!!t.someday&&!t.done&&!t.parentId).length,
     blocked: all.filter(t=>t.blocked&&!t.done&&!t.parentId).length,
@@ -68,7 +68,7 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, 
         <NavItem ico={I.Stack} label="Stack" v="stack" cnt={counts.stack}/>
         <NavItem ico={I.Inbox} label="Inbox" v="inbox" cnt={counts.inbox}/>
         <NavItem ico={I.Star} label="Upcoming" v="upcoming" cnt={counts.upcoming}/>
-        <NavItem ico={I.Archive} label="Backlog" v="backlog" cnt={all.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.someday&&!t.blocked).length}/>
+        <NavItem ico={I.Archive} label="Backlog" v="backlog" cnt={all.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.someday&&!t.blocked&&!t.delegatedTo).length}/>
         <NavItem ico={I.Snooze} label="Snoozed" v="snoozed" cnt={counts.snoozed}/>
         <NavItem ico={I.Someday} label="Someday" v="someday" cnt={counts.someday}/>
         <NavItem ico={I.Pause} label="Blocked" v="blocked" cnt={counts.blocked}/>

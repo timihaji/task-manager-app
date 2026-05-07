@@ -863,6 +863,10 @@ function App() {
       if(t.someday) return;
       if(t.parentId) return; // children render inside their project, not in a column
       if(isAutoSnoozedDelegation(t)) return;
+      // Hide delegated tasks from the main board unless the user has explicitly
+      // toggled the "Waiting on" filter to surface them. They live in the
+      // Delegations view until undelegated.
+      if(t.delegatedTo && !showWaitingOn) return;
       if(showWaitingOn && !t.delegatedTo && !t.checkInOf) return;
       if(showStaleOnly && !isStale(t)) return;
       const key = t.date || 'inbox';
@@ -2133,9 +2137,9 @@ function App() {
 
   // non-week view tasks
   const listTasks = ()=>{
-    if(view==='inbox') return applyFilters(activeTasks.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.snoozedUntil&&!t.someday&&!t.blocked));
-    if(view==='upcoming') return applyFilters(activeTasks.filter(t=>D.isFut(t.date)&&!t.done&&!t.parentId&&!t.blocked));
-    if(view==='backlog') return applyFilters(activeTasks.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.someday&&!t.blocked));
+    if(view==='inbox') return applyFilters(activeTasks.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.snoozedUntil&&!t.someday&&!t.blocked&&!t.delegatedTo));
+    if(view==='upcoming') return applyFilters(activeTasks.filter(t=>D.isFut(t.date)&&!t.done&&!t.parentId&&!t.blocked&&!t.delegatedTo));
+    if(view==='backlog') return applyFilters(activeTasks.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.someday&&!t.blocked&&!t.delegatedTo));
     if(view==='snoozed') return applyFilters(activeTasks.filter(t=>!!t.snoozedUntil&&!t.parentId));
     if(view==='someday') return applyFilters(activeTasks.filter(t=>!!t.someday&&!t.parentId));
     if(view==='blocked') return applyFilters(activeTasks.filter(t=>t.blocked&&!t.done&&!t.parentId));
