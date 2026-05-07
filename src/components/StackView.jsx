@@ -4,6 +4,7 @@ import { D, parseTimeEst, fmtTimeEst, PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE
 import { lifeAreaPalette } from '../utils/colors.js';
 import { PriBars } from './PriBars.jsx';
 import { DropPreview } from './DropPreview.jsx';
+import { groupTasksBy } from '../utils/grouping.js';
 
 const PRI_RANK = { p1:0, p2:1, p3:2, p4:3 };
 const COMPLETE_ANIM_MS = 320;
@@ -191,7 +192,8 @@ function ChipRow({ task, isProject, allTasks, theme }) {
 function StackCard({ task, idx, isNow, isDeck, isLater, completing, allTasks, theme, isFirst, isLast,
                     expanded, onToggleExpand, onOpen, onComplete, onSendToTop, onSendToBottom, onSubToggle,
                     isDragging, dropPos, onDragStart, onDragOver, onDragEnd, onDrop,
-                    focused, renaming, onFocus, onContextMenu, onRename, onStartRename, onRenameDone }) {
+                    focused, renaming, onFocus, onContextMenu, onRename, onStartRename, onRenameDone,
+                    selected, onSelect }) {
   const [draft, setDraft] = useState(task.title || '');
   const inputRef = useRef(null);
   useEffect(()=>{ setDraft(task.title || ''); }, [task.id, task.title]);
@@ -221,6 +223,7 @@ function StackCard({ task, idx, isNow, isDeck, isLater, completing, allTasks, th
     dropPos === 'after' && 'drop-after',
     focused && 'focused',
     renaming && 'renaming',
+    selected && 'selected',
   ].filter(Boolean).join(' ');
 
   const isCardSurface = (e) => {
@@ -231,7 +234,11 @@ function StackCard({ task, idx, isNow, isDeck, isLater, completing, allTasks, th
     if (e.target.closest('.scard-sub-chk')) return false;
     return true;
   };
-  const handleCardClick = (e) => { if (isCardSurface(e)) onFocus?.(task.id); };
+  const handleCardClick = (e) => {
+    if (!isCardSurface(e)) return;
+    if (e.shiftKey && onSelect) { e.preventDefault(); onSelect(task.id); return; }
+    onFocus?.(task.id);
+  };
   const handleCardDoubleClick = (e) => { if (isCardSurface(e)) onOpen?.(task.id); };
 
   return (
@@ -349,7 +356,9 @@ function DoneTodayFooter({ items, onRestore }) {
 
 export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onComplete, onOpen, theme,
                              focusedId, setFocusedId, renamingId, setRenamingId, onContextMenu, onAddNew,
-                             navCollapsed, onToggleNav }) {
+                             navCollapsed, onToggleNav,
+                             selectedIds, onSelect, onMarqueeStart,
+                             renamingGroupId, onStartGroupRename, onGroupRenameDone, onRenameGroup }) {
   const sortMode = tweaks.stackSort || 'smart';
   const manualOrder = tweaks.stackOrder || [];
   const compactBelowDeck = tweaks.stackCompactBelowDeck !== false;
@@ -612,7 +621,12 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
         </div>
       </div>
 
-      <div className={`stack-body${drag.id ? ' is-dragging' : ''}`} ref={stackBodyRef}>
+      <div className={`stack-body${drag.id ? ' is-dragging' : ''}`} ref={stackBodyRef}
+           onMouseDown={(e)=>{
+             if (e.button !== 0 || !e.shiftKey) return;
+             if (e.target.closest('.scard,.scard-actions,.scard-subs,button,input,.stack-divider')) return;
+             onMarqueeStart?.(e, stackBodyRef.current);
+           }}>
         <div className={`stack-inner${showSpine ? '' : ' no-spine'}`}>
           {onAddNew && (
             <button className="stack-add-top"
@@ -630,15 +644,20 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
           )}
 
           {(() => {
+            const customGroups = tweaks?.customGroups || [];
+            const stackGroups = groupTasksBy(sorted, 'none', null, customGroups);
+            const globalIdx = new Map(sorted.map((t,i)=>[t.id, i]));
+            const draggingTask = drag.id ? sorted.find(x => x.id === drag.id) : null;
             let lastBucket = null;
-            return sorted.map((t, idx) => {
+
+            const renderCard = (t) => {
+              const idx = globalIdx.get(t.id);
               const isNow = idx === 0;
               const isDeck = idx >= 1 && idx <= 2;
               const isLater = idx >= 3 && compactBelowDeck;
               const bucket = showDividers ? bucketOf(t) : null;
               const dividerNeeded = bucket && bucket !== lastBucket;
               if (bucket) lastBucket = bucket;
-              const draggingTask = drag.id ? sorted.find(x => x.id === drag.id) : null;
               const showBefore = drag.overId === t.id && drag.overPos === 'before' && drag.id !== t.id;
               const showAfter  = drag.overId === t.id && drag.overPos === 'after'  && drag.id !== t.id;
               return (
@@ -681,9 +700,35 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                     onRename={onUpdate}
                     onStartRename={setRenamingId}
                     onRenameDone={()=>setRenamingId?.(null)}
+                    selected={selectedIds?.has(t.id)}
+                    onSelect={onSelect}
                   />
                   {showAfter && <DropPreview task={draggingTask} theme={theme}/>}
                 </React.Fragment>
+              );
+            };
+
+            return stackGroups.map(grp => {
+              if (!grp.label) {
+                return <React.Fragment key={grp.key}>{grp.tasks.map(renderCard)}</React.Fragment>;
+              }
+              return (
+                <div key={grp.key} className="grp-box stack-grp-box">
+                  <div className="grp-hdr grp-hdr-custom">
+                    {grp.groupId === renamingGroupId ? (
+                      <input className="grp-name-edit" autoFocus defaultValue={grp.label}
+                        onClick={e=>e.stopPropagation()}
+                        onBlur={e=>{ onRenameGroup?.(grp.groupId, e.target.value); onGroupRenameDone?.(); }}
+                        onKeyDown={e=>{ if(e.key==='Enter') e.target.blur(); if(e.key==='Escape'){ e.target.value=grp.label; onGroupRenameDone?.(); } }}/>
+                    ) : (
+                      <span className="grp-name" style={{color: grp.color}}
+                            onClick={e=>{ e.stopPropagation(); onStartGroupRename?.(grp.groupId); }}
+                            title="Click to rename">{grp.label}</span>
+                    )}
+                    <span className="grp-cnt">{grp.tasks.length}</span>
+                  </div>
+                  {grp.tasks.map(renderCard)}
+                </div>
               );
             });
           })()}

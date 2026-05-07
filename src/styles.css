@@ -184,6 +184,17 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);display:flex;f
 .grp-cnt{font-size:9.5px;font-family:var(--mono);color:var(--t4)}
 .done-grp-hdr{display:flex;align-items:center;gap:5px;padding:6px 4px 4px;cursor:pointer;border-top:1px solid var(--border);margin-top:4px}
 .done-grp-hdr:hover{background:var(--surface-2)}
+.grp-hdr-custom .grp-name{font-weight:700;cursor:text}
+.grp-hdr-custom .grp-name:hover{text-decoration:underline}
+.grp-name-edit{flex:1;background:var(--surface);border:1px solid var(--accent);border-radius:3px;padding:1px 5px;font:inherit;font-size:10.5px;font-weight:700;color:var(--t1);outline:none;min-width:60px;max-width:180px}
+.stack-grp-box{margin:8px 0;padding:6px 8px}
+.stack-grp-box > .grp-hdr{padding:2px 4px 4px}
+.scard.selected{box-shadow:inset 0 0 0 2px var(--accent), var(--shadow)}
+
+/* Marquee selection rectangle (Shift+drag on board / stack) */
+.marquee-rect{position:fixed;border:1px dashed var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);pointer-events:none;z-index:200;border-radius:2px}
+body.marquee-active{cursor:crosshair !important}
+body.marquee-active *{user-select:none !important}
 
 /* cards */
 .card{background:var(--surface);border:1px solid var(--border-s);border-radius:var(--radius-card,2px);padding:7px 8px;cursor:pointer;box-shadow:var(--shadow);transition:box-shadow .12s,transform .12s;user-select:none;position:relative}

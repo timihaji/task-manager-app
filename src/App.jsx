@@ -209,6 +209,7 @@ function App() {
     filterPrefs: { mode: 'and' },
     groupPrefs: { global: 'project', inbox: 'none' },
     recentBlockReasons: [],
+    customGroups: [],
   };
   const defaultTaxonomy = () => ({
     contexts: PROJ.map(p=>({...p})),
@@ -464,6 +465,9 @@ function App() {
   const [recents,setRecents] = useState({tags:[], projects:[]});
   const [contextMenu,setContextMenu] = useState(null); // {task, x, y}
   const [popRequest,setPopRequest] = useState(null); // {id, field}
+  const [renamingGroupId,setRenamingGroupId] = useState(null);
+  const [marquee,setMarquee] = useState(null); // {x0,y0,x1,y1} viewport coords
+  const marqueeBaseRef = useRef(null);
   useEffect(() => {
     const onResize = () => setIsNarrowScreen(window.innerWidth <= 640);
     window.addEventListener('resize', onResize);
@@ -1758,7 +1762,11 @@ function App() {
     if(!undoStack.length) return;
     const last=undoStack[undoStack.length-1];
     setUndoStack(s=>s.slice(0,-1));
-    if(last.bulk) { setTasks(last.before); return; }
+    if(last.bulk) {
+      setTasks(last.before);
+      if (last.beforeGroups !== undefined) setTweak('customGroups', last.beforeGroups);
+      return;
+    }
     if(last.deleted) { setTasks(prev=>[...prev,last.before]); return; }
     setTasks(prev=>prev.map(t=>t.id===last.id?last.before:t));
   };
@@ -2361,8 +2369,10 @@ function App() {
     if(!selectedIds.size) return;
     if(!window.confirm(`Delete ${selectedIds.size} selected task${selectedIds.size===1?'':'s'}?`)) return;
     const ids = new Set(selectedIds);
-    setUndoStack(s=>[...s.slice(-9),{bulk:true,before:tasks}]);
-    setTasks(prev=>prev.filter(t=>!ids.has(t.id)));
+    setUndoStack(s=>[...s.slice(-9),{bulk:true,before:tasks,beforeGroups:tweaks.customGroups||[]}]);
+    const nextTasks = tasks.filter(t=>!ids.has(t.id));
+    setTasks(nextTasks);
+    pruneEmptyGroups(nextTasks);
     setSelectedIds(new Set());
     setDrawerId(id=>ids.has(id)?null:id);
     setFocusedId(id=>ids.has(id)?null:id);
@@ -2370,15 +2380,96 @@ function App() {
     setTimeout(()=>setToast(null),1400);
   };
 
+  // ---- Custom groups (user-created, persistent multi-card clusters) ----
+  const GROUP_PALETTE = ['#0f766e','#7c3aed','#db2777','#ea580c','#0284c7','#65a30d','#ca8a04','#dc2626'];
+  const pruneEmptyGroups = (taskList) => {
+    const used = new Set((taskList||[]).map(t=>t.groupId).filter(Boolean));
+    const list = tweaks.customGroups || [];
+    const next = list.filter(g => used.has(g.id));
+    if (next.length !== list.length) setTweak('customGroups', next);
+  };
+  const groupSelected = () => {
+    if (selectedIds.size < 2) return;
+    const list = tweaks.customGroups || [];
+    const id = mkid();
+    const grp = {
+      id,
+      name: `Group ${list.length + 1}`,
+      color: GROUP_PALETTE[list.length % GROUP_PALETTE.length],
+      createdAt: new Date().toISOString(),
+    };
+    setUndoStack(s=>[...s.slice(-9),{bulk:true,before:tasks,beforeGroups:list}]);
+    setTweak('customGroups', [...list, grp]);
+    const ids = new Set(selectedIds);
+    const nextTasks = tasks.map(t => ids.has(t.id) ? {...t, groupId: id} : t);
+    setTasks(nextTasks);
+    pruneEmptyGroups(nextTasks);
+    setRenamingGroupId(id);
+    setToast('Grouped'); setTimeout(()=>setToast(null), 1200);
+  };
+  const ungroupSelected = () => {
+    if (!selectedIds.size) return;
+    const ids = new Set(selectedIds);
+    setUndoStack(s=>[...s.slice(-9),{bulk:true,before:tasks,beforeGroups:tweaks.customGroups||[]}]);
+    const nextTasks = tasks.map(t => ids.has(t.id) ? {...t, groupId: null} : t);
+    setTasks(nextTasks);
+    pruneEmptyGroups(nextTasks);
+    setToast('Ungrouped'); setTimeout(()=>setToast(null), 1200);
+  };
+  const renameGroup = (id, name) => {
+    const trimmed = (name||'').trim();
+    if (!trimmed) return;
+    setTweak('customGroups', (tweaks.customGroups||[]).map(g => g.id===id ? {...g, name: trimmed} : g));
+  };
+
   const openTask = (id) => { setSettingsOpen(false); setRenamingId(null); setDrawerFromLeft(false); setDrawerId(id); setFocusedId(id); };
   const openSettings = () => { setDrawerId(null); setRenamingId(null); setSettingsOpen(s=>!s); };
   const drawerTask = drawerId ? taskById(drawerId) : null;
+
+  // Shift+drag marquee selection — works on board AND stack-body backgrounds.
+  const startMarquee = (e, root) => {
+    if (!root) return;
+    e.preventDefault();
+    marqueeBaseRef.current = new Set(selectedIds);
+    const rect = { x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY };
+    setMarquee(rect);
+    document.body.classList.add('marquee-active');
+    let raf = 0;
+    const onMove = ev => {
+      rect.x1 = ev.clientX; rect.y1 = ev.clientY;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        setMarquee({...rect});
+        const x0 = Math.min(rect.x0, rect.x1), x1 = Math.max(rect.x0, rect.x1);
+        const y0 = Math.min(rect.y0, rect.y1), y1 = Math.max(rect.y0, rect.y1);
+        const next = new Set(marqueeBaseRef.current);
+        root.querySelectorAll('[data-card-id]').forEach(node => {
+          const r = node.getBoundingClientRect();
+          if (r.right < x0 || r.left > x1 || r.bottom < y0 || r.top > y1) return;
+          next.add(node.dataset.cardId);
+        });
+        setSelectedIds(next);
+      });
+    };
+    const onUp = () => {
+      if (raf) cancelAnimationFrame(raf);
+      setMarquee(null);
+      document.body.classList.remove('marquee-active');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+  const onStackMarqueeStart = (e, root) => startMarquee(e, root);
 
   // board pan-to-scroll — attach move/up to document so fast drags don't lose events
   const onBoardMouseDown = e => {
     if (e.button !== 0) return;
     if (e.target.closest('.card,.col-add,.col-groupby,.col-groupby-wrap,.card-add-zone,.side-panel,.col-hdr,.grp-hdr,.done-grp-hdr,.tb-btn,.lnav-item,.drawer')) return;
     const el = boardRef.current; if (!el) return;
+    if (e.shiftKey) { startMarquee(e, el); return; }
     userScrolledRef.current = true;
     panState.current = {isPanning:true, startX:e.clientX, scrollLeft:el.scrollLeft};
     el.classList.add('panning');
@@ -2430,6 +2521,11 @@ function App() {
     onPopHandled: () => setPopRequest(null),
     onAddTaxonomy: (kind, label) => taxonomyActions.add(kind, label),
     onStartRename: (id) => { setFocusedId(id); setRenamingId(id); },
+    customGroups: tweaks.customGroups || [],
+    renamingGroupId,
+    onStartGroupRename: (id) => setRenamingGroupId(id),
+    onGroupRenameDone: () => setRenamingGroupId(null),
+    onRenameGroup: renameGroup,
   };
   const renderTimelineColumn = (date, keyPrefix='') => {
     const colKey=D.str(date);
@@ -2700,7 +2796,14 @@ function App() {
           onContextMenu={onCardContextMenu}
           onAddNew={()=>addTask('inbox', null, 'Untitled')}
           navCollapsed={navCollapsed}
-          onToggleNav={()=>setNavCollapsed(c=>!c)}/>
+          onToggleNav={()=>setNavCollapsed(c=>!c)}
+          selectedIds={selectedIds}
+          onSelect={toggleSelected}
+          onMarqueeStart={onStackMarqueeStart}
+          renamingGroupId={renamingGroupId}
+          onStartGroupRename={(id)=>setRenamingGroupId(id)}
+          onGroupRenameDone={()=>setRenamingGroupId(null)}
+          onRenameGroup={renameGroup}/>
       ) : view==='list' ? (
         <ListView title="List" tasks={allOpenTopLevel} onOpen={openTask} onFocus={setFocusedId}
           onSelect={toggleSelected} selectedIds={selectedIds}
@@ -2743,6 +2846,8 @@ function App() {
         </select>
         <input className="bulk-input" type="date" aria-label="Start Date" title="Set Start Date" onChange={e=>{bulkSet({date:e.target.value||null}, e.target.value?'Start Date updated':'Moved to inbox'); e.target.value='';}}/>
         <button className="tb-btn" onClick={bulkGroupIntoProject} disabled={selectedTasks.length<2}>Group into project</button>
+        <button className="tb-btn" onClick={groupSelected} disabled={selectedTasks.length<2}>Group</button>
+        <button className="tb-btn" onClick={ungroupSelected} disabled={!selectedTasks.some(t=>t.groupId)}>Ungroup</button>
         <button className="tb-btn" onClick={()=>{
           const ts = new Date().toISOString();
           bulkUpdate(t=>({...t, done:true, completedAt:ts,
@@ -2759,6 +2864,14 @@ function App() {
         <button className="tb-btn bulk-danger" onClick={bulkDelete}>Delete</button>
         <button className="tb-btn" onClick={clearSelection}>Clear all selected</button>
       </div>
+    )}
+    {marquee && (
+      <div className="marquee-rect" style={{
+        left:   Math.min(marquee.x0, marquee.x1),
+        top:    Math.min(marquee.y0, marquee.y1),
+        width:  Math.abs(marquee.x1 - marquee.x0),
+        height: Math.abs(marquee.y1 - marquee.y0),
+      }}/>
     )}
     </div>
 

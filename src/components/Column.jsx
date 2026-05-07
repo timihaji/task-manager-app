@@ -30,7 +30,11 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
   const totalCount = flatActiveSet.size + flatDoneSet.size;
   const doneCount  = flatDoneSet.size;
   const pct = totalCount>0 ? (doneCount/totalCount)*100 : 0;
-  const groups = groupTasksBy(active, groupBy, cardExtras?.getEffectiveLifeArea);
+  const groups = groupTasksBy(active, groupBy, cardExtras?.getEffectiveLifeArea, cardExtras?.customGroups);
+  const renamingGroupId = cardExtras?.renamingGroupId;
+  const onStartGroupRename = cardExtras?.onStartGroupRename;
+  const onGroupRenameDone = cardExtras?.onGroupRenameDone;
+  const onRenameGroup = cardExtras?.onRenameGroup;
   const gbLabel = {none:'None',project:'Location',lifeArea:'Life Area',tag:'Tag',priority:'Priority'}[groupBy]||'Location';
 
   return (
@@ -58,9 +62,28 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
           return (
             <div key={grp.key} className={grp.label?'grp-box':'grp-free'}>
               {grp.label && (
-                <div className="grp-hdr" onClick={()=>onToggleGrp(gKey)}>
+                <div className={`grp-hdr${grp.custom?' grp-hdr-custom':''}`} onClick={()=>onToggleGrp(gKey)}>
                   <svg className={`grp-chv${open?' open':''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-                      <span className="grp-name" style={{color:getGColor(grp.key, groupBy, theme)}}>{grp.label}</span>
+                  {grp.custom && grp.groupId === renamingGroupId ? (
+                    <input
+                      className="grp-name-edit"
+                      autoFocus
+                      defaultValue={grp.label}
+                      onClick={e=>e.stopPropagation()}
+                      onBlur={e=>{ onRenameGroup?.(grp.groupId, e.target.value); onGroupRenameDone?.(); }}
+                      onKeyDown={e=>{
+                        if (e.key==='Enter') e.target.blur();
+                        if (e.key==='Escape') { e.target.value=grp.label; onGroupRenameDone?.(); }
+                      }}
+                    />
+                  ) : (
+                    <span className="grp-name"
+                          style={{color: grp.custom ? grp.color : getGColor(grp.key, groupBy, theme)}}
+                          onClick={e=>{ if (grp.custom) { e.stopPropagation(); onStartGroupRename?.(grp.groupId); } }}
+                          title={grp.custom ? 'Click to rename' : undefined}>
+                      {grp.label}
+                    </span>
+                  )}
                   <span className="grp-cnt">{grp.tasks.length}</span>
                 </div>
               )}
@@ -294,17 +317,35 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
         {dragOver==='inbox' && draggingId && inboxTasks.length===0 && <DropPreview task={draggingTask} theme={theme}/>}
         {tasks.length===0 && <div className="list-empty">Nothing here yet.</div>}
         {(()=>{
-          const useGroups = inboxGroupBy && inboxGroupBy!=='none';
-          const groups = useGroups ? groupTasksBy(visibleInboxTasks, inboxGroupBy, cardExtras?.getEffectiveLifeArea) : [{key:'_all',label:null,tasks:visibleInboxTasks}];
+          const customGroups = cardExtras?.customGroups || [];
+          const renamingGroupId = cardExtras?.renamingGroupId;
+          const onStartGroupRename = cardExtras?.onStartGroupRename;
+          const onGroupRenameDone = cardExtras?.onGroupRenameDone;
+          const onRenameGroup = cardExtras?.onRenameGroup;
+          const useGroups = (inboxGroupBy && inboxGroupBy!=='none') || customGroups.length>0;
+          const groups = useGroups
+            ? groupTasksBy(visibleInboxTasks, inboxGroupBy, cardExtras?.getEffectiveLifeArea, customGroups)
+            : [{key:'_all',label:null,tasks:visibleInboxTasks}];
           return groups.map(grp=>{
             const gKey = `inbox:${grp.key}`;
             const open = !collapsedGrps?.has(gKey);
             return (
               <div key={grp.key} className={grp.label?'grp-box':'grp-free'}>
                 {grp.label && (
-                  <div className="grp-hdr" onClick={()=>onToggleGrp?.(gKey)}>
+                  <div className={`grp-hdr${grp.custom?' grp-hdr-custom':''}`} onClick={()=>onToggleGrp?.(gKey)}>
                     <svg className={`grp-chv${open?' open':''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-                    <span className="grp-name" style={{color:getGColor(grp.key, inboxGroupBy, theme)}}>{grp.label}</span>
+                    {grp.custom && grp.groupId === renamingGroupId ? (
+                      <input className="grp-name-edit" autoFocus defaultValue={grp.label}
+                        onClick={e=>e.stopPropagation()}
+                        onBlur={e=>{ onRenameGroup?.(grp.groupId, e.target.value); onGroupRenameDone?.(); }}
+                        onKeyDown={e=>{ if(e.key==='Enter') e.target.blur(); if(e.key==='Escape'){ e.target.value=grp.label; onGroupRenameDone?.(); } }}/>
+                    ) : (
+                      <span className="grp-name"
+                        style={{color: grp.custom ? grp.color : getGColor(grp.key, inboxGroupBy, theme)}}
+                        onClick={e=>{ if(grp.custom){ e.stopPropagation(); onStartGroupRename?.(grp.groupId); } }}>
+                        {grp.label}
+                      </span>
+                    )}
                     <span className="grp-cnt">{grp.tasks.length}</span>
                   </div>
                 )}

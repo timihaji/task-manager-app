@@ -18,6 +18,7 @@ const TASK_TO_ROW_KEYS = {
   cardType: 'card_type',
   parentId: 'parent_id',
   childOrder: 'child_order',
+  groupId: 'group_id',
   lifeArea: 'life_area',
   timeEstimate: 'time_estimate',
   dueDate: 'due_date',
@@ -56,7 +57,7 @@ const ROW_TO_TASK_KEYS = Object.fromEntries(
 // otherwise fail the upsert with a "column not found" error.
 const TASK_DB_COLUMNS = new Set([
   'id', 'workspace_id', 'user_id',
-  'title', 'description', 'card_type', 'parent_id', 'child_order',
+  'title', 'description', 'card_type', 'parent_id', 'child_order', 'group_id',
   'project', 'tags', 'priority', 'life_area', 'time_estimate',
   'date', 'due_date', 'done', 'completed_at', 'snoozed_until', 'snooze_mode', 'snooze_offset_days', 'someday', 'recurrence',
   'blocked', 'blocked_reason', 'blocked_by', 'blocked_since', 'follow_up_at',

@@ -1,7 +1,31 @@
 import { PROJ, ALL_TAGS, LIFE_AREAS, LIFE_AREA_NAMES, TAG_NAMES, TAG_DARK, TAG_LIGHT } from '../data.js';
 import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from './colors.js';
 
-function groupTasksBy(tasks, by, getEffectiveLifeAreaForTask) {
+function groupTasksBy(tasks, by, getEffectiveLifeAreaForTask, customGroups) {
+  if (customGroups?.length) {
+    const valid = new Set(customGroups.map(g => g.id));
+    const byGid = new Map();
+    const ungrouped = [];
+    for (const t of tasks) {
+      if (t.groupId && valid.has(t.groupId)) {
+        if (!byGid.has(t.groupId)) byGid.set(t.groupId, []);
+        byGid.get(t.groupId).push(t);
+      } else {
+        ungrouped.push(t);
+      }
+    }
+    const result = [];
+    for (const g of customGroups) {
+      const list = byGid.get(g.id);
+      if (!list?.length) continue;
+      result.push({ key:`__cg__${g.id}`, label:g.name, tasks:list, custom:true, color:g.color, groupId:g.id });
+    }
+    return result.concat(_innerGroupTasksBy(ungrouped, by, getEffectiveLifeAreaForTask));
+  }
+  return _innerGroupTasksBy(tasks, by, getEffectiveLifeAreaForTask);
+}
+
+function _innerGroupTasksBy(tasks, by, getEffectiveLifeAreaForTask) {
   if (!by || by==='none') return [{key:'_all',label:null,tasks}];
   const order = by==='priority'
     ? ['p1','p2','p3']
