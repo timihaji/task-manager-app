@@ -35,7 +35,7 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
   onCardDragOver, onCardDragLeave, onCardDrop, cardDragOver,
   selectedIds, renamingId, spawningSet, focusedId, onAdd, depth=0, blockingCountFor, taskTitleById,
-  onContextMenu, onBulkUpdate, recents, onRecentTag, onRecentProj, openPopRequest, onPopHandled, getEffectiveLifeArea, onAddTaxonomy }) {
+  onContextMenu, onBulkUpdate, recents, onRecentTag, onRecentProj, openPopRequest, onPopHandled, getEffectiveLifeArea, onAddTaxonomy, onStartRename }) {
   const tagPalette = theme==='dark'?TAG_DARK:TAG_LIGHT;
   const tp = tagPalette[task.tags?.[0]] || tagPalette.admin;
   const proj = PROJ.find(p=>p.id===task.project);
@@ -121,7 +121,9 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
             onBlur={()=>finishRename(true)}
             onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault();finishRename(true);} if(e.key==='Escape'){e.preventDefault();finishRename(false);} }}/>
         ) : (
-          <div className={`card-title${task.done?' done':''}`}>{task.title}</div>
+          <div className={`card-title${task.done?' done':''}`}
+            onDoubleClick={e=>{ e.stopPropagation(); onStartRename?.(task.id); }}
+            title="Double-click to rename">{task.title}</div>
         )}
         {renderAsProject && (
           <button className="card-proj-chv" title={open?'Collapse project':'Expand project'}
@@ -309,6 +311,7 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
                 openPopRequest={openPopRequest} onPopHandled={onPopHandled}
                 getEffectiveLifeArea={getEffectiveLifeArea}
                 onAddTaxonomy={onAddTaxonomy}
+                onStartRename={onStartRename}
                 />
             </React.Fragment>
           ))}

@@ -2349,6 +2349,7 @@ function App() {
     openPopRequest: popRequest,
     onPopHandled: () => setPopRequest(null),
     onAddTaxonomy: (kind, label) => taxonomyActions.add(kind, label),
+    onStartRename: (id) => { setFocusedId(id); setRenamingId(id); },
   };
   const renderTimelineColumn = (date, keyPrefix='') => {
     const colKey=D.str(date);
