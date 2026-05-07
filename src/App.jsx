@@ -1781,7 +1781,35 @@ function App() {
   };
 
   // drag & drop
-  const onDragStart=(e,id,col)=>{ setDrag({taskId:id,fromCol:col}); e.dataTransfer.effectAllowed='move'; };
+  const onDragStart=(e,id,col)=>{
+    setDrag({taskId:id,fromCol:col});
+    e.dataTransfer.effectAllowed='move';
+    // Some browsers refuse to start a drag without payload — set a no-op string.
+    try { e.dataTransfer.setData('text/plain', String(id)); } catch {}
+    // Build a Trello-style drag preview: a clean clone of the card with a
+    // slight tilt and a lifted shadow that follows the cursor. The original
+    // card fades to a placeholder via the .dragging CSS class.
+    const card = e.currentTarget;
+    if (card && e.dataTransfer.setDragImage) {
+      const rect = card.getBoundingClientRect();
+      const clone = card.cloneNode(true);
+      clone.classList.remove('dragging','focused','selected','spawning','card-drop-target');
+      clone.style.position = 'fixed';
+      clone.style.top = '-9999px';
+      clone.style.left = '-9999px';
+      clone.style.width = rect.width + 'px';
+      clone.style.transform = 'rotate(3deg)';
+      clone.style.opacity = '1';
+      clone.style.boxShadow = '0 12px 28px rgba(0,0,0,.35)';
+      clone.style.pointerEvents = 'none';
+      clone.style.background = getComputedStyle(card).backgroundColor || 'var(--surface)';
+      document.body.appendChild(clone);
+      try {
+        e.dataTransfer.setDragImage(clone, e.clientX - rect.left, e.clientY - rect.top);
+      } catch {}
+      setTimeout(() => { try { clone.remove(); } catch {} }, 0);
+    }
+  };
   const onDragEnd=()=>{ setDrag(null); setDragOver(null); setCardDragOver(null); setColDropIndex(null); };
   const onDragOver=(e,col)=>{
     e.preventDefault();
