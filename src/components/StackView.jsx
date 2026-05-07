@@ -4,7 +4,6 @@ import { D, parseTimeEst, fmtTimeEst, PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE
 import { lifeAreaPalette } from '../utils/colors.js';
 import { PriBars } from './PriBars.jsx';
 import { DropPreview } from './DropPreview.jsx';
-import { groupTasksBy } from '../utils/grouping.js';
 
 const PRI_RANK = { p1:0, p2:1, p3:2, p4:3 };
 const COMPLETE_ANIM_MS = 320;
@@ -189,7 +188,7 @@ function ChipRow({ task, isProject, allTasks, theme }) {
   );
 }
 
-function StackCard({ task, idx, isNow, isDeck, isLater, completing, allTasks, theme, isFirst, isLast,
+function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing, allTasks, theme, isFirst, isLast,
                     expanded, onToggleExpand, onOpen, onComplete, onSendToTop, onSendToBottom, onSubToggle,
                     isDragging, dropPos, onDragStart, onDragOver, onDragEnd, onDrop,
                     focused, renaming, onFocus, onContextMenu, onRename, onStartRename, onRenameDone,
@@ -253,7 +252,7 @@ function StackCard({ task, idx, isNow, isDeck, isLater, completing, allTasks, th
          onDoubleClick={handleCardDoubleClick}
          onMouseEnter={()=>!renaming && onFocus?.(task.id)}
          onContextMenu={(e)=>{ if (onContextMenu) { e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}>
-      <div className="scard-idx">{idx+1}</div>
+      <div className="scard-idx">{showIdx ? (idx+1) : ''}</div>
 
       <div className="scard-actions" onClick={e=>e.stopPropagation()}>
         {isNow && (
@@ -644,39 +643,52 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
           )}
 
           {(() => {
+            // Build "slots" honoring sort order: each ungrouped task is a slot of 1,
+            // each custom group is a single slot placed at its first member's sort
+            // position. Members of the same group share the slot's tier (now/deck/later)
+            // and number — so a group acts as one entity in the stack ordering.
             const customGroups = tweaks?.customGroups || [];
-            const stackGroups = groupTasksBy(sorted, 'none', null, customGroups);
-            const globalIdx = new Map(sorted.map((t,i)=>[t.id, i]));
+            const validGids = new Set(customGroups.map(g => g.id));
+            const groupBuckets = new Map();
+            for (const t of sorted) {
+              if (t.groupId && validGids.has(t.groupId)) {
+                if (!groupBuckets.has(t.groupId)) groupBuckets.set(t.groupId, []);
+                groupBuckets.get(t.groupId).push(t);
+              }
+            }
+            const slots = [];
+            const seenGroups = new Set();
+            for (const t of sorted) {
+              if (t.groupId && validGids.has(t.groupId)) {
+                if (seenGroups.has(t.groupId)) continue;
+                seenGroups.add(t.groupId);
+                const g = customGroups.find(x => x.id === t.groupId);
+                slots.push({ kind: 'group', tasks: groupBuckets.get(t.groupId), group: g });
+              } else {
+                slots.push({ kind: 'task', task: t });
+              }
+            }
             const draggingTask = drag.id ? sorted.find(x => x.id === drag.id) : null;
             let lastBucket = null;
 
-            const renderCard = (t) => {
-              const idx = globalIdx.get(t.id);
-              const isNow = idx === 0;
-              const isDeck = idx >= 1 && idx <= 2;
-              const isLater = idx >= 3 && compactBelowDeck;
-              const bucket = showDividers ? bucketOf(t) : null;
-              const dividerNeeded = bucket && bucket !== lastBucket;
-              if (bucket) lastBucket = bucket;
+            const renderCard = (t, slotIdx, isFirstInSlot, slotsLen) => {
+              const isNow = slotIdx === 0;
+              const isDeck = slotIdx >= 1 && slotIdx <= 2;
+              const isLater = slotIdx >= 3 && compactBelowDeck;
               const showBefore = drag.overId === t.id && drag.overPos === 'before' && drag.id !== t.id;
               const showAfter  = drag.overId === t.id && drag.overPos === 'after'  && drag.id !== t.id;
               return (
                 <React.Fragment key={t.id}>
-                  {dividerNeeded && (
-                    <div className="stack-divider">
-                      <span className="label">{bucket}</span>
-                      <span className="rule"/>
-                    </div>
-                  )}
                   {showBefore && <DropPreview task={draggingTask} theme={theme}/>}
                   <StackCard
                     task={t}
-                    idx={idx}
+                    idx={slotIdx}
+                    showIdx={isFirstInSlot}
                     isNow={isNow}
                     isDeck={isDeck}
                     isLater={isLater}
-                    isFirst={idx === 0}
-                    isLast={idx === sorted.length - 1}
+                    isFirst={slotIdx === 0}
+                    isLast={slotIdx === slotsLen - 1}
                     completing={completing.has(t.id)}
                     allTasks={allTasks}
                     theme={theme}
@@ -708,27 +720,47 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
               );
             };
 
-            return stackGroups.map(grp => {
-              if (!grp.label) {
-                return <React.Fragment key={grp.key}>{grp.tasks.map(renderCard)}</React.Fragment>;
-              }
-              return (
-                <div key={grp.key} className="grp-box stack-grp-box">
-                  <div className="grp-hdr grp-hdr-custom">
-                    {grp.groupId === renamingGroupId ? (
-                      <input className="grp-name-edit" autoFocus defaultValue={grp.label}
-                        onClick={e=>e.stopPropagation()}
-                        onBlur={e=>{ onRenameGroup?.(grp.groupId, e.target.value); onGroupRenameDone?.(); }}
-                        onKeyDown={e=>{ if(e.key==='Enter') e.target.blur(); if(e.key==='Escape'){ e.target.value=grp.label; onGroupRenameDone?.(); } }}/>
-                    ) : (
-                      <span className="grp-name" style={{color: grp.color}}
-                            onClick={e=>{ e.stopPropagation(); onStartGroupRename?.(grp.groupId); }}
-                            title="Click to rename">{grp.label}</span>
-                    )}
-                    <span className="grp-cnt">{grp.tasks.length}</span>
-                  </div>
-                  {grp.tasks.map(renderCard)}
+            return slots.map((slot, slotIdx) => {
+              const lead = slot.kind === 'group' ? slot.tasks[0] : slot.task;
+              const bucket = showDividers ? bucketOf(lead) : null;
+              const dividerNeeded = bucket && bucket !== lastBucket;
+              if (bucket) lastBucket = bucket;
+              const divider = dividerNeeded && (
+                <div className="stack-divider">
+                  <span className="label">{bucket}</span>
+                  <span className="rule"/>
                 </div>
+              );
+              if (slot.kind === 'task') {
+                return (
+                  <React.Fragment key={lead.id}>
+                    {divider}
+                    {renderCard(lead, slotIdx, true, slots.length)}
+                  </React.Fragment>
+                );
+              }
+              const grp = slot.group;
+              const tierClass = slotIdx === 0 ? ' is-now' : (slotIdx <= 2 ? ' is-deck' : (compactBelowDeck ? ' is-later' : ''));
+              return (
+                <React.Fragment key={`__cg__${grp.id}`}>
+                  {divider}
+                  <div className={`grp-box stack-grp-box${tierClass}`}>
+                    <div className="grp-hdr grp-hdr-custom">
+                      {grp.id === renamingGroupId ? (
+                        <input className="grp-name-edit" autoFocus defaultValue={grp.name}
+                          onClick={e=>e.stopPropagation()}
+                          onBlur={e=>{ onRenameGroup?.(grp.id, e.target.value); onGroupRenameDone?.(); }}
+                          onKeyDown={e=>{ if(e.key==='Enter') e.target.blur(); if(e.key==='Escape'){ e.target.value=grp.name; onGroupRenameDone?.(); } }}/>
+                      ) : (
+                        <span className="grp-name" style={{color: grp.color}}
+                              onClick={e=>{ e.stopPropagation(); onStartGroupRename?.(grp.id); }}
+                              title="Click to rename">{grp.name}</span>
+                      )}
+                      <span className="grp-cnt">{slot.tasks.length}</span>
+                    </div>
+                    {slot.tasks.map((t, i) => renderCard(t, slotIdx, i === 0, slots.length))}
+                  </div>
+                </React.Fragment>
               );
             });
           })()}
