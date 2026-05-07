@@ -1958,8 +1958,9 @@ function App() {
     let index;
     // determine insertion index by mouse Y vs children
     const body = e.currentTarget.querySelector('.card-project-body');
+    let childEls = [];
     if(body) {
-      const childEls = [...body.querySelectorAll(':scope > .card')];
+      childEls = [...body.querySelectorAll(':scope > .card')];
       index = childEls.length;
       for(let i=0;i<childEls.length;i++) {
         const r = childEls[i].getBoundingClientRect();
@@ -1967,6 +1968,17 @@ function App() {
       }
     } else {
       index = 0;
+    }
+    // Suppress the placeholder when the proposed slot is exactly where the
+    // dragged child already sits — both the slot above and below itself are
+    // no-op moves, so showing a preview there is misleading.
+    const draggedId = drag.taskId;
+    if (draggedId && childEls.length) {
+      const draggedDomIdx = childEls.findIndex(c => c.dataset.cardId === draggedId);
+      if (draggedDomIdx !== -1 && (index === draggedDomIdx || index === draggedDomIdx + 1)) {
+        setCardDragOver(prev => prev?.targetId===target.id ? null : prev);
+        return;
+      }
     }
     setCardDragOver(prev => (prev?.targetId===target.id && prev?.index===index) ? prev : {targetId:target.id, index});
   };
