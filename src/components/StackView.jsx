@@ -36,10 +36,13 @@ const dueLabel = (date, today=todayStr(), isDue=true) => {
   }
   if (date === today) return { kind:'today', label: isDue ? 'Due today' : 'Today' };
   const r = dateRank(date, today);
-  if (r === 1) return { kind:'soon', label: isDue ? 'Due tomorrow' : 'Tomorrow' };
-  if (r <= 7) return { kind:'soon', label:`In ${r} days` };
+  const prefix = isDue ? 'Due ' : '';
+  const startsPrefix = isDue ? '' : 'Starts ';
+  if (r === 1) return { kind:'soon', label: isDue ? 'Due tomorrow' : 'Starts tomorrow' };
+  if (r <= 7) return { kind:'soon', label: `${prefix}in ${r} days` };
   const d = D.parse(date);
-  return { kind:'later', label: d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) };
+  const dateStr = d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+  return { kind:'later', label: isDue ? `Due ${dateStr}` : `Starts ${dateStr}` };
 };
 
 const effectiveDate = (t, allTasks) => {
@@ -130,15 +133,35 @@ function ChipRow({ task, isProject, allTasks, theme }) {
 
   return (
     <div className="scard-r2">
-      {due && due.kind === 'overdue' && <span className="schip schip-due-overdue">⚠ {due.label}</span>}
-      {due && due.kind === 'today' && (
+      {/* Start chip — render when the task has a real start date AND we're not
+          already showing it as the due chip below. */}
+      {!isProject && task.date && (() => {
+        const startD = dueLabel(task.date, undefined, false);
+        if (!startD) return null;
+        return <span className="schip"><I.Cal/>{startD.label}</span>;
+      })()}
+      {/* Due chip — red, no calendar, says "Due …". */}
+      {!isProject && task.dueDate && (() => {
+        const dueD = dueLabel(task.dueDate, undefined, true);
+        if (!dueD) return null;
+        const cls = dueD.kind === 'overdue' ? 'schip schip-due-overdue' : 'schip schip-due-overdue';
+        const prefix = dueD.kind === 'overdue' ? '⚠ ' : '';
+        return <span className={cls}>{prefix}{dueD.label}</span>;
+      })()}
+      {/* Project rollup falls back to the legacy single-chip behaviour. */}
+      {isProject && due && due.kind === 'overdue' && <span className="schip schip-due-overdue">⚠ {due.label}</span>}
+      {isProject && due && due.kind === 'today' && (
         eff.isDue
-          ? <span className="schip schip-due-today">● {due.label}</span>
+          ? <span className="schip schip-due-overdue">{due.label}</span>
           : <span className="schip"><I.Cal/>{due.label}</span>
       )}
-      {due && due.kind === 'soon' && <span className="schip"><I.Cal/>{due.label}</span>}
-      {due && due.kind === 'later' && <span className="schip"><I.Cal/>{due.label}</span>}
-      {!due && <span className="schip" style={{opacity:.6}}><I.Cal/>No start date</span>}
+      {isProject && due && (due.kind === 'soon' || due.kind === 'later') && (
+        eff.isDue
+          ? <span className="schip schip-due-overdue">{due.label}</span>
+          : <span className="schip"><I.Cal/>{due.label}</span>
+      )}
+      {!isProject && !task.date && !task.dueDate && <span className="schip" style={{opacity:.6}}><I.Cal/>No start date</span>}
+      {isProject && !due && <span className="schip" style={{opacity:.6}}><I.Cal/>No start date</span>}
 
       {proj && <span className="schip schip-proj" style={{color:proj.color, borderColor:proj.color+'55'}}>{proj.id}</span>}
 
