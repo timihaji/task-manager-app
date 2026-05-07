@@ -15,7 +15,7 @@ function ListTaskItem({ task, focused, selected, renaming, onOpen, onFocus, onSe
     onRenameDone();
   };
   return (
-    <div className={`list-item${focused?' focused':''}${selected?' selected':''}`} data-list-id={task.id} onMouseEnter={()=>onFocus(task.id)} onMouseLeave={()=>onFocus(null)} onClick={()=>!renaming&&onOpen(task.id)}>
+    <div className={`list-item${focused?' focused':''}${selected?' selected':''}`} data-list-id={task.id} onMouseEnter={()=>onFocus(task.id)} onClick={()=>!renaming&&onFocus(task.id)} onDoubleClick={()=>!renaming&&onOpen(task.id)}>
       <button className={`bulk-check${selected?' on':''}`} title={selected?'Deselect task':'Select task'}
         onClick={e=>{e.stopPropagation();onSelect(task.id);}}>{selected?'✓':''}</button>
       <div className={`card-chk${task.done?' done':''}`} style={{width:13,height:13,borderRadius:'50%',border:'1.5px solid var(--border-s)',flexShrink:0}}/>

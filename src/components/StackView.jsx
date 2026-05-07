@@ -188,14 +188,16 @@ function StackCard({ task, idx, isNow, isDeck, isLater, completing, allTasks, th
     renaming && 'renaming',
   ].filter(Boolean).join(' ');
 
-  const handleCardClick = (e) => {
-    if (renaming) return;
-    if (e.target.closest('button')) return;
-    if (e.target.closest('input')) return;
-    if (e.target.closest('.scard-subs')) return;
-    if (e.target.closest('.scard-sub-chk')) return;
-    onOpen?.(task.id);
+  const isCardSurface = (e) => {
+    if (renaming) return false;
+    if (e.target.closest('button')) return false;
+    if (e.target.closest('input')) return false;
+    if (e.target.closest('.scard-subs')) return false;
+    if (e.target.closest('.scard-sub-chk')) return false;
+    return true;
   };
+  const handleCardClick = (e) => { if (isCardSurface(e)) onFocus?.(task.id); };
+  const handleCardDoubleClick = (e) => { if (isCardSurface(e)) onOpen?.(task.id); };
 
   return (
     <div className={klass}
@@ -206,8 +208,8 @@ function StackCard({ task, idx, isNow, isDeck, isLater, completing, allTasks, th
          onDrop={(e)=>onDrop?.(e, task.id)}
          onDragEnd={onDragEnd}
          onClick={handleCardClick}
+         onDoubleClick={handleCardDoubleClick}
          onMouseEnter={()=>!renaming && onFocus?.(task.id)}
-         onMouseLeave={()=>!renaming && onFocus?.(null)}
          onContextMenu={(e)=>{ if (onContextMenu) { e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}>
       <div className="scard-idx">{idx+1}</div>
 

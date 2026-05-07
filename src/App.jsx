@@ -1934,6 +1934,18 @@ function App() {
     const idx=colTasks.findIndex(t=>t.id===focusedId);
     const next=colTasks[idx+dir]; if(next) setFocusedId(next.id);
   };
+  // Stack/List views render a flat sequence of cards; j/k walks the visible DOM order.
+  const moveFocusInFlat = (dir) => {
+    const els = Array.from(document.querySelectorAll('[data-card-id], [data-list-id]'))
+      .filter(el => el.offsetParent !== null);
+    const idOf = el => el.getAttribute('data-card-id') || el.getAttribute('data-list-id');
+    if(!els.length) return;
+    if(!focusedId){ setFocusedId(idOf(dir>0 ? els[0] : els[els.length-1])); return; }
+    const idx = els.findIndex(el => idOf(el) === focusedId);
+    if(idx < 0){ setFocusedId(idOf(els[0])); return; }
+    const next = els[idx + dir];
+    if(next) setFocusedId(idOf(next));
+  };
   const moveFocusToCol = (dir) => {
     const ci=getFocusedColIdx();
     const ni=ci<0?0:Math.max(0,Math.min(visColKeys.length-1,ci+dir));
@@ -1951,10 +1963,11 @@ function App() {
       if(e.key==='Escape'){ setRenamingId(null); setDrawerId(null); setSettingsOpen(false); setFocusedId(null); setPalette(false); setShortcuts(false); setAddModal(null); setFilterOpen(false); return; }
       if(inInput) return;
       if(e.key==='?'){ setShortcuts(s=>!s); return; }
-      if(e.key==='j'||e.key==='J') moveFocusInCol(1);
-      if(e.key==='k'||e.key==='K') moveFocusInCol(-1);
-      if(e.key==='ArrowRight') moveFocusToCol(1);
-      if(e.key==='ArrowLeft')  moveFocusToCol(-1);
+      const flatNav = view==='stack' || view==='list' || view==='inbox' || view==='upcoming' || view==='backlog' || view==='snoozed' || view==='someday' || view==='blocked' || view==='completed' || view==='archived' || view?.type==='project' || view?.type==='tag' || view?.type==='lifeArea';
+      if(e.key==='j'||e.key==='J'){ flatNav ? moveFocusInFlat(1) : moveFocusInCol(1); }
+      if(e.key==='k'||e.key==='K'){ flatNav ? moveFocusInFlat(-1) : moveFocusInCol(-1); }
+      if(e.key==='ArrowRight'){ if(!flatNav) moveFocusToCol(1); else moveFocusInFlat(1); }
+      if(e.key==='ArrowLeft'){ if(!flatNav) moveFocusToCol(-1); else moveFocusInFlat(-1); }
       if((e.key==='x'||e.key==='X')&&focusedId){ const t=taskById(focusedId); if(t) completeTask(t.id,t.date||'inbox'); }
       if((e.key==='e'||e.key==='E')&&focusedId){ e.preventDefault(); setDrawerId(null); setSettingsOpen(false); setRenamingId(focusedId); }
       if(e.key==='Enter'&&focusedId&&!drawerId){ setSettingsOpen(false); setRenamingId(null); setDrawerId(focusedId); }
@@ -2436,7 +2449,7 @@ function App() {
 
     {/* BODY */}
     <div className="app-shell">
-    <div className={`app-body${filtersActive?' chk-mode':''}${selectedIds.size?' chk-mode':''}`} onClick={e=>{ setFilterOpen(false); setGroupOpen(false); if(!e.target.closest('.card,.list-item,.side-panel,.lnav,.drawer,.bulk-bar')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); } }}>
+    <div className={`app-body${filtersActive?' chk-mode':''}${selectedIds.size?' chk-mode':''}`} onClick={e=>{ setFilterOpen(false); setGroupOpen(false); if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); } }}>
       <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false); if (isNarrowScreen) setNavCollapsed(true);}} collapsed={navCollapsed} theme={theme}
         activeLifeAreas={filters.lifeAreas}
         onLifeAreaToggle={id=>toggleFilter('lifeAreas',id)}/>

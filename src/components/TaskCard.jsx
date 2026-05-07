@@ -99,10 +99,11 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
     <div className={`card${focused?' focused':''}${selected?' selected':''}${isDragging?' dragging':''}${spawning?' spawning':''}${renderAsProject?' card-project':''}${isDropTarget?' card-drop-target':''}${task.blocked?' blocked':''}${isStaleCard?' card-stale':''}${task.checkInOf?' card-checkin':''}`}
       data-card-id={task.id}
       title={task.blocked ? (task.blockedReason || 'Blocked') + ((task.blockedBy||[]).length && taskTitleById ? '\nWaiting on: ' + (task.blockedBy||[]).map(id=>taskTitleById(id)).filter(Boolean).join(', ') : '') : undefined}
-      draggable={!renaming} onClick={()=>!renaming&&!openPop&&onOpen(task.id)}
+      draggable={!renaming}
+      onClick={()=>!renaming&&onFocus(task.id)}
+      onDoubleClick={()=>!renaming&&!openPop&&onOpen(task.id)}
       onContextMenu={e=>{ if(onContextMenu){ e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}
       onMouseEnter={()=>onFocus(task.id)}
-      onMouseLeave={()=>onFocus(null)}
       onDragStart={e=>{e.stopPropagation();onDragStart(e,task.id,colKey);}}
       onDragEnd={onDragEnd}
       onDragOver={onCardDragOver?e=>onCardDragOver(e,task):undefined}
