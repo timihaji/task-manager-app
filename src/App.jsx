@@ -168,6 +168,10 @@ function App() {
   const pendingTodayJump = useRef(true);
   const pendingTodayJumpBehavior = useRef('auto');
   const pendingTodayJumpTimer = useRef(null);
+  // Refs so the rAF re-anchor in the today-jump effect uses the LATEST values,
+  // not the ones captured by the closure of the render that scheduled it.
+  const colWRef = useRef(0);
+  const todayIdxRef = useRef(-1);
   const pendingScrollShift = useRef(0);
   const pendingGoToDate = useRef(null);
   const [goToSeq, setGoToSeq] = useState(0);
@@ -627,6 +631,8 @@ function App() {
   const beforeColsWidth = firstRenderCol * COL_W;
   const afterColsWidth = Math.max(0, (visibleDates.length - lastRenderCol) * COL_W);
   const todayIdx = visibleDateKeys.indexOf(todayStr);
+  colWRef.current = COL_W;
+  todayIdxRef.current = todayIdx;
   const viewportRight = colScrollLeft + (boardMetrics.width||dayAreaWidth);
   const todayLeft = todayIdx >= 0 ? todayIdx * COL_W : null;
   const todayRight = todayLeft !== null ? todayLeft + COL_W : null;
@@ -675,17 +681,29 @@ function App() {
       return;
     }
     jumpToTodayAnchor(pendingTodayJumpBehavior.current);
-    // COL_W can shift on a follow-up render once the board's measured width
-    // settles, leaving the scroll anchor we just set pointing at the wrong
-    // pixel offset. Keep `pendingTodayJump` true until layout has been quiet
-    // for a moment — the effect will re-run on COL_W changes (it's in deps)
-    // and re-anchor each time.
-    if (pendingTodayJumpTimer.current) clearTimeout(pendingTodayJumpTimer.current);
-    pendingTodayJumpTimer.current = setTimeout(() => {
-      pendingTodayJump.current = false;
-      pendingTodayJumpBehavior.current = 'auto';
-      pendingTodayJumpTimer.current = null;
-    }, 200);
+    pendingTodayJump.current = false;
+    pendingTodayJumpBehavior.current = 'auto';
+    // Belt-and-suspenders: COL_W can shift on a follow-up render once the
+    // board's width finishes settling, leaving scrollLeft pointing at the
+    // wrong pixel offset (e.g. the user's "today" column ends up off-screen
+    // on the right). Re-anchor on the next two animation frames using the
+    // freshest COL_W via refs that update each render.
+    const behavior = pendingTodayJumpBehavior.current === 'smooth' ? 'auto' : 'auto';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el2 = boardRef.current;
+        if (!el2) return;
+        const idx = todayIdxRef.current;
+        const cw = colWRef.current;
+        if (idx < 0 || !cw) return;
+        const target = Math.max(0, idx * cw);
+        if (Math.abs(el2.scrollLeft - target) <= 1) return;
+        if (typeof el2.scrollTo === 'function') el2.scrollTo({left:target, behavior});
+        else el2.scrollLeft = target;
+        const shell2 = boardShellRef.current;
+        setBoardMetrics({scrollLeft:el2.scrollLeft, width:el2.clientWidth, boardWidth:shell2?.clientWidth||el2.clientWidth});
+      });
+    });
   },[view, weekOff, timelineDays, todayJumpSeq, COL_W, showWknd, boardMetrics.width, boardMetrics.boardWidth]);
   useEffect(()=>{
     const shift = pendingScrollShift.current;
