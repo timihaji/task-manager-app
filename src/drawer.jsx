@@ -81,6 +81,15 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
     document.addEventListener('mousedown', fn);
     return () => document.removeEventListener('mousedown', fn);
   }, [dueOpen]);
+  const [startOpen, setStartOpen] = useState(false);
+  const [startMode, setStartMode] = useState('today'); // 'today' | 'before_due'
+  const startRef = useRef(null);
+  useEffect(() => {
+    if (!startOpen) return;
+    const fn = e => { if (startRef.current && !startRef.current.contains(e.target)) setStartOpen(false); };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
+  }, [startOpen]);
   const [menuOpen,   setMenuOpen]   = useState(false);
   const [timeMoreOpen, setTimeMoreOpen] = useState(false);
   const [blockerQuery,setBlockerQuery] = useState('');
@@ -183,6 +192,40 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
     const d = D.parse(task.date);
     d.setDate(d.getDate() + days);
     return D.str(d);
+  };
+  const START_OPTS = [
+    {l:'Today',        fn:()=>D.str(D.today())},
+    {l:'Tomorrow',     fn:()=>D.str(D.add(D.today(),1))},
+    {l:'In 2 days',    fn:()=>D.str(D.add(D.today(),2))},
+    {l:'In 3 days',    fn:()=>D.str(D.add(D.today(),3))},
+    {l:'Next Monday',  fn:nextMondayStr},
+    {l:'In 1 week',    fn:()=>D.str(D.add(D.today(),7))},
+    {l:'In 2 weeks',   fn:()=>D.str(D.add(D.today(),14))},
+    {l:'In 1 month',   fn:()=>{ const d=new Date(D.today()); d.setMonth(d.getMonth()+1); return D.str(d); }},
+  ];
+  // When a Due Date is set, the user can pick a start date relative to it.
+  const RELATIVE_START_OPTS = [
+    { l:'Same day',       days:0 },
+    { l:'1 day before',   days:1 },
+    { l:'3 days before',  days:3 },
+    { l:'1 week before',  days:7 },
+    { l:'2 weeks before', days:14 },
+    { l:'1 month before', days:30 },
+  ];
+  const startFromDue = (days) => {
+    if (!task?.dueDate) return null;
+    const d = D.parse(task.dueDate);
+    d.setDate(d.getDate() - days);
+    return D.str(d);
+  };
+  const fmtStartDateLabel = (s) => {
+    if (!s) return 'No start date';
+    const today = D.str(D.today());
+    const tomorrow = D.str(D.add(D.today(),1));
+    if (s === today) return 'Starts today';
+    if (s === tomorrow) return 'Starts tomorrow';
+    if (s < today) return `Started ${s}`;
+    return `Starts ${s}`;
   };
   const fmtDueLabel = (s) => {
     if (!s) return 'No due date';
@@ -535,7 +578,49 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
             </div>
           </DRow>
           <DRow label="Start Date">
-            <input type="date" className="dr-inp" value={task.date||''} onChange={e=>upd({date:e.target.value||null})}/>
+            <div ref={startRef} style={{position:'relative'}}>
+              <button className="dr-sel dr-sel-btn" onClick={()=>setStartOpen(o=>!o)}>
+                {fmtStartDateLabel(task.date)} ▾
+              </button>
+              {startOpen && (
+                <div className="dr-dd" style={{position:'absolute',left:0,top:'calc(100% + 4px)',zIndex:200,minWidth:220}}>
+                  {/* Mode toggle: choose what the offset is relative to */}
+                  <div style={{display:'flex',gap:2,padding:'4px',borderBottom:'1px solid var(--border)'}}>
+                    {[{v:'today',l:'From today'},{v:'before_due',l:'From due',disabled:!task.dueDate}].map(m => (
+                      <button key={m.v} disabled={m.disabled}
+                        onClick={()=>setStartMode(m.v)}
+                        title={m.disabled ? 'Set a Due Date first' : ''}
+                        style={{flex:1,border:'none',cursor:m.disabled?'default':'pointer',padding:'4px 6px',borderRadius:2,fontSize:10.5,
+                          background:startMode===m.v?'var(--accent-dim)':'transparent',
+                          color:m.disabled?'var(--t4)':startMode===m.v?'var(--accent)':'var(--t2)',
+                          fontWeight:startMode===m.v?600:400}}>{m.l}</button>
+                    ))}
+                  </div>
+                  {task.date && (
+                    <div className="dr-dd-item" onClick={()=>{upd({date:null});setStartOpen(false);}}>Remove start date</div>
+                  )}
+                  {startMode === 'today' && START_OPTS.map(o => (
+                    <div key={o.l} className="dr-dd-item"
+                      onClick={()=>{upd({date:o.fn()});setStartOpen(false);}}>
+                      {o.l}
+                    </div>
+                  ))}
+                  {startMode === 'before_due' && RELATIVE_START_OPTS.map(o => (
+                    <div key={`due-${o.days}`} className="dr-dd-item"
+                      onClick={()=>{ const d = startFromDue(o.days); if(d) upd({date:d}); setStartOpen(false); }}>
+                      {o.l}
+                    </div>
+                  ))}
+                  <div style={{borderTop:'1px solid var(--border)',padding:'6px 8px',display:'flex',alignItems:'center',gap:6}}>
+                    <span style={{fontSize:11,color:'var(--t3)'}}>Custom</span>
+                    <input type="date" className="dr-inp" style={{padding:'4px 6px',font:'12px var(--font)',flex:1}}
+                      value={task.date||''}
+                      onChange={e=>{ upd({date:e.target.value||null}); }}
+                      onKeyDown={e=>{ if(e.key==='Enter'){ setStartOpen(false); } }}/>
+                  </div>
+                </div>
+              )}
+            </div>
           </DRow>
           <DRow label="Due Date">
             <div ref={dueRef} style={{position:'relative'}}>
