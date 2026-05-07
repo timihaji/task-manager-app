@@ -2392,7 +2392,10 @@ function App() {
       {label:'Open in drawer', onClick:()=>openTask(t.id), kbd:'↵'},
       {label:'Rename',         onClick:()=>setRenamingId(t.id), kbd:'E'},
       {label:'Duplicate',      onClick:()=>duplicateTask(t.id), kbd:'D'},
-      {label:'Move to inbox',  onClick:()=>updateTask(t.id,{date:null,someday:false,...clearSnoozePatch})},
+      ...(t.date == null
+        ? [{label:'Move to today', onClick:()=>updateTask(t.id,{date:D.str(D.today()),someday:false,...clearSnoozePatch})}]
+        : [{label:'Move to inbox', onClick:()=>updateTask(t.id,{date:null,someday:false,...clearSnoozePatch})}]
+      ),
       {label: t.someday ? 'Remove from Someday' : 'Move to Someday',
         onClick:()=>updateTask(t.id,{someday:!t.someday}), kbd:'Z'},
       {label: t.cardType==='project' ? 'Convert to task' : 'Convert to project',
