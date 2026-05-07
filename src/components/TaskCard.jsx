@@ -35,7 +35,7 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
   onCardDragOver, onCardDragLeave, onCardDrop, cardDragOver,
   selectedIds, renamingId, spawningSet, focusedId, onAdd, depth=0, blockingCountFor, taskTitleById,
-  onContextMenu, onBulkUpdate, recents, onRecentTag, onRecentProj, openPopRequest, onPopHandled, getEffectiveLifeArea }) {
+  onContextMenu, onBulkUpdate, recents, onRecentTag, onRecentProj, openPopRequest, onPopHandled, getEffectiveLifeArea, onAddTaxonomy }) {
   const tagPalette = theme==='dark'?TAG_DARK:TAG_LIGHT;
   const tp = tagPalette[task.tags?.[0]] || tagPalette.admin;
   const proj = PROJ.find(p=>p.id===task.project);
@@ -175,7 +175,7 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
               )}
               <CardPopover open={openPop==='tag'} onClose={()=>setOpenPop(null)} anchorRef={tagRef}>
                 <TagPicker task={task} theme={theme} recents={recents?.tags} isBulk={isBulkEdit}
-                  onChange={(p,rv)=>applyChange(p,rv)} onClose={()=>setOpenPop(null)}/>
+                  onChange={(p,rv)=>applyChange(p,rv)} onAddTaxonomy={onAddTaxonomy} onClose={()=>setOpenPop(null)}/>
               </CardPopover>
             </span>
           );
@@ -191,7 +191,7 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
           )}
           <CardPopover open={openPop==='proj'} onClose={()=>setOpenPop(null)} anchorRef={projRef}>
             <ProjPicker task={task} recents={recents?.projects} isBulk={isBulkEdit}
-              onChange={(p,rv)=>applyChange(p,rv)} onClose={()=>setOpenPop(null)}/>
+              onChange={(p,rv)=>applyChange(p,rv)} onAddTaxonomy={onAddTaxonomy} onClose={()=>setOpenPop(null)}/>
           </CardPopover>
         </span>
         {/* Time estimate (read-only on project cards) */}
@@ -308,6 +308,7 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
                 recents={recents} onRecentTag={onRecentTag} onRecentProj={onRecentProj}
                 openPopRequest={openPopRequest} onPopHandled={onPopHandled}
                 getEffectiveLifeArea={getEffectiveLifeArea}
+                onAddTaxonomy={onAddTaxonomy}
                 />
             </React.Fragment>
           ))}

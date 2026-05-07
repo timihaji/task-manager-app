@@ -2348,6 +2348,7 @@ function App() {
     getEffectiveLifeArea,
     openPopRequest: popRequest,
     onPopHandled: () => setPopRequest(null),
+    onAddTaxonomy: (kind, label) => taxonomyActions.add(kind, label),
   };
   const renderTimelineColumn = (date, keyPrefix='') => {
     const colKey=D.str(date);
@@ -2699,6 +2700,7 @@ function App() {
     {/* DRAWER */}
     {drawerTask && <TaskDrawer task={drawerTask} theme={theme} tasks={tasks}
       onUpdate={updateTask}
+      onAddTaxonomy={(kind,label)=>taxonomyActions.add(kind,label)}
       onClose={()=>setDrawerId(null)}
       onDelete={deleteTask}
       onDuplicate={duplicateTask}

@@ -1,10 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, D } from '../data.js';
 import { TIME_PRESETS, TIME_MORE, PRI_INFO, SNOOZE_OPTS } from '../utils/constants.js';
 import { parseNLDate } from '../utils/parseNLDate.js';
 import { MiniCalendar } from './MiniCalendar.jsx';
 
-function TagPicker({ task, theme, recents, onChange, onClose, isBulk }) {
+// Inline "+ Add" affordance for picker chips. Toggles to a text field that
+// creates a new taxonomy entry on Enter.
+function AddTaxonomyChip({ kind, onAdd }) {
+  const [open, setOpen] = useState(false);
+  const [val, setVal] = useState('');
+  const ref = useRef(null);
+  useEffect(() => {
+    if (open) requestAnimationFrame(() => ref.current?.focus());
+  }, [open]);
+  const submit = () => {
+    const trimmed = val.trim();
+    if (trimmed) onAdd(kind, trimmed);
+    setVal('');
+    setOpen(false);
+  };
+  if (!open) {
+    return <span className="card-pop-chip" style={{borderStyle:'dashed',color:'var(--t3)'}}
+      onClick={() => setOpen(true)}>+ Add</span>;
+  }
+  return (
+    <input ref={ref} className="card-pop-search" style={{margin:0, padding:'3px 8px', fontSize:11, width:120}}
+      value={val} placeholder="New name…"
+      onChange={e => setVal(e.target.value)}
+      onBlur={submit}
+      onKeyDown={e => {
+        if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        else if (e.key === 'Escape') { e.preventDefault(); setVal(''); setOpen(false); }
+      }}/>
+  );
+}
+
+function TagPicker({ task, theme, recents, onChange, onAddTaxonomy, onClose, isBulk }) {
   const tp = theme === 'dark' ? TAG_DARK : TAG_LIGHT;
   const [filter, setFilter] = useState('');
   const cur = task.tags || [];
@@ -59,6 +90,11 @@ function TagPicker({ task, theme, recents, onChange, onClose, isBulk }) {
           );
         })}
       </div>
+      {onAddTaxonomy && (
+        <div className="card-pop-row" style={{marginTop:6}}>
+          <AddTaxonomyChip kind="tag" onAdd={onAddTaxonomy}/>
+        </div>
+      )}
       <div className="card-pop-foot">
         <button className="card-pop-clear" onClick={onClose}>Done</button>
       </div>
@@ -66,7 +102,7 @@ function TagPicker({ task, theme, recents, onChange, onClose, isBulk }) {
   );
 }
 
-function ProjPicker({ task, recents, onChange, onClose, isBulk }) {
+function ProjPicker({ task, recents, onChange, onAddTaxonomy, onClose, isBulk }) {
   const cur = task.project || null;
   const recList = (recents || []).filter(p => PROJ.find(x => x.id === p)).slice(0, 3);
   const pick = p => {
@@ -116,6 +152,7 @@ function ProjPicker({ task, recents, onChange, onClose, isBulk }) {
             </span>
           );
         })}
+        {onAddTaxonomy && <AddTaxonomyChip kind="context" onAdd={onAddTaxonomy}/>}
         {cur && <button className="card-pop-clear" onClick={() => { onChange({ project: null }); onClose(); }}>Clear</button>}
       </div>
     </>

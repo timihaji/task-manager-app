@@ -34,7 +34,38 @@ function DRow({ label, children }) {
   );
 }
 
-function TaskDrawer({ task, theme, tasks, onUpdate, onClose, onDelete, onDuplicate, onMoveToInbox, fromLeft, onSetBlocked, onClearBlocked, recentBlockReasons, blockingCountFor, onJumpTo, onCheckIn, onGoToCard }) {
+// Inline "+ Add" affordance for taxonomy pickers (tag/location/life area).
+// Click opens a small text field; Enter creates the new taxonomy entry.
+function AddTaxonomyChip({ kind, onAdd }) {
+  const [open, setOpen] = useState(false);
+  const [val, setVal] = useState('');
+  const ref = useRef(null);
+  useEffect(() => {
+    if (open) requestAnimationFrame(() => ref.current?.focus());
+  }, [open]);
+  const submit = () => {
+    const trimmed = val.trim();
+    if (trimmed) onAdd(kind, trimmed);
+    setVal('');
+    setOpen(false);
+  };
+  if (!open) {
+    return <button className="dr-pick" style={{borderStyle:'dashed',color:'var(--t3)'}}
+      onClick={()=>setOpen(true)} title={`Add new ${kind === 'context' ? 'location' : kind === 'lifeArea' ? 'life area' : 'tag'}`}>+ Add</button>;
+  }
+  return (
+    <input ref={ref} className="dr-inp" style={{padding:'3px 8px', fontSize:11, width:120}}
+      value={val} placeholder="Name…"
+      onChange={e=>setVal(e.target.value)}
+      onBlur={submit}
+      onKeyDown={e=>{
+        if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        else if (e.key === 'Escape') { e.preventDefault(); setVal(''); setOpen(false); }
+      }}/>
+  );
+}
+
+function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDelete, onDuplicate, onMoveToInbox, fromLeft, onSetBlocked, onClearBlocked, recentBlockReasons, blockingCountFor, onJumpTo, onCheckIn, onGoToCard }) {
   const [localTitle, setLocalTitle] = useState('');
   const [localDesc,  setLocalDesc]  = useState('');
   const [localReason,setLocalReason]= useState('');
@@ -372,6 +403,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onClose, onDelete, onDuplica
                   <span className="dr-pick-dot" style={{background:p.color}}/>{p.label}
                 </button>;
               })}
+              {onAddTaxonomy && <AddTaxonomyChip kind="context" onAdd={onAddTaxonomy}/>}
               {task.project && <button className="dr-time-clear" onClick={()=>upd({project:null})}>Clear</button>}
             </div>
           </DRow>
@@ -398,6 +430,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onClose, onDelete, onDuplica
                     {LIFE_AREA_NAMES[id] || id}
                   </button>;
                 })}
+                {onAddTaxonomy && <AddTaxonomyChip kind="lifeArea" onAdd={onAddTaxonomy}/>}
                 {task.lifeArea && <button className="dr-time-clear" onClick={()=>upd({lifeArea:null})}>Clear</button>}
               </div>
               {inheritedLifeArea && (
@@ -428,6 +461,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onClose, onDelete, onDuplica
                   {TAG_NAMES[t]||t}
                 </button>;
               })}
+              {onAddTaxonomy && <AddTaxonomyChip kind="tag" onAdd={onAddTaxonomy}/>}
             </div>
           </DRow>
           <DRow label="Start Date">
