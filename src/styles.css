@@ -256,8 +256,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);display:flex;f
 .card-del{position:absolute;top:4px;right:5px;width:16px;height:16px;border:none;background:var(--surface-3);color:var(--t3);border-radius:2px;font-size:10px;cursor:pointer;opacity:0;transition:opacity .1s;display:flex;align-items:center;justify-content:center}
 .drop-ph{height:44px;border-radius:2px;border:2px dashed var(--accent);background:var(--accent-dim);flex-shrink:0;animation:drop-ph-in .14s ease-out;transform-origin:center}
 .drop-ph.drop-ph-sm{height:8px;border-width:1px;border-radius:1px;animation:drop-ph-in-sm .14s ease-out}
+.drop-ph.drop-ph-preview{height:auto;min-height:36px;padding:6px 8px;border-radius:var(--radius-card);border:2px dashed var(--accent);background:var(--accent-dim);display:flex;flex-direction:column;gap:4px;animation:drop-ph-preview-in .14s ease-out}
+.drop-ph-title{font:600 12px var(--font);color:var(--t1);opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drop-ph-meta{display:flex;flex-wrap:wrap;gap:4px}
+.drop-ph-chip{font:500 10px var(--font);padding:1px 5px;border-radius:2px;background:var(--surface-2);color:var(--t3);border:1px solid var(--border-s);opacity:.85}
 @keyframes drop-ph-in{from{height:0;opacity:0;margin-top:0;margin-bottom:0}to{height:44px;opacity:1}}
 @keyframes drop-ph-in-sm{from{height:0;opacity:0}to{height:8px;opacity:1}}
+@keyframes drop-ph-preview-in{from{opacity:0;transform:scaleY(.85)}to{opacity:1;transform:scaleY(1)}}
 .card{transition:box-shadow .12s,transform .18s cubic-bezier(.2,.8,.2,1),opacity .12s}
 
 /* project cards */

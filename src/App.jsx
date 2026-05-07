@@ -2442,7 +2442,7 @@ function App() {
       onRenameDone={()=>setRenamingId(null)}
       onDragStart={onDragStart} onDragEnd={onDragEnd}
       onDragOver={onDragOver} onDrop={onDrop} onDragLeave={onDragLeave}
-      dragOver={dragOver===colKey?colKey:null} draggingId={drag?.taskId}
+      dragOver={dragOver===colKey?colKey:null} draggingId={drag?.taskId} draggingTask={drag?.taskId ? taskById(drag.taskId) : null}
       childrenOf={childrenOf} projectStats={projectStats}
       collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
       forceOpenProjects={forceOpenProjects}
@@ -2629,7 +2629,7 @@ function App() {
             onRenameDone={()=>setRenamingId(null)}
             onDragStart={onDragStart} onDragEnd={onDragEnd}
             onDragOver={onDragOver} onDrop={onDrop} onDragLeave={onDragLeave}
-            dragOver={dragOver} draggingId={drag?.taskId}
+            dragOver={dragOver} draggingId={drag?.taskId} draggingTask={drag?.taskId ? taskById(drag.taskId) : null}
             childrenOf={childrenOf} projectStats={projectStats}
             collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
             forceOpenProjects={forceOpenProjects}

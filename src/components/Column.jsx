@@ -5,10 +5,31 @@ import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from '../utils/colors.js';
 import { groupTasksBy, getGLabel, getGColor } from '../utils/grouping.js';
 import { TaskCard } from './TaskCard.jsx';
 
+// A card-shaped placeholder shown at the drop slot during drag. Mirrors the
+// dragged card's title + key chips so the user sees a preview of the
+// post-drop layout instead of a generic blue rectangle.
+function DropPreview({ task, theme }) {
+  if (!task) return <div className="drop-ph"/>;
+  const proj = task.project ? PROJ.find(p => p.id === task.project) : null;
+  return (
+    <div className="drop-ph drop-ph-preview">
+      <div className="drop-ph-title">{task.title || 'Untitled'}</div>
+      <div className="drop-ph-meta">
+        {(task.tags||[]).slice(0,2).map(tg => (
+          <span key={tg} className="drop-ph-chip">{TAG_NAMES[tg]||tg}</span>
+        ))}
+        {task.lifeArea && <span className="drop-ph-chip">{LIFE_AREA_NAMES[task.lifeArea]||task.lifeArea}</span>}
+        {proj && <span className="drop-ph-chip" style={{color:proj.color}}>{proj.id}</span>}
+        {task.timeEstimate && <span className="drop-ph-chip">{task.timeEstimate}</span>}
+      </div>
+    </div>
+  );
+}
+
 function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, groupBy, collapsedGrps, completedOpen, blockedOpen,
   onToggleGrp, onToggleCompleted, onToggleBlocked, onAdd, onOpen, onToggle, onDelete,
   onFocus, onSelect, renamingId, onRename, onRenameDone,
-  onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, dragOver, draggingId,
+  onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, dragOver, draggingId, draggingTask,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
   onCardDragOver, onCardDragLeave, onCardDrop, cardDragOver, colDropIndex, blockingCountFor, taskTitleById,
   cardExtras, className='', style }) {
@@ -50,7 +71,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
       </div>
       <div className="col-divider"/>
       <div className="col-body" onDoubleClick={e=>{ if(!e.target.closest('.card,.grp-hdr,.done-grp-hdr,.card-add-zone')) onAdd(colKey,date); }}>
-        {dragOver && draggingId && active.length===0 && done.length===0 && <div className="drop-ph"/>}
+        {dragOver && draggingId && active.length===0 && done.length===0 && <DropPreview task={draggingTask} theme={theme}/>}
         {groups.map(grp=>{
           const gKey=`${colKey}:${grp.key}`;
           const open=!collapsedGrps.has(gKey);
@@ -65,7 +86,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
               )}
               {open && grp.tasks.map((task,i)=>(
                 <React.Fragment key={task.id}>
-                  {dragOver===colKey && draggingId && !cardDragOver && colDropIndex?.col===colKey && colDropIndex?.index===i && <div className="drop-ph"/>}
+                  {dragOver===colKey && draggingId && !cardDragOver && colDropIndex?.col===colKey && colDropIndex?.index===i && <DropPreview task={draggingTask} theme={theme}/>}
                   <div className="card-add-zone" title="Add above" onClick={e=>{e.stopPropagation();onAdd(colKey,date,{beforeId:task.id});}}>
                     <button tabIndex={-1}>+</button>
                   </div>
@@ -89,7 +110,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                       <button tabIndex={-1}>+</button>
                     </div>
                   )}
-                  {dragOver===colKey && draggingId && !cardDragOver && colDropIndex?.col===colKey && colDropIndex?.index===i+1 && i===grp.tasks.length-1 && <div className="drop-ph drop-ph-sm"/>}
+                  {dragOver===colKey && draggingId && !cardDragOver && colDropIndex?.col===colKey && colDropIndex?.index===i+1 && i===grp.tasks.length-1 && <DropPreview task={draggingTask} theme={theme}/>}
                 </React.Fragment>
               ))}
             </div>
@@ -159,7 +180,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
 
 // ── InboxColumn ──────────────────────────────────────────────────────────
 function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawning, width, collapsed, panelView, onPanelView, onCollapse, onResizeStart, onAdd, onOpen, onToggle, onDelete, onFocus, onSelect, onRename, onRenameDone,
-  onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, dragOver, draggingId,
+  onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, dragOver, draggingId, draggingTask,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
   onCardDragOver, onCardDragLeave, onCardDrop, cardDragOver, colDropIndex,
   inboxFilters, onCycleInboxFilter, onClearInboxFilters, inboxFilterCount,
@@ -290,7 +311,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
         <button onClick={submit}>+</button>
       </div>
       <div className="col-body" style={{flex:1}} onDoubleClick={e=>{ if(insertable && !e.target.closest('.card,.card-add-zone,.grp-hdr')) onAdd(null,null,'Untitled'); }}>
-        {dragOver==='inbox' && draggingId && inboxTasks.length===0 && <div className="drop-ph"/>}
+        {dragOver==='inbox' && draggingId && inboxTasks.length===0 && <DropPreview task={draggingTask} theme={theme}/>}
         {tasks.length===0 && <div className="list-empty">Nothing here yet.</div>}
         {(()=>{
           const useGroups = inboxGroupBy && inboxGroupBy!=='none';
@@ -309,7 +330,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
                 )}
                 {open && grp.tasks.map((task,i)=>(
                   <React.Fragment key={task.id}>
-                    {!useGroups && dragOver==='inbox' && draggingId && !cardDragOver && colDropIndex?.col==='inbox' && colDropIndex?.index===i && <div className="drop-ph drop-ph-sm"/>}
+                    {!useGroups && dragOver==='inbox' && draggingId && !cardDragOver && colDropIndex?.col==='inbox' && colDropIndex?.index===i && <DropPreview task={draggingTask} theme={theme}/>}
                     {insertable && <div className="card-add-zone" title="Add above" onClick={e=>{e.stopPropagation();onAdd(null,null,'Untitled',{beforeId:task.id});}}>
                       <button tabIndex={-1}>+</button>
                     </div>}
@@ -330,7 +351,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
                     {insertable && i===grp.tasks.length-1 && <div className="card-add-zone" title="Add below" onClick={e=>{e.stopPropagation();onAdd(null,null,'Untitled',{afterId:task.id});}}>
                       <button tabIndex={-1}>+</button>
                     </div>}
-                    {!useGroups && i===grp.tasks.length-1 && dragOver==='inbox' && draggingId && !cardDragOver && colDropIndex?.col==='inbox' && colDropIndex?.index===grp.tasks.length && <div className="drop-ph drop-ph-sm"/>}
+                    {!useGroups && i===grp.tasks.length-1 && dragOver==='inbox' && draggingId && !cardDragOver && colDropIndex?.col==='inbox' && colDropIndex?.index===grp.tasks.length && <DropPreview task={draggingTask} theme={theme}/>}
                   </React.Fragment>
                 ))}
               </div>
