@@ -26,15 +26,17 @@ const dateRank = (date, today=todayStr()) => {
   return Math.round((a - t) / 86400000);
 };
 
-const dueLabel = (date, today=todayStr()) => {
+// `isDue` lets the caller render "Due today" only when the chip really
+// reflects a due date, vs. "Today" / "In 3 days" when it's just a start date.
+const dueLabel = (date, today=todayStr(), isDue=true) => {
   if (!date) return null;
   if (date < today) {
     const days = -dateRank(date, today);
     return { kind:'overdue', label: days===1 ? '1 day overdue' : `${days} days overdue` };
   }
-  if (date === today) return { kind:'today', label:'Due today' };
+  if (date === today) return { kind:'today', label: isDue ? 'Due today' : 'Today' };
   const r = dateRank(date, today);
-  if (r === 1) return { kind:'soon', label:'Due tomorrow' };
+  if (r === 1) return { kind:'soon', label: isDue ? 'Due tomorrow' : 'Tomorrow' };
   if (r <= 7) return { kind:'soon', label:`In ${r} days` };
   const d = D.parse(date);
   return { kind:'later', label: d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) };
@@ -51,16 +53,20 @@ const effectiveDate = (t, allTasks) => {
   return t.date || null;
 };
 
+// Returns { date, isDue } so the chip can label real deadlines as "Due today"
+// and start-date-only tasks as plain "Today".
 const effectiveDueDate = (t, allTasks) => {
   if (t.cardType === 'project') {
     const kids = (allTasks || [])
       .filter(c => c.parentId === t.id && !c.done && (c.dueDate || c.date))
-      .map(c => c.dueDate || c.date)
-      .filter(Boolean)
-      .sort((a,b)=>a.localeCompare(b));
+      .map(c => ({ date: c.dueDate || c.date, isDue: !!c.dueDate }))
+      .filter(x => x.date)
+      .sort((a,b)=>a.date.localeCompare(b.date));
     if (kids.length) return kids[0];
   }
-  return t.dueDate || t.date || null;
+  if (t.dueDate) return { date: t.dueDate, isDue: true };
+  if (t.date) return { date: t.date, isDue: false };
+  return { date: null, isDue: false };
 };
 
 function sortStack(arr, mode, allTasks, manualOrder=[]) {
@@ -107,7 +113,8 @@ function sortStack(arr, mode, allTasks, manualOrder=[]) {
 }
 
 function ChipRow({ task, isProject, allTasks, theme }) {
-  const due = dueLabel(effectiveDueDate(task, allTasks));
+  const eff = effectiveDueDate(task, allTasks);
+  const due = dueLabel(eff.date, undefined, eff.isDue);
   const proj = PROJ.find(p=>p.id === task.project);
   const tags = task.tags || [];
   const life = task.lifeArea;
@@ -124,7 +131,11 @@ function ChipRow({ task, isProject, allTasks, theme }) {
   return (
     <div className="scard-r2">
       {due && due.kind === 'overdue' && <span className="schip schip-due-overdue">⚠ {due.label}</span>}
-      {due && due.kind === 'today' && <span className="schip schip-due-today">● {due.label}</span>}
+      {due && due.kind === 'today' && (
+        eff.isDue
+          ? <span className="schip schip-due-today">● {due.label}</span>
+          : <span className="schip"><I.Cal/>{due.label}</span>
+      )}
       {due && due.kind === 'soon' && <span className="schip"><I.Cal/>{due.label}</span>}
       {due && due.kind === 'later' && <span className="schip"><I.Cal/>{due.label}</span>}
       {!due && <span className="schip" style={{opacity:.6}}><I.Cal/>No start date</span>}
