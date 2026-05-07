@@ -2073,10 +2073,10 @@ function App() {
     if(view==='blocked') return applyFilters(activeTasks.filter(t=>t.blocked&&!t.done&&!t.parentId));
     if(view==='completed') return applyFilters(activeTasks.filter(t=>t.done&&!t.parentId));
     if(view==='archived') return applyFilters(tasks.filter(t=>t.archived&&!t.parentId));
-    if(view?.type==='project') return applyFilters(activeTasks.filter(t=>t.project===view.id&&!t.parentId));
-    if(view?.type==='tag') return applyFilters(activeTasks.filter(t=>(t.tags||[]).includes(view.name)&&!t.parentId));
+    if(view?.type==='project') return applyFilters(activeTasks.filter(t=>t.project===view.id&&!t.done&&!t.parentId));
+    if(view?.type==='tag') return applyFilters(activeTasks.filter(t=>(t.tags||[]).includes(view.name)&&!t.done&&!t.parentId));
     if(view?.type==='lifeArea') return applyFilters(activeTasks.filter(t=>{
-      if(t.parentId) return false;
+      if(t.done || t.parentId) return false;
       const lifeArea = getEffectiveLifeArea(t);
       return view.id===UNASSIGNED_LIFE_AREA ? !lifeArea : lifeArea===view.id;
     }));

@@ -43,14 +43,14 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, 
     return getLifeAreaForTask(byId.get(task.parentId), seen);
   };
   const counts = {
-    inbox: all.filter(t=>!t.date&&!t.done&&!t.snoozedUntil&&!t.someday&&!t.blocked).length,
-    today: all.filter(t=>D.isTdy(t.date)&&!t.done&&!t.blocked).length,
-    upcoming: all.filter(t=>D.isFut(t.date)&&!t.done&&!t.blocked).length,
-    snoozed: all.filter(t=>!!t.snoozedUntil&&!t.done).length,
-    someday: all.filter(t=>!!t.someday&&!t.done).length,
-    blocked: all.filter(t=>t.blocked&&!t.done).length,
-    completed: all.filter(t=>t.done).length,
-    archived: tasks.filter(t=>t.archived).length,
+    inbox: all.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.snoozedUntil&&!t.someday&&!t.blocked).length,
+    today: all.filter(t=>D.isTdy(t.date)&&!t.done&&!t.parentId&&!t.blocked).length,
+    upcoming: all.filter(t=>D.isFut(t.date)&&!t.done&&!t.parentId&&!t.blocked).length,
+    snoozed: all.filter(t=>!!t.snoozedUntil&&!t.done&&!t.parentId).length,
+    someday: all.filter(t=>!!t.someday&&!t.done&&!t.parentId).length,
+    blocked: all.filter(t=>t.blocked&&!t.done&&!t.parentId).length,
+    completed: all.filter(t=>t.done&&!t.parentId).length,
+    archived: tasks.filter(t=>t.archived&&!t.parentId).length,
     stack: all.filter(t=>!t.done&&!t.parentId&&!t.snoozedUntil&&!t.delegatedTo&&!t.checkInOf).length,
     delegations: all.filter(t=>!!t.delegatedTo&&!t.done).length,
   };
@@ -68,7 +68,7 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, 
         <NavItem ico={I.Stack} label="Stack" v="stack" cnt={counts.stack}/>
         <NavItem ico={I.Inbox} label="Inbox" v="inbox" cnt={counts.inbox}/>
         <NavItem ico={I.Star} label="Upcoming" v="upcoming" cnt={counts.upcoming}/>
-        <NavItem ico={I.Archive} label="Backlog" v="backlog" cnt={all.filter(t=>!t.date&&!t.done).length}/>
+        <NavItem ico={I.Archive} label="Backlog" v="backlog" cnt={all.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.someday&&!t.blocked).length}/>
         <NavItem ico={I.Snooze} label="Snoozed" v="snoozed" cnt={counts.snoozed}/>
         <NavItem ico={I.Someday} label="Someday" v="someday" cnt={counts.someday}/>
         <NavItem ico={I.Pause} label="Blocked" v="blocked" cnt={counts.blocked}/>
@@ -79,7 +79,7 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, 
       <div className="lnav-sec">
         <div className="lnav-lbl">Location</div>
         {PROJ.map(p=>{
-          const cnt=all.filter(t=>t.project===p.id&&!t.done).length;
+          const cnt=all.filter(t=>t.project===p.id&&!t.done&&!t.parentId).length;
           return <div key={p.id} className={`lnav-item${viewIs({type:'project',id:p.id})?' active':''}`}
             onClick={()=>onView({type:'project',id:p.id})}>
             <div className="proj-dot" style={{background:p.color}}/>
@@ -90,21 +90,21 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, 
       </div>
       <div className="lnav-sec">
         <div className="lnav-lbl">Tags</div>
-        {ALL_TAGS.filter(t=>all.some(task=>(task.tags||[]).includes(t)&&!task.done)).map(t=>{
+        {ALL_TAGS.filter(t=>all.some(task=>(task.tags||[]).includes(t)&&!task.done&&!task.parentId)).map(t=>{
           const c=(TAG_DARK)[t]||TAG_DARK.admin;
           return <div key={t} className={`lnav-item${viewIs({type:'tag',name:t})?' active':''}`}
             onClick={()=>onView({type:'tag',name:t})}>
             <span style={{width:6,height:6,borderRadius:1,background:c.fg,flexShrink:0,display:'inline-block'}}/>
             <span>{TAG_NAMES[t]}</span>
-            <span className="lnav-cnt">{all.filter(task=>(task.tags||[]).includes(t)&&!task.done).length}</span>
+            <span className="lnav-cnt">{all.filter(task=>(task.tags||[]).includes(t)&&!task.done&&!task.parentId).length}</span>
           </div>;
         })}
       </div>
       <div className="lnav-sec">
         <div className="lnav-lbl">Life Areas</div>
-        {LIFE_AREAS.filter(id=>all.some(task=>getLifeAreaForTask(task)===id&&!task.done)).map(id=>{
+        {LIFE_AREAS.filter(id=>all.some(task=>getLifeAreaForTask(task)===id&&!task.done&&!task.parentId)).map(id=>{
           const c = lifeAreaPalette(id, theme);
-          const cnt = all.filter(task=>getLifeAreaForTask(task)===id&&!task.done).length;
+          const cnt = all.filter(task=>getLifeAreaForTask(task)===id&&!task.done&&!task.parentId).length;
           return <div key={id} className={`lnav-item${activeLifeAreas?.includes(id)?' active':''}`}
             onClick={()=>onLifeAreaToggle?.(id)}>
             <span style={{width:6,height:6,borderRadius:1,background:c.fg,flexShrink:0,display:'inline-block'}}/>
@@ -116,7 +116,7 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, 
           onClick={()=>onLifeAreaToggle?.(UNASSIGNED_LIFE_AREA)}>
           <span style={{width:6,height:6,borderRadius:1,background:'var(--t4)',flexShrink:0,display:'inline-block'}}/>
           <span>Unassigned</span>
-          <span className="lnav-cnt">{all.filter(task=>!getLifeAreaForTask(task)&&!task.done).length}</span>
+          <span className="lnav-cnt">{all.filter(task=>!getLifeAreaForTask(task)&&!task.done&&!task.parentId).length}</span>
         </div>
       </div>
       <div className="lnav-sync"><div className="sync-dot"/><span>Synced · just now</span></div>
