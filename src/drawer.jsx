@@ -72,6 +72,14 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
   const [newSub,     setNewSub]     = useState('');
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [snoozeMode, setSnoozeMode] = useState('today'); // 'today' | 'before_start' | 'before_due'
+  const [dueOpen, setDueOpen] = useState(false);
+  const dueRef = useRef(null);
+  useEffect(() => {
+    if (!dueOpen) return;
+    const fn = e => { if (dueRef.current && !dueRef.current.contains(e.target)) setDueOpen(false); };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
+  }, [dueOpen]);
   const [menuOpen,   setMenuOpen]   = useState(false);
   const [timeMoreOpen, setTimeMoreOpen] = useState(false);
   const [blockerQuery,setBlockerQuery] = useState('');
@@ -135,6 +143,39 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
     const dow = d.getDay();
     d.setDate(d.getDate() + (dow === 6 ? 7 : (6 - dow + 7) % 7 || 7));
     return D.str(d);
+  };
+  const endOfWeekStr = () => {
+    // Friday of the current week (or today if already Fri/Sat/Sun)
+    const d = new Date(D.today());
+    const dow = d.getDay();
+    const add = dow <= 5 ? (5 - dow) : 0;
+    d.setDate(d.getDate() + add);
+    return D.str(d);
+  };
+  const endOfMonthStr = () => {
+    const d = new Date(D.today());
+    d.setMonth(d.getMonth() + 1, 0); // last day of current month
+    return D.str(d);
+  };
+  const DUE_OPTS = [
+    {l:'Today',        fn:()=>D.str(D.today())},
+    {l:'Tomorrow',     fn:()=>D.str(D.add(D.today(),1))},
+    {l:'End of week',  fn:endOfWeekStr},
+    {l:'Next Monday',  fn:nextMondayStr},
+    {l:'In 1 week',    fn:()=>D.str(D.add(D.today(),7))},
+    {l:'In 2 weeks',   fn:()=>D.str(D.add(D.today(),14))},
+    {l:'End of month', fn:endOfMonthStr},
+    {l:'In 1 month',   fn:()=>{ const d=new Date(D.today()); d.setMonth(d.getMonth()+1); return D.str(d); }},
+    {l:'In 3 months',  fn:()=>{ const d=new Date(D.today()); d.setMonth(d.getMonth()+3); return D.str(d); }},
+  ];
+  const fmtDueLabel = (s) => {
+    if (!s) return 'No due date';
+    const today = D.str(D.today());
+    const tomorrow = D.str(D.add(D.today(),1));
+    if (s < today) return `Overdue ${s}`;
+    if (s === today) return 'Due today';
+    if (s === tomorrow) return 'Due tomorrow';
+    return `Due ${s}`;
   };
   const SNOOZE_OPTS = [
     {l:'Tomorrow',    fn:()=>D.str(D.add(D.today(),1))},
@@ -481,7 +522,32 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
             <input type="date" className="dr-inp" value={task.date||''} onChange={e=>upd({date:e.target.value||null})}/>
           </DRow>
           <DRow label="Due Date">
-            <input type="date" className="dr-inp" value={task.dueDate||''} onChange={e=>upd({dueDate:e.target.value||null})}/>
+            <div ref={dueRef} style={{position:'relative'}}>
+              <button className="dr-sel dr-sel-btn" onClick={()=>setDueOpen(o=>!o)}
+                style={task.dueDate && task.dueDate < D.str(D.today()) ? {color:'#ef4444',borderColor:'#ef444466'} : undefined}>
+                {fmtDueLabel(task.dueDate)} ▾
+              </button>
+              {dueOpen && (
+                <div className="dr-dd" style={{position:'absolute',left:0,top:'calc(100% + 4px)',zIndex:200,minWidth:200}}>
+                  {task.dueDate && (
+                    <div className="dr-dd-item" onClick={()=>{upd({dueDate:null});setDueOpen(false);}}>Remove due date</div>
+                  )}
+                  {DUE_OPTS.map(o => (
+                    <div key={o.l} className="dr-dd-item"
+                      onClick={()=>{upd({dueDate:o.fn()});setDueOpen(false);}}>
+                      {o.l}
+                    </div>
+                  ))}
+                  <div style={{borderTop:'1px solid var(--border)',padding:'6px 8px',display:'flex',alignItems:'center',gap:6}}>
+                    <span style={{fontSize:11,color:'var(--t3)'}}>Custom</span>
+                    <input type="date" className="dr-inp" style={{padding:'4px 6px',font:'12px var(--font)',flex:1}}
+                      value={task.dueDate||''}
+                      onChange={e=>{ upd({dueDate:e.target.value||null}); }}
+                      onKeyDown={e=>{ if(e.key==='Enter'){ setDueOpen(false); } }}/>
+                  </div>
+                </div>
+              )}
+            </div>
           </DRow>
           <DRow label="Time est.">
             <div className="dr-time-grp">
