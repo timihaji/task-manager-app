@@ -167,6 +167,7 @@ function App() {
   const boardRaf = useRef(null);
   const pendingTodayJump = useRef(true);
   const pendingTodayJumpBehavior = useRef('auto');
+  const pendingTodayJumpTimer = useRef(null);
   const pendingScrollShift = useRef(0);
   const pendingGoToDate = useRef(null);
   const [goToSeq, setGoToSeq] = useState(0);
@@ -674,8 +675,17 @@ function App() {
       return;
     }
     jumpToTodayAnchor(pendingTodayJumpBehavior.current);
-    pendingTodayJump.current = false;
-    pendingTodayJumpBehavior.current = 'auto';
+    // COL_W can shift on a follow-up render once the board's measured width
+    // settles, leaving the scroll anchor we just set pointing at the wrong
+    // pixel offset. Keep `pendingTodayJump` true until layout has been quiet
+    // for a moment — the effect will re-run on COL_W changes (it's in deps)
+    // and re-anchor each time.
+    if (pendingTodayJumpTimer.current) clearTimeout(pendingTodayJumpTimer.current);
+    pendingTodayJumpTimer.current = setTimeout(() => {
+      pendingTodayJump.current = false;
+      pendingTodayJumpBehavior.current = 'auto';
+      pendingTodayJumpTimer.current = null;
+    }, 200);
   },[view, weekOff, timelineDays, todayJumpSeq, COL_W, showWknd, boardMetrics.width, boardMetrics.boardWidth]);
   useEffect(()=>{
     const shift = pendingScrollShift.current;
