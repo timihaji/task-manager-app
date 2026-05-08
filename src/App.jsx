@@ -2409,6 +2409,7 @@ function App() {
     setTasks(nextTasks);
     pruneEmptyGroups(nextTasks);
     setRenamingGroupId(id);
+    setSelectedIds(new Set());
     setToast('Grouped'); setTimeout(()=>setToast(null), 1200);
   };
   const ungroupSelected = () => {
