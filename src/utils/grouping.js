@@ -2,11 +2,25 @@ import { PROJ, ALL_TAGS, LIFE_AREAS, LIFE_AREA_NAMES, TAG_NAMES, TAG_DARK, TAG_L
 import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from './colors.js';
 
 function groupTasksBy(tasks, by, getEffectiveLifeAreaForTask, customGroups) {
+  // Dedupe customGroups by id (first occurrence wins). Defends against any
+  // upstream state bug that lets the same group id appear twice in the array.
+  const dedupedGroups = [];
   if (customGroups?.length) {
-    const valid = new Set(customGroups.map(g => g.id));
+    const seenGid = new Set();
+    for (const g of customGroups) {
+      if (!g?.id || seenGid.has(g.id)) continue;
+      seenGid.add(g.id);
+      dedupedGroups.push(g);
+    }
+  }
+  if (dedupedGroups.length) {
+    const valid = new Set(dedupedGroups.map(g => g.id));
     const byGid = new Map();
     const ungrouped = [];
+    const seenTaskIds = new Set();
     for (const t of tasks) {
+      if (!t?.id || seenTaskIds.has(t.id)) continue; // dedupe duplicate task records
+      seenTaskIds.add(t.id);
       if (t.groupId && valid.has(t.groupId)) {
         if (!byGid.has(t.groupId)) byGid.set(t.groupId, []);
         byGid.get(t.groupId).push(t);
@@ -15,7 +29,7 @@ function groupTasksBy(tasks, by, getEffectiveLifeAreaForTask, customGroups) {
       }
     }
     const result = [];
-    for (const g of customGroups) {
+    for (const g of dedupedGroups) {
       const list = byGid.get(g.id);
       if (!list?.length) continue;
       result.push({ key:`__cg__${g.id}`, label:g.name, tasks:list, custom:true, color:g.color, groupId:g.id });
