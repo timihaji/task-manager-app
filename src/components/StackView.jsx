@@ -753,8 +753,8 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                           onKeyDown={e=>{ if(e.key==='Enter') e.target.blur(); if(e.key==='Escape'){ e.target.value=grp.name; onGroupRenameDone?.(); } }}/>
                       ) : (
                         <span className="grp-name" style={{color: grp.color}}
-                              onClick={e=>{ e.stopPropagation(); onStartGroupRename?.(grp.id); }}
-                              title="Click to rename">{grp.name}</span>
+                              onDoubleClick={e=>{ e.stopPropagation(); onStartGroupRename?.(grp.id); }}
+                              title="Double-click to rename">{grp.name}</span>
                       )}
                       <span className="grp-cnt">{slot.tasks.length}</span>
                     </div>

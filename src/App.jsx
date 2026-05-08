@@ -275,7 +275,22 @@ function App() {
         ]);
         if (cancelled) return;
         if (cloudSettings) {
-          setTweakState(prev => ({...TM_DEFAULTS, ...prev, ...cloudSettings}));
+          setTweakState(prev => {
+            const merged = {...TM_DEFAULTS, ...prev, ...cloudSettings};
+            // Dedupe customGroups by id — keeps the array clean even if a
+            // prior bug left duplicate-id entries in the saved settings.
+            if (Array.isArray(merged.customGroups) && merged.customGroups.length) {
+              const seen = new Set();
+              const out = [];
+              for (const g of merged.customGroups) {
+                if (!g?.id || seen.has(g.id)) continue;
+                seen.add(g.id);
+                out.push(g);
+              }
+              if (out.length !== merged.customGroups.length) merged.customGroups = out;
+            }
+            return merged;
+          });
         }
         if (cloudTaxonomy) {
           setTaxonomyState(normalizeTaxonomy(cloudTaxonomy));
@@ -1473,7 +1488,9 @@ function App() {
     if (nowDone) {
       // Completing a task clears its blocked state and #blocked tag.
       const tags = (t.tags||[]).filter(x => x !== 'blocked');
-      return {...t, done:true, completedAt: ts,
+      // Inbox tasks (no date, top-level) move to today's completed bucket on completion.
+      const datePatch = (!t.date && !t.parentId) ? {date: todayKey} : {};
+      return {...t, done:true, completedAt: ts, ...datePatch,
         blocked:false, blockedReason:'', blockedBy:[], blockedSince:null, followUpAt:null, tags};
     }
     return {...rollTaskDateForward(t), done:false, completedAt: null};
@@ -2386,28 +2403,52 @@ function App() {
 
   // ---- Custom groups (user-created, persistent multi-card clusters) ----
   const GROUP_PALETTE = ['#0f766e','#7c3aed','#db2777','#ea580c','#0284c7','#65a30d','#ca8a04','#dc2626'];
+  // Dedupe a customGroups array by id (first occurrence wins). Used both on
+  // cloud load and inside any updater that mutates the list, so no code path
+  // can leave duplicate-id entries in state.
+  const dedupeCustomGroups = (list) => {
+    const seen = new Set();
+    const out = [];
+    for (const g of list || []) {
+      if (!g?.id || seen.has(g.id)) continue;
+      seen.add(g.id);
+      out.push(g);
+    }
+    return out;
+  };
+  // Prune groups with no member tasks. Reads customGroups from the live
+  // `prev` inside a functional setter so it never sees stale state.
   const pruneEmptyGroups = (taskList) => {
     const used = new Set((taskList||[]).map(t=>t.groupId).filter(Boolean));
-    const list = tweaks.customGroups || [];
-    const next = list.filter(g => used.has(g.id));
-    if (next.length !== list.length) setTweak('customGroups', next);
+    setTweakState(prev => {
+      const list = dedupeCustomGroups(prev.customGroups);
+      const next = list.filter(g => used.has(g.id));
+      if (next.length === (prev.customGroups || []).length) return prev;
+      return { ...prev, customGroups: next };
+    });
   };
   const groupSelected = () => {
     if (selectedIds.size < 2) return;
-    const list = tweaks.customGroups || [];
     const id = mkid();
-    const grp = {
-      id,
-      name: `Group ${list.length + 1}`,
-      color: GROUP_PALETTE[list.length % GROUP_PALETTE.length],
-      createdAt: new Date().toISOString(),
-    };
-    setUndoStack(s=>[...s.slice(-9),{bulk:true,before:tasks,beforeGroups:list}]);
-    setTweak('customGroups', [...list, grp]);
     const ids = new Set(selectedIds);
     const nextTasks = tasks.map(t => ids.has(t.id) ? {...t, groupId: id} : t);
+    setUndoStack(s=>[...s.slice(-9),{bulk:true,before:tasks,beforeGroups:tweaks.customGroups||[]}]);
+    setTweakState(prev => {
+      // Compute name + color against the *current* customGroups so concurrent
+      // calls don't both read the same stale length.
+      const list = dedupeCustomGroups(prev.customGroups);
+      const used = new Set(nextTasks.map(t=>t.groupId).filter(Boolean));
+      // Drop empties first so positional naming reflects what survives.
+      const live = list.filter(g => used.has(g.id) || g.id === id);
+      const grp = {
+        id,
+        name: `Group ${live.length + 1}`,
+        color: GROUP_PALETTE[live.length % GROUP_PALETTE.length],
+        createdAt: new Date().toISOString(),
+      };
+      return { ...prev, customGroups: [...live, grp] };
+    });
     setTasks(nextTasks);
-    pruneEmptyGroups(nextTasks);
     setRenamingGroupId(id);
     setSelectedIds(new Set());
     setToast('Grouped'); setTimeout(()=>setToast(null), 1200);
@@ -2856,6 +2897,7 @@ function App() {
         <button className="tb-btn" onClick={()=>{
           const ts = new Date().toISOString();
           bulkUpdate(t=>({...t, done:true, completedAt:ts,
+            ...((!t.date && !t.parentId) ? {date: todayKey} : {}),
             blocked:false, blockedReason:'', blockedBy:[], blockedSince:null, followUpAt:null,
             tags:(t.tags||[]).filter(x=>x!=='blocked')}), 'Marked done');
         }}>Done</button>

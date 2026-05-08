@@ -79,8 +79,8 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                   ) : (
                     <span className="grp-name"
                           style={{color: grp.custom ? grp.color : getGColor(grp.key, groupBy, theme)}}
-                          onClick={e=>{ if (grp.custom) { e.stopPropagation(); onStartGroupRename?.(grp.groupId); } }}
-                          title={grp.custom ? 'Click to rename' : undefined}>
+                          onDoubleClick={e=>{ if (grp.custom) { e.stopPropagation(); onStartGroupRename?.(grp.groupId); } }}
+                          title={grp.custom ? 'Double-click to rename' : undefined}>
                       {grp.label}
                     </span>
                   )}
@@ -342,7 +342,8 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
                     ) : (
                       <span className="grp-name"
                         style={{color: grp.custom ? grp.color : getGColor(grp.key, inboxGroupBy, theme)}}
-                        onClick={e=>{ if(grp.custom){ e.stopPropagation(); onStartGroupRename?.(grp.groupId); } }}>
+                        onDoubleClick={e=>{ if(grp.custom){ e.stopPropagation(); onStartGroupRename?.(grp.groupId); } }}
+                        title={grp.custom ? 'Double-click to rename' : undefined}>
                         {grp.label}
                       </span>
                     )}
