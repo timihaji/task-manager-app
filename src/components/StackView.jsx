@@ -510,6 +510,52 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     setDrag(prev => (prev.overId === id && prev.overPos === pos) ? prev : { ...prev, overId: id, overPos: pos });
   };
 
+  // Custom-group boxes wrap their member cards in a .grp-box with a header
+  // above the first card. Without a group-level handler, that header (and the
+  // box's own padding) is a dead zone — the user can't drop a sibling task
+  // above or below the group as a whole. These handlers anchor the drop to
+  // the first or last member based on cursor Y, so the resulting reorder
+  // places the dragged task outside the group rather than inside it.
+  const handleGroupDragOver = (e, groupTasks) => {
+    if (!dragRef.current.id) return;
+    const card = e.target.closest && e.target.closest('.scard');
+    if (card && e.currentTarget.contains(card)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = e.currentTarget.getBoundingClientRect();
+    const upper = e.clientY < rect.top + rect.height / 2;
+    const anchorId = upper ? groupTasks[0].id : groupTasks[groupTasks.length-1].id;
+    if (anchorId === dragRef.current.id) {
+      if (drag.overId !== null) setDrag(d => ({ ...d, overId: null, overPos: null }));
+      return;
+    }
+    const pos = upper ? 'before' : 'after';
+    setDrag(prev => (prev.overId === anchorId && prev.overPos === pos) ? prev : { ...prev, overId: anchorId, overPos: pos });
+  };
+
+  const handleGroupDrop = (e, groupTasks) => {
+    const card = e.target.closest && e.target.closest('.scard');
+    if (card && e.currentTarget.contains(card)) return;
+    e.preventDefault();
+    const draggedId = dragRef.current.id || (() => { try { return e.dataTransfer.getData('text/plain'); } catch { return null; }})();
+    if (!draggedId) { resetDrag(); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const upper = e.clientY < rect.top + rect.height / 2;
+    const anchorId = upper ? groupTasks[0].id : groupTasks[groupTasks.length-1].id;
+    if (anchorId === draggedId) { resetDrag(); return; }
+    const ids = sorted.map(t => t.id);
+    const fromIdx = ids.indexOf(draggedId);
+    if (fromIdx < 0) { resetDrag(); return; }
+    ids.splice(fromIdx, 1);
+    let toIdx = ids.indexOf(anchorId);
+    if (toIdx < 0) { resetDrag(); return; }
+    if (!upper) toIdx += 1;
+    ids.splice(toIdx, 0, draggedId);
+    setTweak('stackOrder', ids);
+    if (sortMode !== 'manual') setTweak('stackSort', 'manual');
+    resetDrag();
+  };
+
   const handleDrop = (e, targetId) => {
     e.preventDefault();
     const draggedId = dragRef.current.id || (() => { try { return e.dataTransfer.getData('text/plain'); } catch { return null; }})();
@@ -541,6 +587,14 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     }
     return null;
   };
+  const findGroupBoxUnder = (el) => {
+    let cur = el;
+    while (cur && cur !== document.body) {
+      if (cur.classList && cur.classList.contains('grp-box')) return cur;
+      cur = cur.parentElement;
+    }
+    return null;
+  };
   // Refs let the hook's window-level event listeners (mounted once on initial
   // render) always see the latest state and props, since the closure captured
   // by useEffect would otherwise be stale.
@@ -560,18 +614,41 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     onMove: (point, el) => {
       if (!dragRef.current.id) return;
       const hit = findCardIdUnder(el);
-      if (!hit || hit.id === dragRef.current.id) {
-        if (touchHoverRef.current.overId !== null) {
-          touchHoverRef.current = { overId: null, overPos: null };
-          setDrag(d => (d.overId == null ? d : { ...d, overId: null, overPos: null }));
-        }
+      if (hit && hit.id !== dragRef.current.id) {
+        const r = hit.el.getBoundingClientRect();
+        const pos = (point.y < r.top + r.height / 2) ? 'before' : 'after';
+        if (touchHoverRef.current.overId === hit.id && touchHoverRef.current.overPos === pos) return;
+        touchHoverRef.current = { overId: hit.id, overPos: pos };
+        setDrag(prev => ({ ...prev, overId: hit.id, overPos: pos }));
         return;
       }
-      const r = hit.el.getBoundingClientRect();
-      const pos = (point.y < r.top + r.height / 2) ? 'before' : 'after';
-      if (touchHoverRef.current.overId === hit.id && touchHoverRef.current.overPos === pos) return;
-      touchHoverRef.current = { overId: hit.id, overPos: pos };
-      setDrag(prev => ({ ...prev, overId: hit.id, overPos: pos }));
+      // Not on a card — but if we're inside a group box (header/padding),
+      // anchor the drop to the group's first or last task so the user can
+      // drop above or below the group as a whole.
+      const grpEl = findGroupBoxUnder(el);
+      const firstId = grpEl?.getAttribute('data-grp-first-id');
+      const lastId  = grpEl?.getAttribute('data-grp-last-id');
+      if (grpEl && firstId && lastId) {
+        const r = grpEl.getBoundingClientRect();
+        const upper = point.y < r.top + r.height / 2;
+        const anchorId = upper ? firstId : lastId;
+        if (anchorId === dragRef.current.id) {
+          if (touchHoverRef.current.overId !== null) {
+            touchHoverRef.current = { overId: null, overPos: null };
+            setDrag(d => (d.overId == null ? d : { ...d, overId: null, overPos: null }));
+          }
+          return;
+        }
+        const pos = upper ? 'before' : 'after';
+        if (touchHoverRef.current.overId === anchorId && touchHoverRef.current.overPos === pos) return;
+        touchHoverRef.current = { overId: anchorId, overPos: pos };
+        setDrag(prev => ({ ...prev, overId: anchorId, overPos: pos }));
+        return;
+      }
+      if (touchHoverRef.current.overId !== null) {
+        touchHoverRef.current = { overId: null, overPos: null };
+        setDrag(d => (d.overId == null ? d : { ...d, overId: null, overPos: null }));
+      }
     },
     onEnd: () => {
       const draggedId = dragRef.current.id;
@@ -750,12 +827,18 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
             const draggingTask = drag.id ? sorted.find(x => x.id === drag.id) : null;
             let lastBucket = null;
 
-            const renderCard = (t, slotIdx, isFirstInSlot, slotsLen) => {
+            const renderCard = (t, slotIdx, isFirstInSlot, slotsLen, suppressEdges = null) => {
               const isNow = slotIdx === 0;
               const isDeck = slotIdx >= 1 && slotIdx <= 2;
               const isLater = slotIdx >= 3 && compactBelowDeck;
-              const showBefore = drag.overId === t.id && drag.overPos === 'before' && drag.id !== t.id;
-              const showAfter  = drag.overId === t.id && drag.overPos === 'after'  && drag.id !== t.id;
+              const wantBefore = drag.overId === t.id && drag.overPos === 'before' && drag.id !== t.id;
+              const wantAfter  = drag.overId === t.id && drag.overPos === 'after'  && drag.id !== t.id;
+              // Suppress before/after preview at the group's outer edges —
+              // those previews render outside the .grp-box so the user sees
+              // the dragged card landing above/below the whole group, not
+              // joining it.
+              const showBefore = wantBefore && !(suppressEdges && suppressEdges.before);
+              const showAfter  = wantAfter  && !(suppressEdges && suppressEdges.after);
               return (
                 <React.Fragment key={t.id}>
                   {showBefore && <DropPreview task={draggingTask} theme={theme}/>}
@@ -821,10 +904,19 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
               }
               const grp = slot.group;
               const tierClass = slotIdx === 0 ? ' is-now' : (slotIdx <= 2 ? ' is-deck' : (compactBelowDeck ? ' is-later' : ''));
+              const firstCard = slot.tasks[0];
+              const lastCard = slot.tasks[slot.tasks.length - 1];
+              const showBeforeGroup = drag.overId === firstCard.id && drag.overPos === 'before' && drag.id !== firstCard.id;
+              const showAfterGroup  = drag.overId === lastCard.id  && drag.overPos === 'after'  && drag.id !== lastCard.id;
               return (
                 <React.Fragment key={`__cg__${grp.id}`}>
                   {divider}
-                  <div className={`grp-box stack-grp-box${tierClass}`}>
+                  {showBeforeGroup && <DropPreview task={draggingTask} theme={theme}/>}
+                  <div className={`grp-box stack-grp-box${tierClass}`}
+                       data-grp-first-id={firstCard.id}
+                       data-grp-last-id={lastCard.id}
+                       onDragOver={(e)=>handleGroupDragOver(e, slot.tasks)}
+                       onDrop={(e)=>handleGroupDrop(e, slot.tasks)}>
                     <div className="grp-hdr grp-hdr-custom">
                       {grp.id === renamingGroupId ? (
                         <input className="grp-name-edit" autoFocus defaultValue={grp.name}
@@ -838,8 +930,12 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                       )}
                       <span className="grp-cnt">{slot.tasks.length}</span>
                     </div>
-                    {slot.tasks.map((t, i) => renderCard(t, slotIdx, i === 0, slots.length))}
+                    {slot.tasks.map((t, i) => renderCard(t, slotIdx, i === 0, slots.length, {
+                      before: i === 0,
+                      after: i === slot.tasks.length - 1,
+                    }))}
                   </div>
+                  {showAfterGroup && <DropPreview task={draggingTask} theme={theme}/>}
                 </React.Fragment>
               );
             });
