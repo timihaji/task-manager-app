@@ -520,7 +520,25 @@ function App() {
   };
 
   // Initial load from Supabase once the workspace is ready.
+  // Dev-bypass / local-only mode (supabaseDisabled === true): seed from
+  // INIT_TASKS so the app boots into a populated state without needing a
+  // real account. The seed only runs when local storage doesn't already
+  // hold a saved task list, so iterating with the bypass is non-destructive.
   useEffect(() => {
+    if (supabaseDisabled) {
+      let saved = null;
+      try {
+        const raw = localStorage.getItem('tm_tasks_v2');
+        if (raw) saved = JSON.parse(raw);
+      } catch {}
+      const seed = Array.isArray(saved) && saved.length ? saved : INIT_TASKS;
+      const merged = rollIncompleteTasksToToday(migrateTasks(seed));
+      syncUidFromTasks(merged);
+      lastSyncedTasksRef.current = merged;
+      setTasks(merged);
+      setTasksReady(true);
+      return;
+    }
     if (!workspaceId) {
       setTasksReady(false);
       return;
@@ -541,7 +559,7 @@ function App() {
       }
     })();
     return () => { cancelled = true; };
-  }, [workspaceId]);
+  }, [workspaceId, supabaseDisabled]);
 
   useEffect(() => {
     const now = new Date();
