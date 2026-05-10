@@ -190,10 +190,9 @@ function ChipRow({ task, isProject, allTasks, theme }) {
 
 function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing, allTasks, theme, isFirst, isLast,
                     expanded, onToggleExpand, onOpen, onComplete, onSendToTop, onSendToBottom, onSubToggle,
-                    isDragging, isDraggingCollapsed, dropPos, onDragStart, onDragOver, onDragEnd, onDrop, onPointerDown,
+                    isDragging, dropPos, onDragStart, onDragOver, onDragEnd, onDrop, onPointerDown,
                     focused, renaming, onFocus, onContextMenu, onRename, onStartRename, onRenameDone,
-                    selected, onSelect,
-                    previewMode=false, previewDropProps=null }) {
+                    selected, onSelect }) {
   const [draft, setDraft] = useState(task.title || '');
   const inputRef = useRef(null);
   useEffect(()=>{ setDraft(task.title || ''); }, [task.id, task.title]);
@@ -219,46 +218,12 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
     isProject && 'is-project',
     completing && 'completing',
     isDragging && 'is-dragging',
-    isDraggingCollapsed && 'is-dragging-collapsed',
     dropPos === 'before' && 'drop-before',
     dropPos === 'after' && 'drop-after',
     focused && 'focused',
     renaming && 'renaming',
     selected && 'selected',
-    previewMode && 'is-preview',
   ].filter(Boolean).join(' ');
-
-  // In preview mode the card is acting as a drop placeholder for the dragged
-  // task. Render the same content (so dimensions and tier styling match the
-  // post-drop result), but strip every interactive handler — the card is
-  // ephemeral and any of its actions would either be confusing or fight the
-  // drag. Forward only the optional drag handlers so the preview itself is
-  // a valid drop target (otherwise the layout shift slides the cursor onto
-  // it and the browser rejects the drop with a "no-drop" cursor).
-  if (previewMode) {
-    return (
-      <div className={klass}
-           aria-hidden="true"
-           onDragOver={previewDropProps?.onDragOver}
-           onDrop={previewDropProps?.onDrop}>
-        <div className="scard-idx">{showIdx ? (idx+1) : ''}</div>
-        <div className="scard-r1">
-          {!isNow && <span className="scard-chk" aria-hidden="true"/>}
-          <div className="scard-title">
-            {task.title || 'Untitled'}
-            {isNow && <span className="scard-now-tag">Now</span>}
-          </div>
-        </div>
-        <ChipRow task={task} isProject={isProject} allTasks={allTasks} theme={theme}/>
-        {isProject && kids.length > 0 && (
-          <div className="scard-proj-prog">
-            <div className="bar"><div className="bar-fill" style={{width:projectPct+'%'}}/></div>
-            <span className="num">{doneSubs.length}/{kids.length}</span>
-          </div>
-        )}
-      </div>
-    );
-  }
 
   const isCardSurface = (e) => {
     if (renaming) return false;
@@ -472,7 +437,6 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     const i = ids.indexOf(id);
     if (i <= 0) return;
     const reordered = [id, ...ids.slice(0, i), ...ids.slice(i+1)];
-    captureFlipSnapshot();
     setTweak('stackOrder', reordered);
     if (sortMode !== 'manual') setTweak('stackSort', 'manual');
   };
@@ -482,7 +446,6 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     const i = ids.indexOf(id);
     if (i < 0 || i === ids.length - 1) return;
     const reordered = [...ids.slice(0, i), ...ids.slice(i+1), id];
-    captureFlipSnapshot();
     setTweak('stackOrder', reordered);
     if (sortMode !== 'manual') setTweak('stackSort', 'manual');
   };
@@ -500,91 +463,64 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
   };
 
   // ---- Drag reorder ----
-  const [drag, setDrag] = useState({ id: null, overId: null, overPos: null, collapsed: false });
-  const dragRef = useRef({ id: null, collapsed: false });
+  const [drag, setDrag] = useState({ id: null, overId: null, overPos: null });
+  const dragRef = useRef({ id: null });
   const stackBodyRef = useRef(null);
   const autoscrollRef = useRef({ rafId: null, dy: 0 });
-  const collapseTimerRef = useRef(null);
 
   const resetDrag = () => {
-    if (collapseTimerRef.current) {
-      clearTimeout(collapseTimerRef.current);
-      collapseTimerRef.current = null;
-    }
     dragRef.current.id = null;
-    dragRef.current.collapsed = false;
-    setDrag({ id: null, overId: null, overPos: null, collapsed: false });
+    setDrag({ id: null, overId: null, overPos: null });
   };
 
-  // Source-card collapse, deferred. Apply .is-dragging immediately for the
-  // dim, then 80ms later add .is-dragging-collapsed which removes the source
-  // from layout. The delay matters: collapsing the source synchronously
-  // after dragstart (or even on the first React commit) makes Chromium read
-  // it as a sign the drag is no longer valid and abort the operation.
-  // 80ms is enough for the drag to be live but short enough that the user
-  // doesn't notice the source hanging around.
-  useEffect(() => {
-    if (!drag.id || drag.collapsed) return;
-    const id = drag.id;
-    collapseTimerRef.current = setTimeout(() => {
-      collapseTimerRef.current = null;
-      if (dragRef.current.id !== id) return;
-      // Capture neighbours before the collapse so they slide smoothly up
-      // into the gap rather than snapping. The source is the skipId so
-      // FLIP doesn't try to animate it (it's the one shrinking out).
-      dragRef.current.collapsed = true;
-      captureFlipSnapshot();
-      setDrag(d => (d.id === id ? { ...d, collapsed: true } : d));
-    }, 80);
-    return () => {
-      if (collapseTimerRef.current) {
-        clearTimeout(collapseTimerRef.current);
-        collapseTimerRef.current = null;
-      }
-    };
-  }, [drag.id, drag.collapsed]);
+  // displaySorted is the visual order during drag: the source is moved to
+  // the hover position so the user sees a single, continuously-updating
+  // representation of where the drop will land — Trello-style. Falls back
+  // to `sorted` when not dragging, or when the drag has no hover target
+  // (source stays at its original spot, just dimmed). FLIP animates the
+  // resulting reflows so the source slides smoothly between candidate
+  // positions as the cursor moves.
+  const displaySorted = useMemo(() => {
+    if (!drag.id || !drag.overId || !drag.overPos || drag.id === drag.overId) {
+      return sorted;
+    }
+    const draggedTask = sorted.find(t => t.id === drag.id);
+    if (!draggedTask) return sorted;
+    const result = sorted.filter(t => t.id !== drag.id);
+    const targetIdx = result.findIndex(t => t.id === drag.overId);
+    if (targetIdx < 0) return sorted;
+    const insertIdx = drag.overPos === 'after' ? targetIdx + 1 : targetIdx;
+    result.splice(insertIdx, 0, draggedTask);
+    return result;
+  }, [sorted, drag.id, drag.overId, drag.overPos]);
 
-  // FLIP animation: when a reorder fires, capture every visible card's top
-  // position right before the state update, then in useLayoutEffect compare
-  // to the new position and slide each card from old → new.
-  //
-  // skipId is set when the snapshot is captured for the source-collapse
-  // moment OR for a drop while the source is collapsed. The collapsed
-  // source's "old" position is the gap (height 0), so animating it from
-  // there to wherever it lands would look like a confused fall. Skipping
-  // it lets it appear at the destination cleanly — which matches the user
-  // mental model since the destination preview was already there.
-  const flipRef = useRef(null);
-  const captureFlipSnapshot = () => {
-    if (!stackBodyRef.current) return;
-    const positions = new Map();
-    const cards = stackBodyRef.current.querySelectorAll('[data-card-id]');
-    cards.forEach(c => {
-      const id = c.getAttribute('data-card-id');
-      if (id) positions.set(id, c.getBoundingClientRect().top);
-    });
-    const skipId = dragRef.current.collapsed ? dragRef.current.id : null;
-    flipRef.current = { positions, skipId };
-  };
-
+  // Auto-FLIP: every time displaySorted changes, capture each card's new
+  // top, compare to the previous render, and slide moved cards from old
+  // to new with translateY. This covers source-into-position sliding
+  // during drag AND the post-drop settle in one mechanism — there's no
+  // separate "snapshot before reorder" step, the previous render's
+  // measured positions are the reference.
+  const prevPositionsRef = useRef(new Map());
   useLayoutEffect(() => {
-    const snap = flipRef.current;
-    if (!snap || !stackBodyRef.current) return;
-    flipRef.current = null;
-    const { positions, skipId } = snap;
+    if (!stackBodyRef.current) return;
     const cards = stackBodyRef.current.querySelectorAll('[data-card-id]');
+    const newPositions = new Map();
     cards.forEach(c => {
       const id = c.getAttribute('data-card-id');
-      if (!id || id === skipId) return;
-      const oldTop = positions.get(id);
+      if (id) newPositions.set(id, c.getBoundingClientRect().top);
+    });
+    cards.forEach(c => {
+      const id = c.getAttribute('data-card-id');
+      if (!id) return;
+      const oldTop = prevPositionsRef.current.get(id);
       if (oldTop == null) return;
-      const newTop = c.getBoundingClientRect().top;
+      const newTop = newPositions.get(id);
       const dy = oldTop - newTop;
       if (Math.abs(dy) < 1) return;
       c.style.transition = 'none';
       c.style.transform = `translateY(${dy}px)`;
       requestAnimationFrame(() => {
-        c.style.transition = 'transform 220ms cubic-bezier(.2,.8,.2,1)';
+        c.style.transition = 'transform 200ms cubic-bezier(.2,.8,.2,1)';
         c.style.transform = '';
         const cleanup = () => {
           c.style.transition = '';
@@ -594,7 +530,8 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
         c.addEventListener('transitionend', cleanup);
       });
     });
-  });
+    prevPositionsRef.current = newPositions;
+  }, [displaySorted]);
 
   const handleDragStart = (e, id) => {
     if (e.target.closest('.scard-subs') || e.target.closest('button') || e.target.closest('.scard-chk')) {
@@ -684,29 +621,10 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     if (toIdx < 0) { resetDrag(); return; }
     if (!upper) toIdx += 1;
     ids.splice(toIdx, 0, draggedId);
-    captureFlipSnapshot();
     setTweak('stackOrder', ids);
     if (sortMode !== 'manual') setTweak('stackSort', 'manual');
     resetDrag();
   };
-
-  // Make the edge DropPreview itself a drop target. When the preview appears
-  // above/below the group box, the layout shift slides the cursor onto the
-  // preview. Without these handlers, dragover on the preview never calls
-  // preventDefault, the browser shows the "no-drop" cursor, and the drop
-  // is rejected even though the visual feedback says it should land there.
-  const previewDropProps = (anchorId, upper) => ({
-    onDragOver: (e) => {
-      if (!dragRef.current.id) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-    },
-    onDrop: (e) => {
-      e.preventDefault();
-      const draggedId = dragRef.current.id || (() => { try { return e.dataTransfer.getData('text/plain'); } catch { return null; }})();
-      reorderRelativeTo(draggedId, anchorId, upper);
-    },
-  });
 
   // Reassign the dragged task's groupId when a drop crosses a group boundary.
   // - Dropping on a card that lives inside group X joins the dragged task to X.
@@ -734,7 +652,6 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     if (toIdx < 0) { resetDrag(); return; }
     if (drag.overPos === 'after') toIdx += 1;
     ids.splice(toIdx, 0, draggedId);
-    captureFlipSnapshot();
     setTweak('stackOrder', ids);
     if (sortMode !== 'manual') setTweak('stackSort', 'manual');
     reconcileGroupOnDrop(draggedId, targetId);
@@ -830,7 +747,6 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
       if (toIdx < 0) { resetDrag(); return; }
       if (overPos === 'after') toIdx += 1;
       ids.splice(toIdx, 0, draggedId);
-      captureFlipSnapshot();
       setTweak('stackOrder', ids);
       if (sortModeRef.current !== 'manual') setTweak('stackSort', 'manual');
       resetDrag();
@@ -972,10 +888,17 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
             // each custom group is a single slot placed at its first member's sort
             // position. Members of the same group share the slot's tier (now/deck/later)
             // and number — so a group acts as one entity in the stack ordering.
+            //
+            // Built from displaySorted (not sorted) so during drag the source
+            // appears at the hover position rather than its original spot.
+            // The visual reorder + the FLIP layout-effect together give the
+            // Trello-style "card slides between candidate slots as I drag"
+            // feel; there's no separate placeholder because the dimmed source
+            // card IS the placeholder.
             const customGroups = tweaks?.customGroups || [];
             const validGids = new Set(customGroups.map(g => g.id));
             const groupBuckets = new Map();
-            for (const t of sorted) {
+            for (const t of displaySorted) {
               if (t.groupId && validGids.has(t.groupId)) {
                 if (!groupBuckets.has(t.groupId)) groupBuckets.set(t.groupId, []);
                 groupBuckets.get(t.groupId).push(t);
@@ -983,7 +906,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
             }
             const slots = [];
             const seenGroups = new Set();
-            for (const t of sorted) {
+            for (const t of displaySorted) {
               if (t.groupId && validGids.has(t.groupId)) {
                 if (seenGroups.has(t.groupId)) continue;
                 seenGroups.add(t.groupId);
@@ -993,90 +916,49 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                 slots.push({ kind: 'task', task: t });
               }
             }
-            const draggingTask = drag.id ? sorted.find(x => x.id === drag.id) : null;
             let lastBucket = null;
 
-            // Render the drop placeholder as a dimmed StackCard. Sharing the
-            // renderer keeps the preview's dimensions, chips, and tier
-            // styling pixel-aligned with what the user will see after drop.
-            // insertionIdx is the slot the dragged card will land at, which
-            // drives is-now / is-deck / is-later so the user can read the
-            // destination tier from the preview itself.
-            const renderPreview = (anchorId, upper, insertionIdx) => {
-              if (!draggingTask) return null;
-              const isNow = insertionIdx === 0;
-              const isDeck = insertionIdx >= 1 && insertionIdx <= 2;
-              const isLater = insertionIdx >= 3 && compactBelowDeck;
-              return (
-                <StackCard
-                  task={draggingTask}
-                  idx={insertionIdx}
-                  showIdx={true}
-                  isNow={isNow}
-                  isDeck={isDeck}
-                  isLater={isLater}
-                  allTasks={allTasks}
-                  theme={theme}
-                  previewMode
-                  previewDropProps={previewDropProps(anchorId, upper)}
-                />
-              );
-            };
-
-            const renderCard = (t, slotIdx, isFirstInSlot, slotsLen, suppressEdges = null) => {
+            const renderCard = (t, slotIdx, isFirstInSlot, slotsLen) => {
               const isNow = slotIdx === 0;
               const isDeck = slotIdx >= 1 && slotIdx <= 2;
               const isLater = slotIdx >= 3 && compactBelowDeck;
-              const wantBefore = drag.overId === t.id && drag.overPos === 'before' && drag.id !== t.id;
-              const wantAfter  = drag.overId === t.id && drag.overPos === 'after'  && drag.id !== t.id;
-              // Suppress before/after preview at the group's outer edges —
-              // those previews render outside the .grp-box so the user sees
-              // the dragged card landing above/below the whole group, not
-              // joining it.
-              const showBefore = wantBefore && !(suppressEdges && suppressEdges.before);
-              const showAfter  = wantAfter  && !(suppressEdges && suppressEdges.after);
               return (
-                <React.Fragment key={t.id}>
-                  {showBefore && renderPreview(t.id, true, slotIdx)}
-                  <StackCard
-                    task={t}
-                    idx={slotIdx}
-                    showIdx={isFirstInSlot}
-                    isNow={isNow}
-                    isDeck={isDeck}
-                    isLater={isLater}
-                    isFirst={slotIdx === 0}
-                    isLast={slotIdx === slotsLen - 1}
-                    completing={completing.has(t.id)}
-                    allTasks={allTasks}
-                    theme={theme}
-                    expanded={expanded.has(t.id)}
-                    onToggleExpand={toggleExpand}
-                    onOpen={onOpen}
-                    onComplete={handleComplete}
-                    onSendToTop={handleSendToTop}
-                    onSendToBottom={handleSendToBottom}
-                    onSubToggle={handleSubToggle}
-                    isDragging={drag.id === t.id}
-                    isDraggingCollapsed={drag.collapsed && drag.id === t.id}
-                    dropPos={drag.overId === t.id ? drag.overPos : null}
-                    onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    onDragEnd={handleDragEnd}
-                    onPointerDown={touchDrag.onPointerDown}
-                    focused={focusedId === t.id}
-                    renaming={renamingId === t.id}
-                    onFocus={setFocusedId}
-                    onContextMenu={onContextMenu}
-                    onRename={onUpdate}
-                    onStartRename={setRenamingId}
-                    onRenameDone={()=>setRenamingId?.(null)}
-                    selected={selectedIds?.has(t.id)}
-                    onSelect={onSelect}
-                  />
-                  {showAfter && renderPreview(t.id, false, slotIdx + 1)}
-                </React.Fragment>
+                <StackCard
+                  key={t.id}
+                  task={t}
+                  idx={slotIdx}
+                  showIdx={isFirstInSlot}
+                  isNow={isNow}
+                  isDeck={isDeck}
+                  isLater={isLater}
+                  isFirst={slotIdx === 0}
+                  isLast={slotIdx === slotsLen - 1}
+                  completing={completing.has(t.id)}
+                  allTasks={allTasks}
+                  theme={theme}
+                  expanded={expanded.has(t.id)}
+                  onToggleExpand={toggleExpand}
+                  onOpen={onOpen}
+                  onComplete={handleComplete}
+                  onSendToTop={handleSendToTop}
+                  onSendToBottom={handleSendToBottom}
+                  onSubToggle={handleSubToggle}
+                  isDragging={drag.id === t.id}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  onPointerDown={touchDrag.onPointerDown}
+                  focused={focusedId === t.id}
+                  renaming={renamingId === t.id}
+                  onFocus={setFocusedId}
+                  onContextMenu={onContextMenu}
+                  onRename={onUpdate}
+                  onStartRename={setRenamingId}
+                  onRenameDone={()=>setRenamingId?.(null)}
+                  selected={selectedIds?.has(t.id)}
+                  onSelect={onSelect}
+                />
               );
             };
 
@@ -1103,12 +985,9 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
               const tierClass = slotIdx === 0 ? ' is-now' : (slotIdx <= 2 ? ' is-deck' : (compactBelowDeck ? ' is-later' : ''));
               const firstCard = slot.tasks[0];
               const lastCard = slot.tasks[slot.tasks.length - 1];
-              const showBeforeGroup = drag.overId === firstCard.id && drag.overPos === 'before' && drag.id !== firstCard.id;
-              const showAfterGroup  = drag.overId === lastCard.id  && drag.overPos === 'after'  && drag.id !== lastCard.id;
               return (
                 <React.Fragment key={`__cg__${grp.id}`}>
                   {divider}
-                  {showBeforeGroup && renderPreview(firstCard.id, true, slotIdx)}
                   <div className={`grp-box stack-grp-box${tierClass}`}
                        data-grp-first-id={firstCard.id}
                        data-grp-last-id={lastCard.id}
@@ -1130,12 +1009,8 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                               title="Add task to this group"
                               onClick={e=>{ e.stopPropagation(); onAddNew?.({groupId: grp.id}); }}>+</button>
                     </div>
-                    {slot.tasks.map((t, i) => renderCard(t, slotIdx, i === 0, slots.length, {
-                      before: i === 0,
-                      after: i === slot.tasks.length - 1,
-                    }))}
+                    {slot.tasks.map((t, i) => renderCard(t, slotIdx, i === 0, slots.length))}
                   </div>
-                  {showAfterGroup && renderPreview(lastCard.id, false, slotIdx + 1)}
                 </React.Fragment>
               );
             });
