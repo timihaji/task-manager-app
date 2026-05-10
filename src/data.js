@@ -406,7 +406,7 @@ const makeTask = (overrides={}) => syncTaskSnooze({
   recurrence:null, activity:[{type:'created',at:new Date().toISOString()}],
   createdAt:new Date().toISOString(),
   cardType:'task', parentId:null, childOrder:null,
-  groupId:null,
+  groupId:null, position:null,
   blocked:false, blockedReason:'', blockedBy:[], blockedSince:null, followUpAt:null,
   delegatedTo:null, delegatedAt:null, delegationStatus:null,
   checkInSchedule:null, checkInTaskIds:[], checkInOf:null, checkInDayOffset:null,

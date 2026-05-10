@@ -66,7 +66,7 @@ const TASK_DB_COLUMNS = new Set([
   'expiry_date', 'expiry_task_id', 'expiry_of',
   'last_contact_at', 'delegation_history',
   'activity', 'archived', 'source', 'source_id',
-  'subtasks',
+  'subtasks', 'position',
   'created_at', 'updated_at',
 ]);
 
@@ -93,6 +93,29 @@ const TASK_NOT_NULL_DEFAULTS = {
   subtasks: [],
 };
 
+// camelCase view of TASK_NOT_NULL_DEFAULTS, derived once. Used by
+// normalizeTask to fill missing fields on incoming rows so JS-side equality
+// checks (notably the realtime echo no-op guard) don't see spurious diffs
+// when the DB has [] for an array the local task left unset.
+const TASK_NOT_NULL_DEFAULTS_JS = Object.fromEntries(
+  Object.entries(TASK_NOT_NULL_DEFAULTS).map(([dbKey, val]) => [ROW_TO_TASK_KEYS[dbKey] || dbKey, val])
+);
+
+// Fill any missing/null NOT-NULL fields with the same defaults the DB has.
+// Returns a fresh object — safe to compare with JSON.stringify against
+// another normalized task.
+export function normalizeTask(task) {
+  if (!task) return task;
+  const out = { ...task };
+  for (const [k, v] of Object.entries(TASK_NOT_NULL_DEFAULTS_JS)) {
+    if (out[k] === undefined || out[k] === null) {
+      // Clone arrays so the default reference isn't shared across tasks.
+      out[k] = Array.isArray(v) ? [] : v;
+    }
+  }
+  return out;
+}
+
 // camelCase task object -> snake_case Postgres row.
 // userId/workspaceId are added explicitly because the JS object doesn't
 // usually carry them.
@@ -108,6 +131,9 @@ export function taskToRow(task, userId, workspaceId) {
     if (!TASK_DB_COLUMNS.has(dbKey)) continue;
     // Don't let an explicit null overwrite a NOT NULL default.
     if (v === null && Object.prototype.hasOwnProperty.call(TASK_NOT_NULL_DEFAULTS, dbKey)) continue;
+    // Drop `position` from upserts until migration 0007 is applied —
+    // otherwise every write fails with "column does not exist".
+    if (dbKey === 'position' && _positionColumnMissing) continue;
     row[dbKey] = v;
   }
   return row;
@@ -186,15 +212,32 @@ export async function getOrCreateWorkspace(userId) {
 // Tasks (PR B)
 // ---------------------------------------------------------------------------
 
+// Tracks whether the `position` column has been confirmed missing this
+// session — once we hit that error, drop position from upserts and skip
+// the position-sorted read until the user applies migration 0007.
+let _positionColumnMissing = false;
+
 export async function fetchTasks(workspaceId) {
   if (!supabase) throw new Error('Supabase client not configured');
+  if (!_positionColumnMissing) {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .order('position', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true });
+    if (!error) return (data || []).map(rowToTask).map(normalizeTask);
+    if (!/position/i.test(error.message || '')) throw error;
+    _positionColumnMissing = true;
+    console.warn('[tasks] `position` column missing — apply migration 0007 to enable persistent task ordering. Falling back to created_at order.');
+  }
   const { data, error } = await supabase
     .from('tasks')
     .select('*')
     .eq('workspace_id', workspaceId)
     .order('created_at', { ascending: true });
   if (error) throw error;
-  return (data || []).map(rowToTask);
+  return (data || []).map(rowToTask).map(normalizeTask);
 }
 
 export async function upsertTask(task, userId, workspaceId) {

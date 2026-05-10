@@ -4,6 +4,7 @@ import { D, parseTimeEst, fmtTimeEst, PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE
 import { lifeAreaPalette } from '../utils/colors.js';
 import { PriBars } from './PriBars.jsx';
 import { DropPreview } from './DropPreview.jsx';
+import { useTouchDrag } from '../utils/useTouchDrag.js';
 
 const PRI_RANK = { p1:0, p2:1, p3:2, p4:3 };
 const COMPLETE_ANIM_MS = 320;
@@ -161,8 +162,8 @@ function ChipRow({ task, isProject, allTasks, theme }) {
           ? <span className="schip schip-due-overdue">{due.label}</span>
           : <span className="schip"><I.Cal/>{due.label}</span>
       )}
-      {!isProject && !task.date && !task.dueDate && <span className="schip" style={{opacity:.6}}><I.Cal/>No start date</span>}
-      {isProject && !due && <span className="schip" style={{opacity:.6}}><I.Cal/>No start date</span>}
+      {!isProject && !task.date && !task.dueDate && <span className="schip schip-empty"><I.Cal/>No start date</span>}
+      {isProject && !due && <span className="schip schip-empty"><I.Cal/>No start date</span>}
 
       {proj && <span className="schip schip-proj" style={{color:proj.color, borderColor:proj.color+'55'}}>{proj.id}</span>}
 
@@ -190,7 +191,7 @@ function ChipRow({ task, isProject, allTasks, theme }) {
 
 function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing, allTasks, theme, isFirst, isLast,
                     expanded, onToggleExpand, onOpen, onComplete, onSendToTop, onSendToBottom, onSubToggle,
-                    isDragging, dropPos, onDragStart, onDragOver, onDragEnd, onDrop,
+                    isDragging, dropPos, onDragStart, onDragOver, onDragEnd, onDrop, onPointerDown,
                     focused, renaming, onFocus, onContextMenu, onRename, onStartRename, onRenameDone,
                     selected, onSelect }) {
   const [draft, setDraft] = useState(task.title || '');
@@ -243,11 +244,13 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
   return (
     <div className={klass}
          data-card-id={task.id}
+         data-task-id={task.id}
          draggable={!renaming}
          onDragStart={(e)=>onDragStart?.(e, task.id)}
          onDragOver={(e)=>onDragOver?.(e, task.id)}
          onDrop={(e)=>onDrop?.(e, task.id)}
          onDragEnd={onDragEnd}
+         onPointerDown={(e)=>onPointerDown?.(e, task.id)}
          onClick={handleCardClick}
          onDoubleClick={handleCardDoubleClick}
          onMouseEnter={()=>!renaming && onFocus?.(task.id)}
@@ -274,8 +277,14 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
       </div>
 
       <div className="scard-r1">
-        <button className="scard-chk" title="Mark complete"
-                onClick={(e)=>{e.stopPropagation(); onComplete?.(task.id);}}/>
+        {/* Now card has the prominent "✓ Done" button in .scard-actions; the
+            checkbox here would be a third complete affordance for the same task
+            (button + checkbox + Enter). Hide it on Now to keep the gesture
+            unambiguous; cards 2+ still show the checkbox. */}
+        {!isNow && (
+          <button className="scard-chk" title="Mark complete"
+                  onClick={(e)=>{e.stopPropagation(); onComplete?.(task.id);}}/>
+        )}
         {renaming ? (
           <input ref={inputRef} className="scard-title-input" value={draft}
                  onClick={e=>e.stopPropagation()}
@@ -297,14 +306,18 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
 
       <ChipRow task={task} isProject={isProject} allTasks={allTasks} theme={theme}/>
 
-      {isProject && (
+      {isProject && kids.length > 0 && (
         <div className="scard-proj-prog">
           <div className="bar"><div className="bar-fill" style={{width:projectPct+'%'}}/></div>
           <span className="num">{doneSubs.length}/{kids.length}</span>
           <button className={`scard-toggle${expanded?' open':''}`}
                   onClick={(e)=>{e.stopPropagation(); onToggleExpand(task.id);}}>
             <span className="chev">▸</span>
-            {expanded ? 'Collapse' : `Show ${openSubs.length} open subtask${openSubs.length===1?'':'s'}`}
+            {expanded
+              ? 'Collapse'
+              : openSubs.length === 0
+                ? `All done · ${doneSubs.length} subtask${doneSubs.length===1?'':'s'}`
+                : `Show ${openSubs.length} open subtask${openSubs.length===1?'':'s'}`}
           </button>
         </div>
       )}
@@ -359,6 +372,9 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                              selectedIds, onSelect, onMarqueeStart,
                              renamingGroupId, onStartGroupRename, onGroupRenameDone, onRenameGroup }) {
   const sortMode = tweaks.stackSort || 'smart';
+  // Stack-view-specific manual order, persisted via tweaks → user_settings.
+  // Intentionally separate from `task.position` (which drives week/day/inbox
+  // ordering): stack view is a per-user lens, not the canonical task slot.
   const manualOrder = tweaks.stackOrder || [];
   const compactBelowDeck = tweaks.stackCompactBelowDeck !== false;
   const showCompleted = tweaks.stackShowCompleted !== false;
@@ -512,6 +528,69 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
   };
 
   const handleDragEnd = () => resetDrag();
+
+  // ---- Touch drag-and-drop (long-press) -------------------------------------
+  // Mirrors the HTML5 drag handlers above but driven by pointer events so
+  // mobile users can long-press a card and drag it to reorder.
+  const findCardIdUnder = (el) => {
+    let cur = el;
+    while (cur && cur !== document.body) {
+      const id = cur.getAttribute && cur.getAttribute('data-card-id');
+      if (id) return { id, el: cur };
+      cur = cur.parentElement;
+    }
+    return null;
+  };
+  // Refs let the hook's window-level event listeners (mounted once on initial
+  // render) always see the latest state and props, since the closure captured
+  // by useEffect would otherwise be stale.
+  const touchHoverRef = useRef({ overId: null, overPos: null });
+  const sortedRef = useRef(sorted);
+  sortedRef.current = sorted;
+  const sortModeRef = useRef(sortMode);
+  sortModeRef.current = sortMode;
+  const touchDrag = useTouchDrag({
+    longPressMs: 350,
+    scrollContainerRef: stackBodyRef,
+    onStart: (id) => {
+      dragRef.current.id = id;
+      touchHoverRef.current = { overId: null, overPos: null };
+      setDrag(d => ({ ...d, id }));
+    },
+    onMove: (point, el) => {
+      if (!dragRef.current.id) return;
+      const hit = findCardIdUnder(el);
+      if (!hit || hit.id === dragRef.current.id) {
+        if (touchHoverRef.current.overId !== null) {
+          touchHoverRef.current = { overId: null, overPos: null };
+          setDrag(d => (d.overId == null ? d : { ...d, overId: null, overPos: null }));
+        }
+        return;
+      }
+      const r = hit.el.getBoundingClientRect();
+      const pos = (point.y < r.top + r.height / 2) ? 'before' : 'after';
+      if (touchHoverRef.current.overId === hit.id && touchHoverRef.current.overPos === pos) return;
+      touchHoverRef.current = { overId: hit.id, overPos: pos };
+      setDrag(prev => ({ ...prev, overId: hit.id, overPos: pos }));
+    },
+    onEnd: () => {
+      const draggedId = dragRef.current.id;
+      const { overId, overPos } = touchHoverRef.current;
+      if (!draggedId || !overId || overId === draggedId) { resetDrag(); return; }
+      const ids = sortedRef.current.map(t => t.id);
+      const fromIdx = ids.indexOf(draggedId);
+      if (fromIdx < 0) { resetDrag(); return; }
+      ids.splice(fromIdx, 1);
+      let toIdx = ids.indexOf(overId);
+      if (toIdx < 0) { resetDrag(); return; }
+      if (overPos === 'after') toIdx += 1;
+      ids.splice(toIdx, 0, draggedId);
+      setTweak('stackOrder', ids);
+      if (sortModeRef.current !== 'manual') setTweak('stackSort', 'manual');
+      resetDrag();
+    },
+    onCancel: () => resetDrag(),
+  });
 
   // Auto-scroll the stack-body when dragging near top/bottom edges.
   useEffect(() => {
@@ -705,6 +784,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onDragEnd={handleDragEnd}
+                    onPointerDown={touchDrag.onPointerDown}
                     focused={focusedId === t.id}
                     renaming={renamingId === t.id}
                     onFocus={setFocusedId}

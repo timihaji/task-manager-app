@@ -60,7 +60,7 @@ import {
   fetchTaxonomy, saveTaxonomy,
   fetchPeople, upsertPerson,
   subscribeTasks, subscribeTaxonomy, subscribePeople,
-  rowToTask, rowToPerson,
+  rowToTask, rowToPerson, normalizeTask,
 } from './lib/db.js';
 // ── extracted utilities ──────────────────────────────────────────────────
 import { I } from './utils/icons.jsx';
@@ -360,7 +360,7 @@ function App() {
         });
         return;
       }
-      const incoming = rollTaskDateForward(syncTaskSnooze(rowToTask(payload.new)));
+      const incoming = rollTaskDateForward(syncTaskSnooze(normalizeTask(rowToTask(payload.new))));
       if (!incoming?.id) return;
       setTasks(prev => {
         const idx = prev.findIndex(t => t.id === incoming.id);
@@ -479,8 +479,9 @@ function App() {
   const [toast,setToast]     = useState(null);
   const [toastUndoable,setToastUndoable]=useState(false);
   const [undoStack,setUndoStack]=useState([]);
-  const [navCollapsed,setNavCollapsed]=useState(false);
+  const [navCollapsed,setNavCollapsed]=useState(() => window.innerWidth <= 640);
   const [isNarrowScreen,setIsNarrowScreen]=useState(() => window.innerWidth <= 640);
+  const [tbOverflowOpen,setTbOverflowOpen]=useState(false);
   const [recents,setRecents] = useState({tags:[], projects:[]});
   const [contextMenu,setContextMenu] = useState(null); // {task, x, y}
   const [popRequest,setPopRequest] = useState(null); // {id, field}
@@ -557,6 +558,28 @@ function App() {
     const next = rollIncompleteTasksToToday(tasks, todayKey);
     if (next !== tasks) setTasks(next);
   }, [tasks, todayKey, tasksReady]);
+
+  // One-shot: null out task.groupId values that no longer match any custom
+  // group. customGroups and tasks.group_id are written separately (different
+  // tables) so a partial network failure can leave dangling refs.
+  const groupSweepDoneRef = useRef(false);
+  useEffect(() => {
+    if (!tasksReady || !settingsReady) return;
+    if (groupSweepDoneRef.current) return;
+    groupSweepDoneRef.current = true;
+    const valid = new Set((tweaks.customGroups || []).map(g => g?.id).filter(Boolean));
+    setTasks(prev => {
+      let changed = false;
+      const next = prev.map(t => {
+        if (t.groupId && !valid.has(t.groupId)) {
+          changed = true;
+          return { ...t, groupId: null };
+        }
+        return t;
+      });
+      return changed ? next : prev;
+    });
+  }, [tasksReady, settingsReady, tweaks.customGroups]);
 
   // Debounced diff-sync of local mutations to Supabase.
   useEffect(() => {
@@ -1435,6 +1458,33 @@ function App() {
     });
     const placeAtTop = (tweaks.newTaskPosition || 'top') === 'top';
     setTasks(prev=>{
+      // Stamp `position` on top-level tasks so the slot survives a refresh.
+      // Children sort via the parent's childOrder, so they don't need one.
+      if (!parentId) {
+        const dateKey = nt.date || null;
+        const bucket = prev.filter(t =>
+          (dateKey ? t.date === dateKey : !t.date) &&
+          !t.parentId && !t.archived
+        );
+        const sortedBucket = [...bucket].sort((a, b) =>
+          (Number.isFinite(a.position) ? a.position : Infinity) -
+          (Number.isFinite(b.position) ? b.position : Infinity)
+        );
+        let above = null, below = null;
+        const refId = position.beforeId || position.afterId;
+        if (refId) {
+          const idx = sortedBucket.findIndex(t => t.id === refId);
+          if (idx >= 0) {
+            if (position.afterId) { above = sortedBucket[idx]; below = sortedBucket[idx + 1]; }
+            else { above = sortedBucket[idx - 1]; below = sortedBucket[idx]; }
+          }
+        }
+        if (!refId) {
+          if (placeAtTop) below = sortedBucket[0];
+          else above = sortedBucket[sortedBucket.length - 1];
+        }
+        nt.position = computePosition(above, below);
+      }
       let next = [...prev, nt];
       if(parentId) {
         // Insert into the parent's childOrder at the requested index (before/after a sibling, or append).
@@ -1868,6 +1918,21 @@ function App() {
   };
   const onDragLeave=e=>{ if(!e.currentTarget.contains(e.relatedTarget)) { setDragOver(null); setColDropIndex(null); } };
 
+  // Pick a fractional `position` between two neighbours so a single drag-drop
+  // is captured by syncTaskDiff with one row update — the field changes,
+  // JSON.stringify differs, the diff effect fires. Without this the array
+  // splice alone is invisible to the diff and the manual order is lost on
+  // refresh (fetchTasks orders by `position` then `created_at`).
+  const computePosition = (above, below) => {
+    const A = above && Number.isFinite(above.position) ? above.position : null;
+    const B = below && Number.isFinite(below.position) ? below.position : null;
+    if (A == null && B == null) return 1;
+    if (A == null) return B - 1;
+    if (B == null) return A + 1;
+    if (Math.abs(B - A) < 1e-9) return A + 0.5; // gap collapsed; rare
+    return (A + B) / 2;
+  };
+
   // Reorder a task within a specific date column to position `index` among
   // the cards currently visible in that column. Mirrors `reorderToInbox` but
   // for a YYYY-MM-DD column key.
@@ -1880,9 +1945,10 @@ function App() {
       let oldParentId = null;
       if (moved.parentId) oldParentId = moved.parentId;
       next.splice(fromIdx, 1);
-      const newMoved = {...moved, date: dateKey, parentId: null};
       const inCol = next.filter(t => t.date===dateKey && !t.done && !t.parentId && !t.archived && !t.snoozedUntil && !t.someday);
       const targetTask = inCol[index];
+      const newPosition = computePosition(inCol[index - 1], targetTask);
+      const newMoved = {...moved, date: dateKey, parentId: null, position: newPosition};
       let insertAt;
       if (!targetTask) {
         const last = inCol[inCol.length - 1];
@@ -1912,10 +1978,11 @@ function App() {
         parentPatch = moved.parentId;
       }
       next.splice(fromIdx, 1);
-      const newMoved = {...moved, date:null, parentId:null};
       // Compute insertion point: find the inbox task at `index` (post-removal) and insert before it.
       const inboxList = next.filter(t => !t.date && !t.done && !t.parentId && !t.archived);
       const targetTask = inboxList[index];
+      const newPosition = computePosition(inboxList[index - 1], targetTask);
+      const newMoved = {...moved, date:null, parentId:null, position: newPosition};
       let insertAt;
       if(!targetTask) {
         const lastInbox = inboxList[inboxList.length - 1];
@@ -2140,7 +2207,7 @@ function App() {
       if((e.metaKey||e.ctrlKey)&&e.key==='k'){ e.preventDefault(); setPalette(p=>!p); return; }
       if((e.metaKey||e.ctrlKey)&&e.key==='\\'){ e.preventDefault(); setNavCollapsed(n=>!n); return; }
       if((e.metaKey||e.ctrlKey)&&(e.key==='z'||e.key==='Z')){ e.preventDefault(); undo(); return; }
-      if(e.key==='Escape'){ setRenamingId(null); setDrawerId(null); setSettingsOpen(false); setFocusedId(null); setPalette(false); setShortcuts(false); setAddModal(null); setFilterOpen(false); return; }
+      if(e.key==='Escape'){ setRenamingId(null); setDrawerId(null); setSettingsOpen(false); setFocusedId(null); setPalette(false); setShortcuts(false); setAddModal(null); setFilterOpen(false); clearSelection(); return; }
       if(inInput) return;
       if(e.key==='?'){ setShortcuts(s=>!s); return; }
       const flatNav = view==='stack' || view==='list' || view==='inbox' || view==='upcoming' || view==='backlog' || view==='snoozed' || view==='someday' || view==='blocked' || view==='completed' || view==='archived' || view?.type==='project' || view?.type==='tag' || view?.type==='lifeArea';
@@ -2328,6 +2395,13 @@ function App() {
     });
   };
   const clearSelection = () => setSelectedIds(new Set());
+
+  // Toggle body class so scrolling areas can pad-bottom when the bulk bar is up
+  useEffect(() => {
+    document.body.classList.toggle('has-bulk-bar', selectedTasks.length > 0);
+    return () => document.body.classList.remove('has-bulk-bar');
+  }, [selectedTasks.length]);
+
   const selectBulkScope = () => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -2642,32 +2716,38 @@ function App() {
     )}
     {/* TOPBAR */}
     <div className="topbar">
+      <button className="app-burger" onClick={()=>setNavCollapsed(c=>!c)} aria-label={navCollapsed?'Open menu':'Close menu'} title="Menu">
+        <span/><span/><span/>
+      </button>
       <div className="tb-logo"><div className="tb-icon">K</div>kanban</div>
-      <div className="tb-sep"/>
-      <div className="tb-crumb">
+      <div className="tb-sep tb-hide-mobile"/>
+      <div className="tb-crumb tb-hide-mobile">
         <span>Workspace</span><span>›</span>
         <span className="tb-crumb-active">{viewTitle}</span>
       </div>
-      <div className="tb-sep"/>
-      <div className="tb-btn-group" title="Switch view layout">
-        <button className={`tb-btn${view==='week'?' active':''}`} onClick={()=>setView('week')} title="Cards (Timeline)"><I.Cards/></button>
-        <button className={`tb-btn${view==='list'?' active':''}`} onClick={()=>setView('list')} title="List"><I.List/></button>
-        <button className={`tb-btn${view==='stack'?' active':''}`} onClick={()=>setView('stack')} title="Stack"><I.Stack/></button>
-      </div>
-      {view==='week' && <>
+      <div className="tb-secondary tb-secondary-left">
         <div className="tb-sep"/>
-        <button className="tb-btn" onClick={()=>setWeekOff(o=>o-30)}><I.Chv d="l"/></button>
-        <button className="tb-btn" onClick={resetTimelineToToday}>Today</button>
-        <button className="tb-btn" onClick={()=>setWeekOff(o=>o+30)}><I.Chv d="r"/></button>
-        <div className="tb-btn-group" title="Visible day columns including Today">
-          {['auto',4,5,7].map(o=>(
-            <button key={o} className={`tb-btn${dayWindowSetting===o?' active':''}`} onClick={()=>setTweak('dayWindow',o)}>
-              {o==='auto'?'Auto':o}
-            </button>
-          ))}
+        <div className="tb-btn-group" title="Switch view layout">
+          <button className={`tb-btn${view==='week'?' active':''}`} onClick={()=>setView('week')} title="Cards (Timeline)"><I.Cards/></button>
+          <button className={`tb-btn${view==='list'?' active':''}`} onClick={()=>setView('list')} title="List"><I.List/></button>
+          <button className={`tb-btn${view==='stack'?' active':''}`} onClick={()=>setView('stack')} title="Stack"><I.Stack/></button>
         </div>
-      </>}
+        {view==='week' && <>
+          <div className="tb-sep"/>
+          <button className="tb-btn" onClick={()=>setWeekOff(o=>o-30)}><I.Chv d="l"/></button>
+          <button className="tb-btn" onClick={resetTimelineToToday}>Today</button>
+          <button className="tb-btn" onClick={()=>setWeekOff(o=>o+30)}><I.Chv d="r"/></button>
+          <div className="tb-btn-group" title="Visible day columns including Today">
+            {['auto',4,5,7].map(o=>(
+              <button key={o} className={`tb-btn${dayWindowSetting===o?' active':''}`} onClick={()=>setTweak('dayWindow',o)}>
+                {o==='auto'?'Auto':o}
+              </button>
+            ))}
+          </div>
+        </>}
+      </div>
       <div className="tb-spacer"/>
+      <div className="tb-secondary tb-secondary-right">
       <div className="search-box">
         <I.Search/>
         <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search tasks"/>
@@ -2733,12 +2813,21 @@ function App() {
         )}
       </div>
       <div className="tb-btn-group" title="Delegations">
-        <button className="tb-btn" onClick={()=>setShowWaitingOn(v=>!v)} title="Show only delegated tasks"
-          style={showWaitingOn?{color:'var(--accent)'}:undefined}>→ Waiting</button>
-        <button className="tb-btn" onClick={()=>setShowStaleOnly(v=>!v)} title="Show only stale delegations"
-          style={showStaleOnly?{color:'#ef4444'}:undefined}>⚠ Stale</button>
-        <button className="tb-btn" onClick={()=>setView('delegations')} title="Delegations dashboard"
-          style={view==='delegations'?{color:'var(--accent)'}:undefined}>👥 Delegations</button>
+        <button className="tb-btn" onClick={()=>setShowWaitingOn(v=>!v)}
+          title="Show only delegated tasks"
+          aria-pressed={showWaitingOn}
+          aria-label="Show only delegated tasks (Waiting)"
+          style={showWaitingOn?{color:'var(--accent)'}:undefined}><I.Clock/>Waiting</button>
+        <button className="tb-btn" onClick={()=>setShowStaleOnly(v=>!v)}
+          title="Show only stale delegations"
+          aria-pressed={showStaleOnly}
+          aria-label="Show only stale delegations"
+          style={showStaleOnly?{color:'var(--danger)'}:undefined}><I.Warn/>Stale</button>
+        <button className="tb-btn" onClick={()=>setView('delegations')}
+          title="Delegations dashboard"
+          aria-pressed={view==='delegations'}
+          aria-label="Open delegations dashboard"
+          style={view==='delegations'?{color:'var(--accent)'}:undefined}><I.Deleg/>Delegations</button>
       </div>
       <button className="tb-btn" onClick={()=>setTweak('inboxCollapsed',!tweaks.inboxCollapsed)} title="Toggle inbox panel"><I.Inbox/>Inbox</button>
       <button className="tb-btn" onClick={openSettings} title="Settings">
@@ -2750,16 +2839,57 @@ function App() {
       <button className="tb-icon-btn" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')} title="Toggle theme (L)">
         {theme==='dark'?<I.Sun/>:<I.Moon/>}
       </button>
-      <button className="tb-btn primary" onClick={()=>addTask('today',D.today(),'Untitled')}><I.Plus/>New task</button>
+      </div>{/* /tb-secondary-right */}
+      <div className="filter-dd-wrap tb-overflow-wrap" onClick={e=>e.stopPropagation()}>
+        <button className={`tb-overflow-btn${filtersActive||showWaitingOn||showStaleOnly?' has-active':''}`} onClick={()=>setTbOverflowOpen(o=>!o)} aria-label="More actions" title="More">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+        </button>
+        {tbOverflowOpen && (
+          <div className="filter-dd tb-overflow-menu">
+            <div className="fdd-section">
+              <div className="fdd-label">View</div>
+              {[{v:'week',l:'Cards / Timeline'},{v:'list',l:'List'},{v:'stack',l:'Stack'}].map(o=>(
+                <div key={o.v} className={`fdd-item${view===o.v?' active':''}`}
+                  onClick={()=>{setView(o.v);setTbOverflowOpen(false);}}>{o.l}</div>
+              ))}
+            </div>
+            <div className="fdd-sep"/>
+            <div className="fdd-section">
+              <div className="fdd-label">Search</div>
+              <div style={{padding:'4px 12px 8px'}}>
+                <input className="dr-inp" style={{width:'100%'}} placeholder="Search tasks…" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} autoFocus/>
+              </div>
+            </div>
+            <div className="fdd-sep"/>
+            <div className="fdd-section">
+              <div className="fdd-item" onClick={()=>{setShowWaitingOn(v=>!v);setTbOverflowOpen(false);}}>
+                <input type="checkbox" readOnly checked={showWaitingOn}/>Waiting on others
+              </div>
+              <div className="fdd-item" onClick={()=>{setShowStaleOnly(v=>!v);setTbOverflowOpen(false);}}>
+                <input type="checkbox" readOnly checked={showStaleOnly}/>Stale only
+              </div>
+              <div className="fdd-item" onClick={()=>{setView('delegations');setTbOverflowOpen(false);}}>👥 Delegations</div>
+              <div className="fdd-item" onClick={()=>{setTweak('inboxCollapsed',!tweaks.inboxCollapsed);setTbOverflowOpen(false);}}>📥 Inbox panel</div>
+            </div>
+            <div className="fdd-sep"/>
+            <div className="fdd-section">
+              <div className="fdd-item" onClick={()=>{openSettings();setTbOverflowOpen(false);}}>⚙ Settings</div>
+              <div className="fdd-item" onClick={()=>{setPalette(true);setTbOverflowOpen(false);}}>⌘K Command palette</div>
+              <div className="fdd-item" onClick={()=>{setTheme(t=>t==='dark'?'light':'dark');setTbOverflowOpen(false);}}>{theme==='dark'?'☀ Light theme':'🌙 Dark theme'}</div>
+            </div>
+          </div>
+        )}
+      </div>
+      <button className="tb-btn primary" onClick={()=>addTask('today',D.today(),'Untitled')}><I.Plus/><span className="tb-hide-mobile">New task</span></button>
     </div>
 
     {/* BODY */}
     <div className="app-shell">
-    <div className={`app-body${filtersActive?' chk-mode':''}${selectedIds.size?' chk-mode':''}`} onClick={e=>{ setFilterOpen(false); setGroupOpen(false); if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); } }}>
+    <div className={`app-body${isNarrowScreen?' is-mobile':''}${filtersActive?' chk-mode':''}${selectedIds.size?' chk-mode':''}`} onClick={e=>{ setFilterOpen(false); setGroupOpen(false); setTbOverflowOpen(false); if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); } }}>
       <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false); if (isNarrowScreen) setNavCollapsed(true);}} collapsed={navCollapsed} theme={theme}
         activeLifeAreas={filters.lifeAreas}
         onLifeAreaToggle={id=>toggleFilter('lifeAreas',id)}/>
-      {view==='stack' && isNarrowScreen && !navCollapsed && (
+      {isNarrowScreen && !navCollapsed && (
         <div className="lnav-scrim" onClick={()=>setNavCollapsed(true)}/>
       )}
       {view==='week' ? (
@@ -2862,7 +2992,11 @@ function App() {
     </div>
     {selectedTasks.length>0 && (
       <div className="bulk-bar" onClick={e=>e.stopPropagation()}>
-        <div className="bulk-count">{selectedTasks.length} selected</div>
+        <div className="bulk-count">
+          {selectedTasks.length} selected
+          <button className="bulk-count-x" onClick={clearSelection}
+                  title="Clear selection (Esc)" aria-label="Clear selection">×</button>
+        </div>
         <button className="tb-btn" onClick={selectBulkScope} disabled={!bulkScopeIds.length || allBulkScopeSelected}>
           {allBulkScopeSelected ? `All in ${bulkScopeLabel}` : `Select all in ${bulkScopeLabel}`}
         </button>
@@ -2927,7 +3061,7 @@ function App() {
       <div className="sbar-left">
         <span>{todayCount} remaining today · {allCount} total</span>
         <div className="sbar-sep"/>
-        <span style={{color:'var(--accent)',fontFamily:'var(--mono)',fontSize:10}}>{activeTasks.filter(t=>!t.done&&!t.blocked&&(t.tags||[]).includes('focus')).length} focus blocks</span>
+        <span style={{color:'var(--accent)',fontFamily:'var(--mono)',fontSize:11.5,fontWeight:600}}>{activeTasks.filter(t=>!t.done&&!t.blocked&&(t.tags||[]).includes('focus')).length} focus blocks</span>
         {(() => {
           const n = activeTasks.filter(t=>t.blocked&&!t.done).length;
           if (!n) return null;

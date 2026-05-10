@@ -534,6 +534,9 @@ function SettingsDrawer({ open, tweaks, setTweak, taxonomy, taxonomyActions, onC
   return (
     <div className={`drawer settings-drawer${open?' open':''}`}>
       <div className="dr-hdr">
+        <button className="drawer-back" onClick={onClose} aria-label="Back" title="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
         <div style={{flex:1}}>
           <div style={{font:'600 18px/1.3 var(--font)',color:'var(--t1)'}}>Settings</div>
           <div style={{fontSize:11,color:'var(--t4)',marginTop:3}}>Appearance and board layout</div>

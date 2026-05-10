@@ -119,6 +119,16 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
             </div>
           );
         })}
+        {/* "All done for today" celebratory empty state — appears only when
+            today's column has no active or blocked tasks left AND there are
+            completed tasks to celebrate. Avoids showing on empty future/past days. */}
+        {today && active.length===0 && blocked.length===0 && done.length>0 && (
+          <div className="col-empty-celebrate">
+            <div className="cec-icon"><I.Check/></div>
+            <h4>All done for today</h4>
+            <p>Take a break, or capture the next thing.</p>
+          </div>
+        )}
         {blocked.length>0 && (
           <>
             <div className="blocked-grp-hdr" onClick={()=>onToggleBlocked?.(colKey)}>
