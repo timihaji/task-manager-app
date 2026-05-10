@@ -863,7 +863,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
               const showAfter  = wantAfter  && !(suppressEdges && suppressEdges.after);
               return (
                 <React.Fragment key={t.id}>
-                  {showBefore && <DropPreview task={draggingTask} theme={theme}/>}
+                  {showBefore && <DropPreview task={draggingTask} theme={theme} {...previewDropProps(t.id, true)}/>}
                   <StackCard
                     task={t}
                     idx={slotIdx}
@@ -900,7 +900,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                     selected={selectedIds?.has(t.id)}
                     onSelect={onSelect}
                   />
-                  {showAfter && <DropPreview task={draggingTask} theme={theme}/>}
+                  {showAfter && <DropPreview task={draggingTask} theme={theme} {...previewDropProps(t.id, false)}/>}
                 </React.Fragment>
               );
             };
