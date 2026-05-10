@@ -39,3 +39,11 @@ coverage/
 # Misc
 *.swp
 *.bak
+
+# Playwright screenshots / test artifacts
+playwright-*.png
+playwright-report/
+test-results/
+
+# Supabase CLI cache
+supabase/.temp/
