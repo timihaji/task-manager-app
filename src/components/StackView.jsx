@@ -646,18 +646,27 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
   const handleDrop = (e, targetId) => {
     e.preventDefault();
     const draggedId = dragRef.current.id || (() => { try { return e.dataTransfer.getData('text/plain'); } catch { return null; }})();
-    if (!draggedId || draggedId === targetId) { resetDrag(); return; }
+    if (!draggedId) { resetDrag(); return; }
+    // Use the last hover state as the drop anchor — not whatever's
+    // literally under the cursor at release. With displaySorted moving
+    // the source under the cursor at the hover position, the raw drop
+    // target is often the source itself; falling back to that would no-op
+    // every drop. drag.overId / drag.overPos correctly captures where
+    // the user was aiming.
+    const anchorId = drag.overId && drag.overId !== draggedId ? drag.overId : targetId;
+    const anchorPos = drag.overPos || 'before';
+    if (!anchorId || anchorId === draggedId) { resetDrag(); return; }
     const ids = sorted.map(t => t.id);
     const fromIdx = ids.indexOf(draggedId);
     if (fromIdx < 0) { resetDrag(); return; }
     ids.splice(fromIdx, 1);
-    let toIdx = ids.indexOf(targetId);
+    let toIdx = ids.indexOf(anchorId);
     if (toIdx < 0) { resetDrag(); return; }
-    if (drag.overPos === 'after') toIdx += 1;
+    if (anchorPos === 'after') toIdx += 1;
     ids.splice(toIdx, 0, draggedId);
     setTweak('stackOrder', ids);
     if (sortMode !== 'manual') setTweak('stackSort', 'manual');
-    reconcileGroupOnDrop(draggedId, targetId);
+    reconcileGroupOnDrop(draggedId, anchorId);
     resetDrag();
   };
 
