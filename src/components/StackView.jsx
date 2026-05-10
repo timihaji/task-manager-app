@@ -542,7 +542,11 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     const rect = e.currentTarget.getBoundingClientRect();
     const upper = e.clientY < rect.top + rect.height / 2;
     const anchorId = upper ? groupTasks[0].id : groupTasks[groupTasks.length-1].id;
-    if (anchorId === draggedId) { resetDrag(); return; }
+    reorderRelativeTo(draggedId, anchorId, upper);
+  };
+
+  const reorderRelativeTo = (draggedId, anchorId, upper) => {
+    if (!draggedId || draggedId === anchorId) { resetDrag(); return; }
     const ids = sorted.map(t => t.id);
     const fromIdx = ids.indexOf(draggedId);
     if (fromIdx < 0) { resetDrag(); return; }
@@ -555,6 +559,24 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     if (sortMode !== 'manual') setTweak('stackSort', 'manual');
     resetDrag();
   };
+
+  // Make the edge DropPreview itself a drop target. When the preview appears
+  // above/below the group box, the layout shift slides the cursor onto the
+  // preview. Without these handlers, dragover on the preview never calls
+  // preventDefault, the browser shows the "no-drop" cursor, and the drop
+  // is rejected even though the visual feedback says it should land there.
+  const previewDropProps = (anchorId, upper) => ({
+    onDragOver: (e) => {
+      if (!dragRef.current.id) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    },
+    onDrop: (e) => {
+      e.preventDefault();
+      const draggedId = dragRef.current.id || (() => { try { return e.dataTransfer.getData('text/plain'); } catch { return null; }})();
+      reorderRelativeTo(draggedId, anchorId, upper);
+    },
+  });
 
   const handleDrop = (e, targetId) => {
     e.preventDefault();
@@ -911,7 +933,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
               return (
                 <React.Fragment key={`__cg__${grp.id}`}>
                   {divider}
-                  {showBeforeGroup && <DropPreview task={draggingTask} theme={theme}/>}
+                  {showBeforeGroup && <DropPreview task={draggingTask} theme={theme} {...previewDropProps(firstCard.id, true)}/>}
                   <div className={`grp-box stack-grp-box${tierClass}`}
                        data-grp-first-id={firstCard.id}
                        data-grp-last-id={lastCard.id}
@@ -935,7 +957,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                       after: i === slot.tasks.length - 1,
                     }))}
                   </div>
-                  {showAfterGroup && <DropPreview task={draggingTask} theme={theme}/>}
+                  {showAfterGroup && <DropPreview task={draggingTask} theme={theme} {...previewDropProps(lastCard.id, false)}/>}
                 </React.Fragment>
               );
             });
