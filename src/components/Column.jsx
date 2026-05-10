@@ -35,6 +35,10 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
   const onStartGroupRename = cardExtras?.onStartGroupRename;
   const onGroupRenameDone = cardExtras?.onGroupRenameDone;
   const onRenameGroup = cardExtras?.onRenameGroup;
+  const onGroupDragOver = cardExtras?.onGroupDragOver;
+  const onGroupDragLeave = cardExtras?.onGroupDragLeave;
+  const onGroupDrop = cardExtras?.onGroupDrop;
+  const groupDragOver = cardExtras?.groupDragOver;
   const gbLabel = {none:'None',project:'Location',lifeArea:'Life Area',tag:'Tag',priority:'Priority'}[groupBy]||'Location';
 
   return (
@@ -59,8 +63,15 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
         {groups.map(grp=>{
           const gKey=`${colKey}:${grp.key}`;
           const open=!collapsedGrps.has(gKey);
+          const isCustom = !!grp.custom;
+          const isDropping = isCustom && groupDragOver?.groupId === grp.groupId && groupDragOver?.colKey === colKey;
+          const grpProps = isCustom ? {
+            onDragOver: e => onGroupDragOver?.(e, grp.groupId, colKey),
+            onDragLeave: e => onGroupDragLeave?.(e, grp.groupId),
+            onDrop: e => onGroupDrop?.(e, grp.groupId, colKey),
+          } : {};
           return (
-            <div key={grp.key} className={grp.label?'grp-box':'grp-free'}>
+            <div key={grp.key} className={`${grp.label?'grp-box':'grp-free'}${isDropping?' grp-drop-into':''}`} {...grpProps}>
               {grp.label && (
                 <div className={`grp-hdr${grp.custom?' grp-hdr-custom':''}`} onClick={()=>onToggleGrp(gKey)}>
                   <svg className={`grp-chv${open?' open':''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
@@ -85,12 +96,17 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                     </span>
                   )}
                   <span className="grp-cnt">{grp.tasks.length}</span>
+                  {grp.custom && (
+                    <button className="grp-add-btn"
+                            title="Add task to this group"
+                            onClick={e=>{e.stopPropagation();onAdd(colKey,date,{groupId:grp.groupId});}}>+</button>
+                  )}
                 </div>
               )}
               {open && grp.tasks.map((task,i)=>(
                 <React.Fragment key={task.id}>
                   {dragOver===colKey && draggingId && !cardDragOver && colDropIndex?.col===colKey && colDropIndex?.index===i && <DropPreview task={draggingTask} theme={theme}/>}
-                  <div className="card-add-zone" title="Add above" onClick={e=>{e.stopPropagation();onAdd(colKey,date,{beforeId:task.id});}}>
+                  <div className="card-add-zone" title="Add above" onClick={e=>{e.stopPropagation();onAdd(colKey,date,{beforeId:task.id, ...(grp.custom?{groupId:grp.groupId}:{})});}}>
                     <button tabIndex={-1}>+</button>
                   </div>
                   <TaskCard task={task} colKey={colKey} theme={theme} focused={focusedCardId===task.id}
@@ -109,7 +125,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                     getEffectiveLifeArea={cardExtras?.getEffectiveLifeArea}
                     {...(cardExtras||{})}/>
                   {i===grp.tasks.length-1 && (
-                    <div className="card-add-zone" title="Add below" onClick={e=>{e.stopPropagation();onAdd(colKey,date,{afterId:task.id});}}>
+                    <div className="card-add-zone" title="Add below" onClick={e=>{e.stopPropagation();onAdd(colKey,date,{afterId:task.id, ...(grp.custom?{groupId:grp.groupId}:{})});}}>
                       <button tabIndex={-1}>+</button>
                     </div>
                   )}
@@ -336,11 +352,22 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
           const groups = useGroups
             ? groupTasksBy(visibleInboxTasks, inboxGroupBy, cardExtras?.getEffectiveLifeArea, customGroups)
             : [{key:'_all',label:null,tasks:visibleInboxTasks}];
+          const onGroupDragOver = cardExtras?.onGroupDragOver;
+          const onGroupDragLeave = cardExtras?.onGroupDragLeave;
+          const onGroupDrop = cardExtras?.onGroupDrop;
+          const groupDragOver = cardExtras?.groupDragOver;
           return groups.map(grp=>{
             const gKey = `inbox:${grp.key}`;
             const open = !collapsedGrps?.has(gKey);
+            const isCustom = !!grp.custom;
+            const isDropping = isCustom && groupDragOver?.groupId === grp.groupId && groupDragOver?.colKey === 'inbox';
+            const grpProps = isCustom ? {
+              onDragOver: e => onGroupDragOver?.(e, grp.groupId, 'inbox'),
+              onDragLeave: e => onGroupDragLeave?.(e, grp.groupId),
+              onDrop: e => onGroupDrop?.(e, grp.groupId, 'inbox'),
+            } : {};
             return (
-              <div key={grp.key} className={grp.label?'grp-box':'grp-free'}>
+              <div key={grp.key} className={`${grp.label?'grp-box':'grp-free'}${isDropping?' grp-drop-into':''}`} {...grpProps}>
                 {grp.label && (
                   <div className={`grp-hdr${grp.custom?' grp-hdr-custom':''}`} onClick={()=>onToggleGrp?.(gKey)}>
                     <svg className={`grp-chv${open?' open':''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
@@ -358,12 +385,17 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
                       </span>
                     )}
                     <span className="grp-cnt">{grp.tasks.length}</span>
+                    {grp.custom && (
+                      <button className="grp-add-btn"
+                              title="Add task to this group"
+                              onClick={e=>{e.stopPropagation();onAdd(null,null,'Untitled',{groupId:grp.groupId});}}>+</button>
+                    )}
                   </div>
                 )}
                 {open && grp.tasks.map((task,i)=>(
                   <React.Fragment key={task.id}>
                     {!useGroups && dragOver==='inbox' && draggingId && !cardDragOver && colDropIndex?.col==='inbox' && colDropIndex?.index===i && <DropPreview task={draggingTask} theme={theme}/>}
-                    {insertable && <div className="card-add-zone" title="Add above" onClick={e=>{e.stopPropagation();onAdd(null,null,'Untitled',{beforeId:task.id});}}>
+                    {insertable && <div className="card-add-zone" title="Add above" onClick={e=>{e.stopPropagation();onAdd(null,null,'Untitled',{beforeId:task.id, ...(grp.custom?{groupId:grp.groupId}:{})});}}>
                       <button tabIndex={-1}>+</button>
                     </div>}
                     <TaskCard task={task} colKey={task.date||'inbox'} theme={theme} focused={focusedCardId===task.id}

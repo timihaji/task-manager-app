@@ -471,6 +471,7 @@ function App() {
   const [colDropIndex,setColDropIndex]=useState(null); // {col, index}
   const [collapsedProjects,setCollapsedProjects]=useState(new Set());
   const [cardDragOver,setCardDragOver]=useState(null); // {targetId, index?}
+  const [groupDragOver,setGroupDragOver]=useState(null); // {groupId, colKey}
   const [confirmDialog,setConfirmDialog]=useState(null); // {message, onConfirm}
   const [focusedId,setFocusedId]=useState(null);
   const [selectedIds,setSelectedIds]=useState(new Set());
@@ -1437,6 +1438,15 @@ function App() {
       const parent = taskById(parentId);
       if(parent) inherit = {project:parent.project, tags:[...(parent.tags||[])], priority:parent.priority, pri:parent.pri||parent.priority};
     }
+    // Group context: explicit position.groupId wins; otherwise inherit from a
+    // sibling reference (beforeId / afterId) so "+ between members" lands in
+    // the same group. validGid guards against stale group references.
+    const validGid = new Set((tweaks.customGroups||[]).map(g=>g.id));
+    let groupId = position.groupId && validGid.has(position.groupId) ? position.groupId : null;
+    if (!groupId && (position.beforeId || position.afterId)) {
+      const ref = taskById(position.beforeId || position.afterId);
+      if (ref?.groupId && validGid.has(ref.groupId)) groupId = ref.groupId;
+    }
     const trimmedTitle = title || 'Untitled';
     const explicitLifeArea = position.lifeArea;
     const inheritedProject = inherit.project || position.project || null;
@@ -1455,6 +1465,7 @@ function App() {
       parentId,
       lifeArea: nextLifeArea,
       ...inherit,
+      ...(groupId ? { groupId } : {}),
     });
     const placeAtTop = (tweaks.newTaskPosition || 'top') === 'top';
     setTasks(prev=>{
@@ -1889,7 +1900,7 @@ function App() {
       setTimeout(() => { try { clone.remove(); } catch {} }, 0);
     }
   };
-  const onDragEnd=()=>{ setDrag(null); setDragOver(null); setCardDragOver(null); setColDropIndex(null); };
+  const onDragEnd=()=>{ setDrag(null); setDragOver(null); setCardDragOver(null); setColDropIndex(null); setGroupDragOver(null); };
   const onDragOver=(e,col)=>{
     e.preventDefault();
     setDragOver(col);
@@ -2092,6 +2103,50 @@ function App() {
     const dropIndex = cardDragOver?.targetId === target.id ? cardDragOver.index : undefined;
     handleCardDrop(srcIds, target.id, dropIndex);
     setDrag(null); setDragOver(null); setCardDragOver(null);
+  };
+
+  // Drop a card (or selection) onto a custom group's box. Joins the group and,
+  // for date columns, lands the task on that day. Cross-column drag onto a
+  // group both moves the date and assigns groupId in one shot.
+  const onGroupDragOver = (e, groupId, colKey) => {
+    if(!drag) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setGroupDragOver(prev => (prev?.groupId === groupId && prev?.colKey === colKey) ? prev : { groupId, colKey });
+    setColDropIndex(null);
+  };
+  const onGroupDragLeave = (e, groupId) => {
+    if(!e.currentTarget.contains(e.relatedTarget)) {
+      setGroupDragOver(prev => prev?.groupId === groupId ? null : prev);
+    }
+  };
+  const onGroupDrop = (e, groupId, colKey) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setGroupDragOver(null);
+    if(!drag) { return; }
+    const srcIds = getDragSourceIds();
+    const newDate = colKey ? (colKey === 'inbox' ? null : colKey) : undefined;
+    pushSnapshotUndo();
+    setTasks(prev => {
+      const idSet = new Set(srcIds);
+      // Strip moved sources from any old project's childOrder so a project
+      // child can join a custom group cleanly.
+      const next = prev.map(t => {
+        if(idSet.has(t.id)) {
+          const patch = { groupId, parentId: null };
+          if(newDate !== undefined) patch.date = newDate;
+          return applyTaskPatch(t, patch);
+        }
+        if((t.childOrder||[]).some(id => idSet.has(id))) {
+          return { ...t, childOrder: t.childOrder.filter(id => !idSet.has(id)) };
+        }
+        return t;
+      });
+      return next;
+    });
+    setDrag(null); setDragOver(null); setCardDragOver(null); setColDropIndex(null);
   };
 
   // Snapshot the entire tasks array for atomic undo of multi-task ops.
@@ -2646,6 +2701,10 @@ function App() {
     onStartGroupRename: (id) => setRenamingGroupId(id),
     onGroupRenameDone: () => setRenamingGroupId(null),
     onRenameGroup: renameGroup,
+    onGroupDragOver,
+    onGroupDragLeave,
+    onGroupDrop,
+    groupDragOver,
   };
   const renderTimelineColumn = (date, keyPrefix='') => {
     const colKey=D.str(date);
@@ -2970,7 +3029,7 @@ function App() {
           renamingId={renamingId}
           setRenamingId={setRenamingId}
           onContextMenu={onCardContextMenu}
-          onAddNew={()=>addTask('inbox', null, 'Untitled')}
+          onAddNew={(opts)=>addTask('inbox', null, 'Untitled', opts || {})}
           navCollapsed={navCollapsed}
           onToggleNav={()=>setNavCollapsed(c=>!c)}
           selectedIds={selectedIds}

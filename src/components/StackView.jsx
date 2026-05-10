@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { I } from '../utils/icons.jsx';
 import { D, parseTimeEst, fmtTimeEst, PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREA_NAMES } from '../data.js';
 import { lifeAreaPalette } from '../utils/colors.js';
@@ -404,6 +404,13 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                              navCollapsed, onToggleNav,
                              selectedIds, onSelect, onMarqueeStart,
                              renamingGroupId, onStartGroupRename, onGroupRenameDone, onRenameGroup }) {
+  // Lookup task by id from the live list — used to consult the dragged
+  // task's current groupId when deciding whether a drop reassigns it.
+  const taskByIdMap = useMemo(() => {
+    const m = new Map();
+    (allTasks || []).forEach(t => m.set(t.id, t));
+    return m;
+  }, [allTasks]);
   const sortMode = tweaks.stackSort || 'smart';
   // Stack-view-specific manual order, persisted via tweaks → user_settings.
   // Intentionally separate from `task.position` (which drives week/day/inbox
@@ -464,6 +471,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     const i = ids.indexOf(id);
     if (i <= 0) return;
     const reordered = [id, ...ids.slice(0, i), ...ids.slice(i+1)];
+    captureFlipSnapshot();
     setTweak('stackOrder', reordered);
     if (sortMode !== 'manual') setTweak('stackSort', 'manual');
   };
@@ -473,6 +481,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     const i = ids.indexOf(id);
     if (i < 0 || i === ids.length - 1) return;
     const reordered = [...ids.slice(0, i), ...ids.slice(i+1), id];
+    captureFlipSnapshot();
     setTweak('stackOrder', reordered);
     if (sortMode !== 'manual') setTweak('stackSort', 'manual');
   };
@@ -499,6 +508,55 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     dragRef.current.id = null;
     setDrag({ id: null, overId: null, overPos: null });
   };
+
+  // FLIP animation: when a reorder fires, capture every visible card's top
+  // position right before the state update, then in useLayoutEffect compare
+  // to the new position and slide each card from old → new. The dragged
+  // card is intentionally skipped — during drag it was collapsed (height 0)
+  // so its "old" position is the gap, and animating it from y=0 down to the
+  // destination would look like a confused fall. Letting it just appear at
+  // the destination matches the user's mental model: the preview was
+  // already there, the real card just replaces it.
+  const flipRef = useRef(null);
+  const captureFlipSnapshot = () => {
+    if (!stackBodyRef.current) return;
+    const positions = new Map();
+    const cards = stackBodyRef.current.querySelectorAll('[data-card-id]');
+    cards.forEach(c => {
+      const id = c.getAttribute('data-card-id');
+      if (id) positions.set(id, c.getBoundingClientRect().top);
+    });
+    flipRef.current = { positions, skipId: dragRef.current.id };
+  };
+
+  useLayoutEffect(() => {
+    const snap = flipRef.current;
+    if (!snap || !stackBodyRef.current) return;
+    flipRef.current = null;
+    const { positions, skipId } = snap;
+    const cards = stackBodyRef.current.querySelectorAll('[data-card-id]');
+    cards.forEach(c => {
+      const id = c.getAttribute('data-card-id');
+      if (!id || id === skipId) return;
+      const oldTop = positions.get(id);
+      if (oldTop == null) return;
+      const newTop = c.getBoundingClientRect().top;
+      const dy = oldTop - newTop;
+      if (Math.abs(dy) < 1) return;
+      c.style.transition = 'none';
+      c.style.transform = `translateY(${dy}px)`;
+      requestAnimationFrame(() => {
+        c.style.transition = 'transform 220ms cubic-bezier(.2,.8,.2,1)';
+        c.style.transform = '';
+        const cleanup = () => {
+          c.style.transition = '';
+          c.style.transform = '';
+          c.removeEventListener('transitionend', cleanup);
+        };
+        c.addEventListener('transitionend', cleanup);
+      });
+    });
+  });
 
   const handleDragStart = (e, id) => {
     if (e.target.closest('.scard-subs') || e.target.closest('button') || e.target.closest('.scard-chk')) {
@@ -588,6 +646,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     if (toIdx < 0) { resetDrag(); return; }
     if (!upper) toIdx += 1;
     ids.splice(toIdx, 0, draggedId);
+    captureFlipSnapshot();
     setTweak('stackOrder', ids);
     if (sortMode !== 'manual') setTweak('stackSort', 'manual');
     resetDrag();
@@ -611,6 +670,20 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     },
   });
 
+  // Reassign the dragged task's groupId when a drop crosses a group boundary.
+  // - Dropping on a card that lives inside group X joins the dragged task to X.
+  // - Dropping on an ungrouped card while the dragged task is in a group
+  //   removes it from that group (so users have a way to ungroup via drag).
+  const reconcileGroupOnDrop = (draggedId, targetId) => {
+    const dragged = taskByIdMap.get(draggedId);
+    const target  = taskByIdMap.get(targetId);
+    if (!dragged) return;
+    const validGid = new Set((tweaks?.customGroups || []).map(g => g.id));
+    const targetGid = target?.groupId && validGid.has(target.groupId) ? target.groupId : null;
+    const draggedGid = dragged.groupId && validGid.has(dragged.groupId) ? dragged.groupId : null;
+    if (targetGid !== draggedGid) onUpdate?.(draggedId, { groupId: targetGid });
+  };
+
   const handleDrop = (e, targetId) => {
     e.preventDefault();
     const draggedId = dragRef.current.id || (() => { try { return e.dataTransfer.getData('text/plain'); } catch { return null; }})();
@@ -623,8 +696,10 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     if (toIdx < 0) { resetDrag(); return; }
     if (drag.overPos === 'after') toIdx += 1;
     ids.splice(toIdx, 0, draggedId);
+    captureFlipSnapshot();
     setTweak('stackOrder', ids);
     if (sortMode !== 'manual') setTweak('stackSort', 'manual');
+    reconcileGroupOnDrop(draggedId, targetId);
     resetDrag();
   };
 
@@ -717,6 +792,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
       if (toIdx < 0) { resetDrag(); return; }
       if (overPos === 'after') toIdx += 1;
       ids.splice(toIdx, 0, draggedId);
+      captureFlipSnapshot();
       setTweak('stackOrder', ids);
       if (sortModeRef.current !== 'manual') setTweak('stackSort', 'manual');
       resetDrag();
@@ -1011,6 +1087,9 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                               title="Double-click to rename">{grp.name}</span>
                       )}
                       <span className="grp-cnt">{slot.tasks.length}</span>
+                      <button className="grp-add-btn"
+                              title="Add task to this group"
+                              onClick={e=>{ e.stopPropagation(); onAddNew?.({groupId: grp.id}); }}>+</button>
                     </div>
                     {slot.tasks.map((t, i) => renderCard(t, slotIdx, i === 0, slots.length, {
                       before: i === 0,

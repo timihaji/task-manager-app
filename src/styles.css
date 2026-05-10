@@ -227,6 +227,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);display:flex;f
 .grp-hdr-custom .grp-name{font-weight:700;cursor:text}
 .grp-hdr-custom .grp-name:hover{text-decoration:underline}
 .grp-name-edit{flex:1;background:var(--surface);border:1px solid var(--accent);border-radius:3px;padding:1px 5px;font:inherit;font-size:10.5px;font-weight:700;color:var(--t1);outline:none;min-width:60px;max-width:180px}
+.grp-add-btn{background:transparent;border:1px solid transparent;color:var(--t4);width:16px;height:16px;line-height:1;border-radius:3px;font-size:13px;font-weight:600;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .12s,color .12s,border-color .12s}
+.grp-hdr:hover .grp-add-btn{color:var(--t2)}
+.grp-add-btn:hover{background:var(--surface-2);color:var(--accent);border-color:var(--border-s)}
+.grp-box.grp-drop-into{outline:2px dashed var(--accent);outline-offset:1px;background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
 .stack-grp-box{margin:8px 0;padding:6px 8px}
 .stack-grp-box > .grp-hdr{padding:2px 4px 4px}
 /* Tier highlight on a custom-group slot lives on the group box, not on
@@ -863,8 +867,27 @@ body.marquee-active *{user-select:none !important}
 
 /* === STACK PHASE 4: drag-reorder === */
 .scard{user-select:none}
-.scard.is-dragging{opacity:.4;transform:scale(.985);box-shadow:var(--shadow-lg);cursor:grabbing}
-.scard.is-dragging:hover{transform:scale(.985)}
+/* Hide the source card during drag so the user only sees two things: the
+   cursor's HTML5 ghost (set in handleDragStart) and the destination
+   preview. Leaving the source visible at the original location made the
+   drop feel like a snap — the card "teleported" from old to new spot on
+   release. With the source removed from layout, the preview already
+   occupies the destination slot at full size, so when the drop fires the
+   re-render is essentially a class swap (preview → real card) with no
+   visible movement. The element stays in the DOM (display:none would also
+   work) so dragend keeps firing. */
+.scard.is-dragging{
+  opacity:0;
+  pointer-events:none;
+  max-height:0;
+  min-height:0;
+  padding-top:0;padding-bottom:0;
+  margin-top:0;margin-bottom:0;
+  border-width:0;
+  overflow:hidden;
+  cursor:grabbing;
+}
+.scard.is-dragging:hover{transform:none;box-shadow:none}
 /* Drop indicator is a dimmed-out clone of the dragged card, rendered at the
    insertion point with the destination tier's styling. Sharing the .scard
    renderer keeps dimensions and chips pixel-aligned with the post-drop
