@@ -229,6 +229,32 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);display:flex;f
 .grp-name-edit{flex:1;background:var(--surface);border:1px solid var(--accent);border-radius:3px;padding:1px 5px;font:inherit;font-size:10.5px;font-weight:700;color:var(--t1);outline:none;min-width:60px;max-width:180px}
 .stack-grp-box{margin:8px 0;padding:6px 8px}
 .stack-grp-box > .grp-hdr{padding:2px 4px 4px}
+/* Tier highlight on a custom-group slot lives on the group box, not on
+   each member card — otherwise every card in a NOW group is wrapped in
+   its own blue glow and the group reads as several stacked NOW slots
+   instead of one. The .scard.is-* rules below revert the per-card
+   treatment when the card sits inside a tiered group box. */
+.stack-grp-box.is-now{
+  border-color:var(--accent);
+  border-width:1.5px;
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 28%,transparent),var(--shadow-lg);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,var(--surface)),var(--surface));
+}
+.stack-grp-box.is-now .scard.is-now{
+  border:1px solid var(--border-s);
+  box-shadow:var(--shadow);
+  background:var(--surface);
+}
+.stack-grp-box.is-deck{
+  border-color:color-mix(in srgb,var(--accent) 28%,var(--border-s));
+  border-left:3px solid color-mix(in srgb,var(--accent) 45%,var(--border-s));
+}
+.stack-grp-box.is-deck .scard.is-deck{
+  border:1px solid var(--border-s);
+  border-left:1px solid var(--border-s);
+}
+.stack-grp-box.is-later{opacity:.82}
+.stack-grp-box.is-later .scard.is-later{opacity:1}
 .scard.selected{box-shadow:inset 0 0 0 2px var(--accent), var(--shadow)}
 
 /* Marquee selection rectangle (Shift+drag on board / stack) */
