@@ -512,11 +512,12 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
   // FLIP animation: when a reorder fires, capture every visible card's top
   // position right before the state update, then in useLayoutEffect compare
   // to the new position and slide each card from old → new. The dragged
-  // card is intentionally skipped — during drag it was collapsed (height 0)
-  // so its "old" position is the gap, and animating it from y=0 down to the
-  // destination would look like a confused fall. Letting it just appear at
-  // the destination matches the user's mental model: the preview was
-  // already there, the real card just replaces it.
+  // card is included now — its old position is its dimmed-but-visible
+  // location at the original slot, so animating it from there to the
+  // destination is the smooth "slides into place" effect we want. (Earlier
+  // this skipped the dragged card because the source was being collapsed
+  // to 0 height during drag, making the "old" position the gap and the
+  // animation a confused fall; the source is no longer collapsed.)
   const flipRef = useRef(null);
   const captureFlipSnapshot = () => {
     if (!stackBodyRef.current) return;
@@ -526,18 +527,18 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
       const id = c.getAttribute('data-card-id');
       if (id) positions.set(id, c.getBoundingClientRect().top);
     });
-    flipRef.current = { positions, skipId: dragRef.current.id };
+    flipRef.current = { positions };
   };
 
   useLayoutEffect(() => {
     const snap = flipRef.current;
     if (!snap || !stackBodyRef.current) return;
     flipRef.current = null;
-    const { positions, skipId } = snap;
+    const { positions } = snap;
     const cards = stackBodyRef.current.querySelectorAll('[data-card-id]');
     cards.forEach(c => {
       const id = c.getAttribute('data-card-id');
-      if (!id || id === skipId) return;
+      if (!id) return;
       const oldTop = positions.get(id);
       if (oldTop == null) return;
       const newTop = c.getBoundingClientRect().top;

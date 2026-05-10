@@ -867,27 +867,16 @@ body.marquee-active *{user-select:none !important}
 
 /* === STACK PHASE 4: drag-reorder === */
 .scard{user-select:none}
-/* Hide the source card during drag so the user only sees two things: the
-   cursor's HTML5 ghost (set in handleDragStart) and the destination
-   preview. Leaving the source visible at the original location made the
-   drop feel like a snap — the card "teleported" from old to new spot on
-   release. With the source removed from layout, the preview already
-   occupies the destination slot at full size, so when the drop fires the
-   re-render is essentially a class swap (preview → real card) with no
-   visible movement. The element stays in the DOM (display:none would also
-   work) so dragend keeps firing. */
-.scard.is-dragging{
-  opacity:0;
-  pointer-events:none;
-  max-height:0;
-  min-height:0;
-  padding-top:0;padding-bottom:0;
-  margin-top:0;margin-bottom:0;
-  border-width:0;
-  overflow:hidden;
-  cursor:grabbing;
-}
-.scard.is-dragging:hover{transform:none;box-shadow:none}
+/* Source-card styling during drag. Earlier this rule collapsed the source
+   to height 0 to eliminate the "card teleports" feeling on drop, but in
+   Chromium that aggressive layout change immediately after dragstart
+   sometimes cancels the drag entirely — the browser reads the source
+   changing dramatically as a sign the drag is no longer valid. Keep the
+   source in layout, just dimmed; the FLIP pass on release slides every
+   card (including the dragged one) from its drag-state position to its
+   post-drop position, so the snap is gone without the abort risk. */
+.scard.is-dragging{opacity:.4;transform:scale(.985);box-shadow:var(--shadow-lg);cursor:grabbing}
+.scard.is-dragging:hover{transform:scale(.985)}
 /* Drop indicator is a dimmed-out clone of the dragged card, rendered at the
    insertion point with the destination tier's styling. Sharing the .scard
    renderer keeps dimensions and chips pixel-aligned with the post-drop
