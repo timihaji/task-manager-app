@@ -66,6 +66,9 @@ import {
 import { I } from './utils/icons.jsx';
 import { TIME_PRESETS, TIME_MORE, PRI_INFO, SNOOZE_OPTS } from './utils/constants.js';
 import { parseNLDate } from './utils/parseNLDate.js';
+import { DndContext, DragOverlay } from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
+import { useDndSensors, getInsertionIndex, compositeCollisionDetection } from './utils/dnd.js';
 
 // ── extracted leaf components ────────────────────────────────────────────
 import { CardPopover } from './components/CardPopover.jsx';
@@ -466,12 +469,9 @@ function App() {
     const next = typeof updater === 'function' ? updater(prev) : updater;
     setTweak({ recentBlockReasons: next });
   };
-  const [drag,setDrag]       = useState(null); // {taskId,fromCol}
-  const [dragOver,setDragOver]= useState(null);
-  const [colDropIndex,setColDropIndex]=useState(null); // {col, index}
   const [collapsedProjects,setCollapsedProjects]=useState(new Set());
-  const [cardDragOver,setCardDragOver]=useState(null); // {targetId, index?}
-  const [groupDragOver,setGroupDragOver]=useState(null); // {groupId, colKey}
+  // dnd-kit drag state — single slot, replaces the five legacy HTML5 slots.
+  const [activeDrag,setActiveDrag]=useState(null); // {id, kind, fromCol?}
   const [confirmDialog,setConfirmDialog]=useState(null); // {message, onConfirm}
   const [focusedId,setFocusedId]=useState(null);
   const [selectedIds,setSelectedIds]=useState(new Set());
@@ -1918,65 +1918,6 @@ function App() {
     document.addEventListener('mouseup', onUp);
   };
 
-  // drag & drop
-  const onDragStart=(e,id,col)=>{
-    setDrag({taskId:id,fromCol:col});
-    e.dataTransfer.effectAllowed='move';
-    // Some browsers refuse to start a drag without payload — set a no-op string.
-    try { e.dataTransfer.setData('text/plain', String(id)); } catch {}
-    // Build a Trello-style drag preview: a clean clone of the card with a
-    // slight tilt and a lifted shadow that follows the cursor. The original
-    // card fades to a placeholder via the .dragging CSS class.
-    const card = e.currentTarget;
-    if (card && e.dataTransfer.setDragImage) {
-      const rect = card.getBoundingClientRect();
-      const clone = card.cloneNode(true);
-      clone.classList.remove('dragging','focused','selected','spawning','card-drop-target');
-      clone.style.position = 'fixed';
-      clone.style.top = '-9999px';
-      clone.style.left = '-9999px';
-      clone.style.width = rect.width + 'px';
-      clone.style.transform = 'rotate(3deg)';
-      clone.style.opacity = '1';
-      clone.style.boxShadow = '0 12px 28px rgba(0,0,0,.35)';
-      clone.style.pointerEvents = 'none';
-      clone.style.background = getComputedStyle(card).backgroundColor || 'var(--surface)';
-      document.body.appendChild(clone);
-      try {
-        e.dataTransfer.setDragImage(clone, e.clientX - rect.left, e.clientY - rect.top);
-      } catch {}
-      setTimeout(() => { try { clone.remove(); } catch {} }, 0);
-    }
-  };
-  const onDragEnd=()=>{ setDrag(null); setDragOver(null); setCardDragOver(null); setColDropIndex(null); setGroupDragOver(null); };
-  const onDragOver=(e,col)=>{
-    e.preventDefault();
-    setDragOver(col);
-    // Compute insertion index based on mouseY among direct cards in the col-body.
-    const body = e.currentTarget.querySelector?.('.col-body');
-    if(!body) return;
-    const cards = [...body.querySelectorAll('.card')].filter(c => !c.parentElement.closest('.card'));
-    let index = cards.length;
-    for(let i=0;i<cards.length;i++){
-      const r = cards[i].getBoundingClientRect();
-      if(e.clientY < r.top + r.height/2) { index = i; break; }
-    }
-    // Suppress the drop placeholder when the proposed position is exactly
-    // where the dragged card already sits — both the slot above and the slot
-    // below itself are no-op moves, so showing a placeholder there is
-    // misleading.
-    const draggedId = drag?.taskId;
-    if (draggedId && drag?.fromCol === col) {
-      const draggedDomIdx = cards.findIndex(c => c.dataset.cardId === draggedId);
-      if (draggedDomIdx !== -1 && (index === draggedDomIdx || index === draggedDomIdx + 1)) {
-        setColDropIndex(prev => prev ? null : prev);
-        return;
-      }
-    }
-    setColDropIndex(prev => (prev?.col===col && prev?.index===index) ? prev : {col, index});
-  };
-  const onDragLeave=e=>{ if(!e.currentTarget.contains(e.relatedTarget)) { setDragOver(null); setColDropIndex(null); } };
-
   // Pick a fractional `position` between two neighbours so a single drag-drop
   // is captured by syncTaskDiff with one row update — the field changes,
   // JSON.stringify differs, the diff effect fires. Without this the array
@@ -2057,148 +1998,137 @@ function App() {
     });
   };
 
-  const onDrop=(e,targetCol)=>{
-    e.preventDefault();
-    if(!drag){setDragOver(null);setColDropIndex(null);return;}
-    if(cardDragOver){ setDragOver(null); setColDropIndex(null); return; } // a card-level drop will handle this
-    const task=taskById(drag.taskId); if(!task){setDragOver(null);setColDropIndex(null);return;}
-    // Inbox reorder: drop into inbox at a specific index.
-    if(targetCol === 'inbox' && colDropIndex && colDropIndex.col === 'inbox') {
-      pushSnapshotUndo();
-      reorderToInbox(drag.taskId, colDropIndex.index);
-      setDrag(null); setDragOver(null); setCardDragOver(null); setColDropIndex(null);
-      return;
-    }
-    // Date column reorder (Trello-style within-column move): drop into a
-    // specific slot of a YYYY-MM-DD column.
-    if (targetCol !== 'inbox' && colDropIndex && colDropIndex.col === targetCol) {
-      pushSnapshotUndo();
-      reorderInDate(drag.taskId, targetCol, colDropIndex.index);
-      setDrag(null); setDragOver(null); setCardDragOver(null); setColDropIndex(null);
-      return;
-    }
-    const newDate = targetCol==='inbox'?null:targetCol;
-    // If dragging a child OUT of its project, clear parentId and remove from former parent's childOrder.
-    if(task.parentId) {
-      const parent = taskById(task.parentId);
-      pushSnapshotUndo();
-      setTasks(prev => prev.map(t => {
-        if(t.id===task.id) return applyTaskPatch(t, { date:newDate, parentId:null });
-        if(parent && t.id===parent.id) return {...t, childOrder:(t.childOrder||[]).filter(cid=>cid!==task.id)};
-        return t;
-      }));
-    } else if(drag.fromCol !== targetCol) {
-      updateTask(drag.taskId,{date:newDate});
-    }
-    setDrag(null); setDragOver(null); setCardDragOver(null); setColDropIndex(null);
-  };
-
-  // ── card-level drag (drop on a card to nest into a project) ──
-  // Determine the source set: bulk-aware. If dragged card is in selection, use whole selection.
-  const getDragSourceIds = () => {
-    if(!drag) return [];
-    if(selectedIds.has(drag.taskId) && selectedIds.size > 1) return [...selectedIds];
-    return [drag.taskId];
-  };
-  const onCardDragOver = (e, target) => {
-    if(!drag) return;
-    // Only intercept for project nesting. Non-project cards let the event bubble
-    // to the column so the reorder handler can compute insertion position.
-    if(target.cardType !== 'project') {
-      setCardDragOver(null);
-      return;
-    }
-    e.preventDefault();
-    e.stopPropagation();
-    let index;
-    // determine insertion index by mouse Y vs children
-    const body = e.currentTarget.querySelector('.card-project-body');
-    let childEls = [];
-    if(body) {
-      childEls = [...body.querySelectorAll(':scope > .card')];
-      index = childEls.length;
-      for(let i=0;i<childEls.length;i++) {
-        const r = childEls[i].getBoundingClientRect();
-        if(e.clientY < r.top + r.height/2) { index = i; break; }
-      }
-    } else {
-      index = 0;
-    }
-    // Suppress the placeholder when the proposed slot is exactly where the
-    // dragged child already sits — both the slot above and below itself are
-    // no-op moves, so showing a preview there is misleading.
-    const draggedId = drag.taskId;
-    if (draggedId && childEls.length) {
-      const draggedDomIdx = childEls.findIndex(c => c.dataset.cardId === draggedId);
-      if (draggedDomIdx !== -1 && (index === draggedDomIdx || index === draggedDomIdx + 1)) {
-        setCardDragOver(prev => prev?.targetId===target.id ? null : prev);
-        return;
-      }
-    }
-    setCardDragOver(prev => (prev?.targetId===target.id && prev?.index===index) ? prev : {targetId:target.id, index});
-  };
-  const onCardDragLeave = (e, target) => {
-    if(!e.currentTarget.contains(e.relatedTarget)) {
-      setCardDragOver(prev => prev?.targetId===target.id ? null : prev);
-    }
-  };
-  const onCardDrop = (e, target) => {
-    if(target.cardType !== 'project') return; // let column handle reorder
-    e.preventDefault();
-    e.stopPropagation();
-    if(!drag) return;
-    const srcIds = getDragSourceIds();
-    const dropIndex = cardDragOver?.targetId === target.id ? cardDragOver.index : undefined;
-    handleCardDrop(srcIds, target.id, dropIndex);
-    setDrag(null); setDragOver(null); setCardDragOver(null);
-  };
-
-  // Drop a card (or selection) onto a custom group's box. Joins the group and,
-  // for date columns, lands the task on that day. Cross-column drag onto a
-  // group both moves the date and assigns groupId in one shot.
-  const onGroupDragOver = (e, groupId, colKey) => {
-    if(!drag) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = 'move';
-    setGroupDragOver(prev => (prev?.groupId === groupId && prev?.colKey === colKey) ? prev : { groupId, colKey });
-    setColDropIndex(null);
-  };
-  const onGroupDragLeave = (e, groupId) => {
-    if(!e.currentTarget.contains(e.relatedTarget)) {
-      setGroupDragOver(prev => prev?.groupId === groupId ? null : prev);
-    }
-  };
-  const onGroupDrop = (e, groupId, colKey) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setGroupDragOver(null);
-    if(!drag) { return; }
-    const srcIds = getDragSourceIds();
-    const newDate = colKey ? (colKey === 'inbox' ? null : colKey) : undefined;
-    pushSnapshotUndo();
-    setTasks(prev => {
-      const idSet = new Set(srcIds);
-      // Strip moved sources from any old project's childOrder so a project
-      // child can join a custom group cleanly.
-      const next = prev.map(t => {
-        if(idSet.has(t.id)) {
-          const patch = { groupId, parentId: null };
-          if(newDate !== undefined) patch.date = newDate;
-          return applyTaskPatch(t, patch);
-        }
-        if((t.childOrder||[]).some(id => idSet.has(id))) {
-          return { ...t, childOrder: t.childOrder.filter(id => !idSet.has(id)) };
-        }
-        return t;
-      });
-      return next;
-    });
-    setDrag(null); setDragOver(null); setCardDragOver(null); setColDropIndex(null);
-  };
-
   // Snapshot the entire tasks array for atomic undo of multi-task ops.
   const pushSnapshotUndo = () => setUndoStack(s => [...s.slice(-9), {bulk:true, before:tasks}]);
+
+  // ── dnd-kit unified drag handlers ──────────────────────────────────────
+  // Sensors + start/end callbacks replace the four separate HTML5 implementations
+  // (Stack, Timeline, Projects, Groups). Each draggable's data.current.kind
+  // tells onDragEnd how to route.
+  const dndSensors = useDndSensors();
+  const dndOnDragStart = (event) => {
+    const data = event.active.data.current || {};
+    const srcId = String(event.active.id);
+    // Capture the source card's HTML so the DragOverlay can render an identical
+    // ghost — chips, priority bars, project progress, the whole thing — rather
+    // than a stub with just the title.
+    let srcHTML = null;
+    try {
+      const el = document.querySelector(`[data-card-id="${srcId}"]`);
+      if (el) {
+        const clone = el.cloneNode(true);
+        clone.removeAttribute('style');
+        clone.classList.remove('is-dragging','dragging','focused','selected','spawning','card-drop-target');
+        srcHTML = clone.outerHTML;
+      }
+    } catch {}
+    setActiveDrag({ id: srcId, kind: data.kind || 'task', fromCol: data.fromCol, srcHTML });
+    document.body.dataset.dndActive = 'true';
+  };
+  const dndOnDragEnd = (event) => {
+    const { active, over } = event;
+    const aData = active.data.current || {};
+    const oData = over?.data.current || {};
+    const activeId = String(active.id);
+    try {
+      if (!over) return;
+
+      // Stack reorder — both source and target are stack tasks.
+      if (aData.kind === 'stack-task' && oData.kind === 'stack-task') {
+        const ids = aData.sortableIds || [];
+        const fromIdx = ids.indexOf(activeId);
+        const toIdx = ids.indexOf(String(over.id));
+        if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
+          const next = arrayMove(ids, fromIdx, toIdx);
+          setTweak('stackOrder', next);
+          const stackSort = tweaks.stackSort;
+          if (stackSort && stackSort !== 'manual') setTweak('stackSort', 'manual');
+          const targetTask = taskById(String(over.id));
+          const draggedTask = taskById(activeId);
+          if (draggedTask && targetTask) {
+            const validGid = new Set((tweaks?.customGroups || []).map(g => g.id));
+            const tg = targetTask.groupId && validGid.has(targetTask.groupId) ? targetTask.groupId : null;
+            const dg = draggedTask.groupId && validGid.has(draggedTask.groupId) ? draggedTask.groupId : null;
+            if (tg !== dg) updateTask(activeId, { groupId: tg });
+          }
+        }
+        return;
+      }
+
+      // Timeline / Inbox / Project reorder + cross-column move.
+      if (aData.kind === 'task') {
+        // Drop on a project card (not on a child) → nest into project.
+        if (oData.kind === 'project-target') {
+          const srcIds = selectedIds.has(activeId) && selectedIds.size > 1 ? [...selectedIds] : [activeId];
+          handleCardDrop(srcIds, oData.targetId);
+          return;
+        }
+        // Drop on a custom-group box → join group, optionally move date.
+        if (oData.kind === 'group-target') {
+          const srcIds = selectedIds.has(activeId) && selectedIds.size > 1 ? [...selectedIds] : [activeId];
+          const newDate = oData.colKey === 'inbox' ? null : oData.colKey;
+          pushSnapshotUndo();
+          setTasks(prev => {
+            const idSet = new Set(srcIds);
+            return prev.map(t => {
+              if (idSet.has(t.id)) {
+                const patch = { groupId: oData.groupId, parentId: null };
+                if (newDate !== undefined) patch.date = newDate;
+                return applyTaskPatch(t, patch);
+              }
+              if ((t.childOrder || []).some(id => idSet.has(id))) {
+                return { ...t, childOrder: t.childOrder.filter(id => !idSet.has(id)) };
+              }
+              return t;
+            });
+          });
+          return;
+        }
+        // Drop on another task in the same parent (or same date column) → reorder.
+        // Drop on a task in a different column → cross-column move at that index.
+        // Drop on column body → drop at end of that column.
+        const aDate = aData.date === undefined ? null : aData.date;
+        const aParent = aData.parentId || null;
+        let targetDate = aDate;
+        let targetParent = aParent;
+        let targetIndex = null;
+        if (oData.kind === 'task') {
+          const overTask = taskById(String(over.id));
+          if (overTask) {
+            // If we're hovering over a child of a project, nest into that project at the child's slot.
+            if (overTask.parentId) {
+              const srcIds = selectedIds.has(activeId) && selectedIds.size > 1 ? [...selectedIds] : [activeId];
+              handleCardDrop(srcIds, overTask.id);
+              return;
+            }
+            targetDate = oData.date === undefined ? overTask.date || null : oData.date;
+            targetParent = oData.parentId || null;
+          }
+          // Use sortable index (live) — dnd-kit gives us over.data.current.sortable.index
+          const sIdx = over.data?.current?.sortable?.index;
+          if (typeof sIdx === 'number') targetIndex = sIdx;
+        } else if (oData.kind === 'column') {
+          targetDate = oData.date === undefined ? null : oData.date;
+          targetParent = null;
+          targetIndex = null; // append to end
+        }
+        // Inbox column = targetDate null
+        if (targetDate == null) {
+          reorderToInbox(activeId, targetIndex);
+        } else {
+          reorderInDate(activeId, targetDate, targetIndex);
+        }
+        return;
+      }
+    } finally {
+      setActiveDrag(null);
+      delete document.body.dataset.dndActive;
+    }
+  };
+  const dndOnDragCancel = () => {
+    setActiveDrag(null);
+    delete document.body.dataset.dndActive;
+  };
 
   // The big one: drop a set of source cards onto a target card.
   // - If target is already a child: re-route to its parent.
@@ -2714,7 +2644,18 @@ function App() {
     if(boardRaf.current) cancelAnimationFrame(boardRaf.current);
     boardRaf.current = requestAnimationFrame(()=>{
       const shell = boardShellRef.current;
-      setBoardMetrics({scrollLeft:el.scrollLeft,width:el.clientWidth,boardWidth:shell?.clientWidth||el.clientWidth});
+      // Skip the update unless scroll moved by ~half a column or layout
+      // changed. Re-rendering App on every pixel of scroll causes a visible
+      // flicker on a busy board because every TaskCard's useSortable hook
+      // re-subscribes; the column-virtualization slice doesn't actually
+      // change unless we cross a column boundary.
+      const newWidth = el.clientWidth;
+      const newBoardWidth = shell?.clientWidth||el.clientWidth;
+      const dx = Math.abs(el.scrollLeft - boardMetrics.scrollLeft);
+      const layoutChanged = newWidth !== boardMetrics.width || newBoardWidth !== boardMetrics.boardWidth;
+      const COL_HALF = (typeof COL_W === 'number' ? COL_W : 240) / 2;
+      if (!layoutChanged && dx < COL_HALF) return;
+      setBoardMetrics({scrollLeft:el.scrollLeft, width:newWidth, boardWidth:newBoardWidth});
     });
     if (el.scrollLeft < COL_W * 4 && weekOff > -TIMELINE_MAX_DAYS) {
       const add = Math.min(TIMELINE_EXTEND_DAYS, weekOff + TIMELINE_MAX_DAYS);
@@ -2749,10 +2690,6 @@ function App() {
     onStartGroupRename: (id) => setRenamingGroupId(id),
     onGroupRenameDone: () => setRenamingGroupId(null),
     onRenameGroup: renameGroup,
-    onGroupDragOver,
-    onGroupDragLeave,
-    onGroupDrop,
-    groupDragOver,
   };
   const renderTimelineColumn = (date, keyPrefix='') => {
     const colKey=D.str(date);
@@ -2775,14 +2712,9 @@ function App() {
       onSelect={toggleSelected}
       onRename={updateTask}
       onRenameDone={()=>setRenamingId(null)}
-      onDragStart={onDragStart} onDragEnd={onDragEnd}
-      onDragOver={onDragOver} onDrop={onDrop} onDragLeave={onDragLeave}
-      dragOver={dragOver===colKey?colKey:null} draggingId={drag?.taskId} draggingTask={drag?.taskId ? taskById(drag.taskId) : null}
       childrenOf={childrenOf} projectStats={projectStats}
       collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
       forceOpenProjects={forceOpenProjects}
-      onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-      cardDragOver={cardDragOver} colDropIndex={colDropIndex}
       blockingCountFor={blockingCountFor} taskTitleById={taskTitleById}
       cardExtras={cardExtras}/>;
   };
@@ -2817,7 +2749,13 @@ function App() {
       {label:'Delete',  onClick:()=>deleteTask(t.id), danger:true, kbd:'⌫'},
     ];
   })() : [];
-  return <>
+  return <DndContext
+    sensors={dndSensors}
+    collisionDetection={compositeCollisionDetection}
+    onDragStart={dndOnDragStart}
+    onDragEnd={dndOnDragEnd}
+    onDragCancel={dndOnDragCancel}
+  >
     {!supabaseDisabled && tasksReady && !migrationDismissed && (
       <MigrateFromLocal onComplete={() => setMigrationDismissed(true)} />
     )}
@@ -3018,14 +2956,9 @@ function App() {
             onSelect={toggleSelected}
             onRename={updateTask}
             onRenameDone={()=>setRenamingId(null)}
-            onDragStart={onDragStart} onDragEnd={onDragEnd}
-            onDragOver={onDragOver} onDrop={onDrop} onDragLeave={onDragLeave}
-            dragOver={dragOver} draggingId={drag?.taskId} draggingTask={drag?.taskId ? taskById(drag.taskId) : null}
             childrenOf={childrenOf} projectStats={projectStats}
             collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
             forceOpenProjects={forceOpenProjects}
-            onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-            cardDragOver={cardDragOver} colDropIndex={colDropIndex}
             inboxFilters={inboxFilters} onCycleInboxFilter={cycleInboxFilter} onClearInboxFilters={clearInboxFilters} inboxFilterCount={inboxFilterCount}
             inboxGroupBy={inboxGroupBy} onInboxGroupBy={setInboxGroupBy}
             collapsedGrps={collapsedGrps}
@@ -3261,7 +3194,19 @@ function App() {
     {contextMenu && (
       <ContextMenu x={contextMenu.x} y={contextMenu.y} items={ctxItems} onClose={()=>setContextMenu(null)}/>
     )}
-  </>;
+    {/* DragOverlay renders the floating ghost that tracks the cursor. dnd-kit's
+        sortable strategy keeps the source card in its grid slot (snapping
+        between slot positions as you drag past midpoints) — the overlay is
+        what gives the cursor something smooth to follow. Source-tracking-the-
+        cursor (Trello-style smooth FLIP) is not what dnd-kit's strategies do;
+        the standard pattern across Linear / Notion / etc is faded source +
+        floating ghost, and that's what we ship here. */}
+    <DragOverlay zIndex={9999} dropAnimation={{ duration: 180, easing: 'cubic-bezier(.2,.8,.2,1)' }}>
+      {activeDrag?.srcHTML ? (
+        <div className="dnd-overlay-ghost" dangerouslySetInnerHTML={{ __html: activeDrag.srcHTML }} />
+      ) : null}
+    </DragOverlay>
+  </DndContext>;
 }
 
 export default App;

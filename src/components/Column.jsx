@@ -4,14 +4,31 @@ import { I } from '../utils/icons.jsx';
 import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from '../utils/colors.js';
 import { groupTasksBy, getGLabel, getGColor } from '../utils/grouping.js';
 import { TaskCard } from './TaskCard.jsx';
-import { DropPreview } from './DropPreview.jsx';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
+
+// Wraps a column or group body so dnd-kit can resolve drops onto empty/padded
+// areas (where there's no card under the cursor) to a useful target. Splats
+// any extra DOM props (onDoubleClick, style, etc.) so the host can keep the
+// element behaving like the original .col-body it replaces.
+function ColDroppable({ id, data, className, children, ...rest }) {
+  const { setNodeRef, isOver } = useDroppable({ id, data });
+  return (
+    <div ref={setNodeRef} className={`${className||''}${isOver ? ' drag-over' : ''}`} {...rest}>{children}</div>
+  );
+}
+function GrpDroppable({ id, data, baseClass, isCustom, children }) {
+  const { setNodeRef, isOver } = useDroppable({ id, data, disabled: !isCustom });
+  return (
+    <div ref={isCustom ? setNodeRef : undefined} className={`${baseClass}${isOver && isCustom ? ' grp-drop-into' : ''}`}>{children}</div>
+  );
+}
 
 function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, groupBy, collapsedGrps, completedOpen, blockedOpen,
   onToggleGrp, onToggleCompleted, onToggleBlocked, onAdd, onOpen, onToggle, onDelete,
   onFocus, onSelect, renamingId, onRename, onRenameDone,
-  onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, dragOver, draggingId, draggingTask,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
-  onCardDragOver, onCardDragLeave, onCardDrop, cardDragOver, colDropIndex, blockingCountFor, taskTitleById,
+  blockingCountFor, taskTitleById,
   cardExtras, className='', style }) {
   const dow = date.getDay();
   const colKey = D.str(date);
@@ -35,16 +52,14 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
   const onStartGroupRename = cardExtras?.onStartGroupRename;
   const onGroupRenameDone = cardExtras?.onGroupRenameDone;
   const onRenameGroup = cardExtras?.onRenameGroup;
-  const onGroupDragOver = cardExtras?.onGroupDragOver;
-  const onGroupDragLeave = cardExtras?.onGroupDragLeave;
-  const onGroupDrop = cardExtras?.onGroupDrop;
-  const groupDragOver = cardExtras?.groupDragOver;
   const gbLabel = {none:'None',project:'Location',lifeArea:'Life Area',tag:'Tag',priority:'Priority'}[groupBy]||'Location';
+  // Sortable id list — flattened active task ids in render order.
+  const sortableIds = active.map(t => t.id);
+  const cardSortable = (task) => ({ kind: 'task', date: colKey, parentId: task.parentId || null });
 
   return (
-    <div className={`col${past?' is-past':''}${today?' is-today':''}${dragOver && !cardDragOver?' drag-over':''}${className?` ${className}`:''}`}
+    <div className={`col${past?' is-past':''}${today?' is-today':''}${className?` ${className}`:''}`}
       style={style}
-      onDragOver={e=>onDragOver(e,colKey)} onDrop={e=>onDrop(e,colKey)} onDragLeave={onDragLeave}
       data-screen-label={`${DAY_S[dow]} ${date.getDate()}`}>
       <div className="col-hdr">
         <div className="col-day">{DAY_S[dow]}</div>
@@ -58,20 +73,21 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
         </div>
       </div>
       <div className="col-divider"/>
-      <div className="col-body" onDoubleClick={e=>{ if(!e.target.closest('.card,.grp-hdr,.done-grp-hdr,.card-add-zone')) onAdd(colKey,date); }}>
-        {dragOver && draggingId && active.length===0 && done.length===0 && <DropPreview task={draggingTask} theme={theme}/>}
+      <ColDroppable id={`col:${colKey}`} data={{ kind: 'column', date: colKey }} className="col-body"
+        onDoubleClick={e=>{ if(!e.target.closest('.card,.grp-hdr,.done-grp-hdr,.card-add-zone')) onAdd(colKey,date); }}>
+        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
         {groups.map(grp=>{
           const gKey=`${colKey}:${grp.key}`;
           const open=!collapsedGrps.has(gKey);
           const isCustom = !!grp.custom;
-          const isDropping = isCustom && groupDragOver?.groupId === grp.groupId && groupDragOver?.colKey === colKey;
-          const grpProps = isCustom ? {
-            onDragOver: e => onGroupDragOver?.(e, grp.groupId, colKey),
-            onDragLeave: e => onGroupDragLeave?.(e, grp.groupId),
-            onDrop: e => onGroupDrop?.(e, grp.groupId, colKey),
-          } : {};
           return (
-            <div key={grp.key} className={`${grp.label?'grp-box':'grp-free'}${isDropping?' grp-drop-into':''}`} {...grpProps}>
+            <GrpDroppable
+              key={grp.key}
+              id={`grp:${colKey}:${grp.groupId || grp.key}`}
+              data={{ kind: 'group-target', groupId: grp.groupId, colKey }}
+              baseClass={grp.label?'grp-box':'grp-free'}
+              isCustom={isCustom}
+            >
               {grp.label && (
                 <div className={`grp-hdr${grp.custom?' grp-hdr-custom':''}`} onClick={()=>onToggleGrp(gKey)}>
                   <svg className={`grp-chv${open?' open':''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
@@ -105,7 +121,6 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
               )}
               {open && grp.tasks.map((task,i)=>(
                 <React.Fragment key={task.id}>
-                  {dragOver===colKey && draggingId && !cardDragOver && colDropIndex?.col===colKey && colDropIndex?.index===i && <DropPreview task={draggingTask} theme={theme}/>}
                   <div className="card-add-zone" title="Add above" onClick={e=>{e.stopPropagation();onAdd(colKey,date,{beforeId:task.id, ...(grp.custom?{groupId:grp.groupId}:{})});}}>
                     <button tabIndex={-1}>+</button>
                   </div>
@@ -113,12 +128,10 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                     selected={selectedIds?.has(task.id)}
                     renaming={renamingId===task.id} spawning={spawning?.has(task.id)} onOpen={onOpen} onToggle={onToggle} onDelete={onDelete}
                     onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
-                    onDragStart={onDragStart} onDragEnd={onDragEnd} isDragging={draggingId===task.id}
+                    sortableData={cardSortable(task)}
                     childrenOf={childrenOf} projectStats={projectStats}
                     collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
                     forceOpenProjects={forceOpenProjects}
-                    onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-                    cardDragOver={cardDragOver} draggingTask={draggingTask}
                     selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawning} focusedId={focusedCardId}
                     onAdd={onAdd}
                     blockingCountFor={blockingCountFor} taskTitleById={taskTitleById}
@@ -129,10 +142,9 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                       <button tabIndex={-1}>+</button>
                     </div>
                   )}
-                  {dragOver===colKey && draggingId && !cardDragOver && colDropIndex?.col===colKey && colDropIndex?.index===i+1 && i===grp.tasks.length-1 && <DropPreview task={draggingTask} theme={theme}/>}
                 </React.Fragment>
               ))}
-            </div>
+            </GrpDroppable>
           );
         })}
         {/* "All done for today" celebratory empty state — appears only when
@@ -158,12 +170,9 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                 selected={selectedIds?.has(task.id)}
                 onOpen={onOpen} onToggle={onToggle} onDelete={onDelete}
                 onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
-                onDragStart={onDragStart} onDragEnd={onDragEnd} isDragging={draggingId===task.id}
                 childrenOf={childrenOf} projectStats={projectStats}
                 collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
                 forceOpenProjects={forceOpenProjects}
-                onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-                cardDragOver={cardDragOver} draggingTask={draggingTask}
                 selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawning} focusedId={focusedCardId}
                 onAdd={onAdd}
                 blockingCountFor={blockingCountFor} taskTitleById={taskTitleById}
@@ -185,12 +194,9 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                 selected={selectedIds?.has(task.id)}
                 onOpen={onOpen} onToggle={onToggle} onDelete={onDelete}
                 onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
-                onDragStart={onDragStart} onDragEnd={onDragEnd} isDragging={draggingId===task.id}
                 childrenOf={childrenOf} projectStats={projectStats}
                 collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
                 forceOpenProjects={forceOpenProjects}
-                onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-                cardDragOver={cardDragOver} draggingTask={draggingTask}
                 selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawning} focusedId={focusedCardId}
                 onAdd={onAdd}
                 blockingCountFor={blockingCountFor} taskTitleById={taskTitleById}
@@ -199,7 +205,8 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
             ))}
           </>
         )}
-      </div>
+        </SortableContext>
+      </ColDroppable>
       <button className="col-add" onClick={()=>onAdd(colKey,date)}>
         <I.Plus/> Add task
       </button>
@@ -209,9 +216,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
 
 // ── InboxColumn ──────────────────────────────────────────────────────────
 function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawning, width, collapsed, panelView, onPanelView, onCollapse, onResizeStart, onAdd, onOpen, onToggle, onDelete, onFocus, onSelect, onRename, onRenameDone,
-  onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, dragOver, draggingId, draggingTask,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
-  onCardDragOver, onCardDragLeave, onCardDrop, cardDragOver, colDropIndex,
   inboxFilters, onCycleInboxFilter, onClearInboxFilters, inboxFilterCount,
   inboxGroupBy, onInboxGroupBy, collapsedGrps, onToggleGrp, cardExtras }) {
   const [cap, setCap] = useState('');
@@ -253,14 +258,15 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
   const visibleInboxTasks = inboxTasks.slice(0, panelLimit);
   const remainingSlots = Math.max(0, panelLimit - visibleInboxTasks.length);
   const visibleDoneTasks = doneTasks.slice(0, remainingSlots);
+  const inboxSortableIds = visibleInboxTasks.map(t => t.id);
+  const cardSortable = (task) => ({ kind: 'task', date: null, parentId: task.parentId || null });
   const views = [
     ['timeline','Timeline'],['inbox','Inbox'],['upcoming','Upcoming'],['backlog','Backlog'],
     ['snoozed','Snoozed'],['someday','Someday'],['blocked','Blocked'],['completed','Completed'],['archived','Archived'],
   ];
   const activeLabel = views.find(([v])=>v===panelView)?.[1] || 'Inbox';
   return (
-    <div className={`side-panel inbox-col${collapsed?' collapsed':''}${dragOver==='inbox'&&draggingId&&!cardDragOver?' drag-over-inbox':''}`} style={{width, minWidth:collapsed?34:132, left:0}}
-      onDragOver={e=>onDragOver(e,'inbox')} onDrop={e=>onDrop(e,'inbox')} onDragLeave={onDragLeave}>
+    <div className={`side-panel inbox-col${collapsed?' collapsed':''}`} style={{width, minWidth:collapsed?34:132, left:0}}>
       <div className="inbox-hdr">
         <div className="side-panel-tools">
           <div style={{position:'relative'}}>
@@ -339,9 +345,11 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
           onKeyDown={e=>e.key==='Enter'&&submit()}/>
         <button onClick={submit}>+</button>
       </div>
-      <div className="col-body" style={{flex:1}} onDoubleClick={e=>{ if(insertable && !e.target.closest('.card,.card-add-zone,.grp-hdr')) onAdd(null,null,'Untitled'); }}>
-        {dragOver==='inbox' && draggingId && inboxTasks.length===0 && <DropPreview task={draggingTask} theme={theme}/>}
+      <ColDroppable id="col:inbox" data={{ kind: 'column', date: null }} className="col-body"
+        style={{flex:1}}
+        onDoubleClick={e=>{ if(insertable && !e.target.closest('.card,.card-add-zone,.grp-hdr')) onAdd(null,null,'Untitled'); }}>
         {tasks.length===0 && <div className="list-empty">Nothing here yet.</div>}
+        <SortableContext items={inboxSortableIds} strategy={verticalListSortingStrategy}>
         {(()=>{
           const customGroups = cardExtras?.customGroups || [];
           const renamingGroupId = cardExtras?.renamingGroupId;
@@ -352,22 +360,18 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
           const groups = useGroups
             ? groupTasksBy(visibleInboxTasks, inboxGroupBy, cardExtras?.getEffectiveLifeArea, customGroups)
             : [{key:'_all',label:null,tasks:visibleInboxTasks}];
-          const onGroupDragOver = cardExtras?.onGroupDragOver;
-          const onGroupDragLeave = cardExtras?.onGroupDragLeave;
-          const onGroupDrop = cardExtras?.onGroupDrop;
-          const groupDragOver = cardExtras?.groupDragOver;
           return groups.map(grp=>{
             const gKey = `inbox:${grp.key}`;
             const open = !collapsedGrps?.has(gKey);
             const isCustom = !!grp.custom;
-            const isDropping = isCustom && groupDragOver?.groupId === grp.groupId && groupDragOver?.colKey === 'inbox';
-            const grpProps = isCustom ? {
-              onDragOver: e => onGroupDragOver?.(e, grp.groupId, 'inbox'),
-              onDragLeave: e => onGroupDragLeave?.(e, grp.groupId),
-              onDrop: e => onGroupDrop?.(e, grp.groupId, 'inbox'),
-            } : {};
             return (
-              <div key={grp.key} className={`${grp.label?'grp-box':'grp-free'}${isDropping?' grp-drop-into':''}`} {...grpProps}>
+              <GrpDroppable
+                key={grp.key}
+                id={`grp:inbox:${grp.groupId || grp.key}`}
+                data={{ kind: 'group-target', groupId: grp.groupId, colKey: 'inbox' }}
+                baseClass={grp.label?'grp-box':'grp-free'}
+                isCustom={isCustom}
+              >
                 {grp.label && (
                   <div className={`grp-hdr${grp.custom?' grp-hdr-custom':''}`} onClick={()=>onToggleGrp?.(gKey)}>
                     <svg className={`grp-chv${open?' open':''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
@@ -394,7 +398,6 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
                 )}
                 {open && grp.tasks.map((task,i)=>(
                   <React.Fragment key={task.id}>
-                    {!useGroups && dragOver==='inbox' && draggingId && !cardDragOver && colDropIndex?.col==='inbox' && colDropIndex?.index===i && <DropPreview task={draggingTask} theme={theme}/>}
                     {insertable && <div className="card-add-zone" title="Add above" onClick={e=>{e.stopPropagation();onAdd(null,null,'Untitled',{beforeId:task.id, ...(grp.custom?{groupId:grp.groupId}:{})});}}>
                       <button tabIndex={-1}>+</button>
                     </div>}
@@ -402,12 +405,10 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
                       selected={selectedIds?.has(task.id)}
                       renaming={renamingId===task.id} spawning={spawning?.has(task.id)} onOpen={onOpen} onToggle={onToggle}
                       onDelete={onDelete} onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
-                      onDragStart={onDragStart} onDragEnd={onDragEnd} isDragging={draggingId===task.id}
+                      sortableData={cardSortable(task)}
                       childrenOf={childrenOf} projectStats={projectStats}
                       collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
                       forceOpenProjects={forceOpenProjects}
-                      onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-                      cardDragOver={cardDragOver} draggingTask={draggingTask}
                       selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawning} focusedId={focusedCardId}
                       onAdd={onAdd}
                       getEffectiveLifeArea={cardExtras?.getEffectiveLifeArea}
@@ -415,13 +416,13 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
                     {insertable && i===grp.tasks.length-1 && <div className="card-add-zone" title="Add below" onClick={e=>{e.stopPropagation();onAdd(null,null,'Untitled',{afterId:task.id});}}>
                       <button tabIndex={-1}>+</button>
                     </div>}
-                    {!useGroups && i===grp.tasks.length-1 && dragOver==='inbox' && draggingId && !cardDragOver && colDropIndex?.col==='inbox' && colDropIndex?.index===grp.tasks.length && <DropPreview task={draggingTask} theme={theme}/>}
                   </React.Fragment>
                 ))}
-              </div>
+              </GrpDroppable>
             );
           });
         })()}
+        </SortableContext>
         {doneTasks.length>0 && (
           <div style={{marginTop:6,paddingTop:6,borderTop:'1px solid var(--border)'}}>
             {visibleDoneTasks.map(task=>(
@@ -429,12 +430,9 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
                 selected={selectedIds?.has(task.id)}
                 renaming={renamingId===task.id} spawning={false} onOpen={onOpen} onToggle={onToggle} onDelete={onDelete}
                 onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
-                onDragStart={onDragStart} onDragEnd={onDragEnd} isDragging={draggingId===task.id}
                 childrenOf={childrenOf} projectStats={projectStats}
                 collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
                 forceOpenProjects={forceOpenProjects}
-                onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-                cardDragOver={cardDragOver} draggingTask={draggingTask}
                 selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawning} focusedId={focusedCardId}
                 onAdd={onAdd}
                 getEffectiveLifeArea={cardExtras?.getEffectiveLifeArea}
@@ -443,7 +441,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
           </div>
         )}
         {tasks.length>panelLimit && <div className="list-note">Showing first {panelLimit} of {tasks.length}. Search or filter to narrow this panel.</div>}
-      </div>
+      </ColDroppable>
       {!collapsed && <div className="side-resizer" onMouseDown={e=>onResizeStart(e,'inbox')}/>}
     </div>
   );

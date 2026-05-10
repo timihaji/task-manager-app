@@ -5,9 +5,11 @@ import { PRI_INFO } from '../utils/constants.js';
 import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from '../utils/colors.js';
 import { groupTasksBy, getGLabel, getGColor } from '../utils/grouping.js';
 import { CardPopover } from './CardPopover.jsx';
-import { DropPreview } from './DropPreview.jsx';
 import { TagPicker, ProjPicker, TimePicker, DatePicker, PriPicker, SnoozePicker } from './pickers.jsx';
 import { PriBars } from './PriBars.jsx';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 
 const fmtStartDate = (s) => {
   if (!s) return '';
@@ -32,9 +34,9 @@ const fmtDueDate = (s) => {
 };
 
 // ── TaskCard ─────────────────────────────────────────────────────────────
-function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, onOpen, onToggle, onDelete, onFocus, onSelect, onRename, onRenameDone, onDragStart, onDragEnd, isDragging,
+function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, onOpen, onToggle, onDelete, onFocus, onSelect, onRename, onRenameDone,
+  sortableData,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
-  onCardDragOver, onCardDragLeave, onCardDrop, cardDragOver, draggingTask,
   selectedIds, renamingId, spawningSet, focusedId, onAdd, depth=0, blockingCountFor, taskTitleById,
   onContextMenu, onBulkUpdate, recents, onRecentTag, onRecentProj, openPopRequest, onPopHandled, getEffectiveLifeArea, onAddTaxonomy, onStartRename }) {
   const tagPalette = theme==='dark'?TAG_DARK:TAG_LIGHT;
@@ -90,26 +92,43 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
   const isCollapsed = collapsedProjects?.has(task.id) && !forceOpenProjects?.has(task.id);
   const open = renderAsProject && !isCollapsed;
   const kids = renderAsProject ? (childrenOf?.(task.id) || []) : [];
-  const isDropTarget = cardDragOver?.targetId === task.id;
-  const dropIndex = (cardDragOver?.targetId === task.id) ? cardDragOver.index : -1;
   const projTimeStr = renderAsProject && stats?.mins ? fmtTimeEst(stats.mins) : '';
   const pct = stats && stats.total>0 ? (stats.done/stats.total)*100 : 0;
 
+  // dnd-kit wiring. useSortable runs unconditionally (hook rules); when no
+  // sortableData is supplied (e.g. in non-draggable views) we set disabled,
+  // so the card is rendered without listeners and behaves as plain content.
+  const sortable = useSortable({
+    id: task.id,
+    data: sortableData,
+    disabled: !sortableData || renaming,
+  });
+  const projectDrop = useDroppable({
+    id: 'proj:' + task.id,
+    data: { kind: 'project-target', targetId: task.id },
+    disabled: !renderAsProject,
+  });
+  const isSortable = !!sortableData && !renaming;
+  const isDragging = sortable.isDragging;
+  const isProjectDropTarget = renderAsProject && projectDrop.isOver;
+  const dragStyle = isSortable ? {
+    transform: CSS.Transform.toString(sortable.transform),
+    transition: sortable.transition,
+  } : undefined;
+
   const isStaleCard = isStale(task);
   return (
-    <div className={`card${focused?' focused':''}${selected?' selected':''}${isDragging?' dragging':''}${spawning?' spawning':''}${renderAsProject?' card-project':''}${isDropTarget?' card-drop-target':''}${task.blocked?' blocked':''}${isStaleCard?' card-stale':''}${task.checkInOf?' card-checkin':''}`}
+    <div className={`card${focused?' focused':''}${selected?' selected':''}${isDragging?' dragging':''}${spawning?' spawning':''}${renderAsProject?' card-project':''}${isProjectDropTarget?' card-drop-target':''}${task.blocked?' blocked':''}${isStaleCard?' card-stale':''}${task.checkInOf?' card-checkin':''}`}
+      ref={isSortable ? sortable.setNodeRef : undefined}
+      style={dragStyle}
       data-card-id={task.id}
       title={task.blocked ? (task.blockedReason || 'Blocked') + ((task.blockedBy||[]).length && taskTitleById ? '\nWaiting on: ' + (task.blockedBy||[]).map(id=>taskTitleById(id)).filter(Boolean).join(', ') : '') : undefined}
-      draggable={!renaming}
       onClick={()=>!renaming&&onFocus(task.id)}
       onDoubleClick={()=>!renaming&&!openPop&&onOpen(task.id)}
       onContextMenu={e=>{ if(onContextMenu){ e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}
       onMouseEnter={()=>onFocus(task.id)}
-      onDragStart={e=>{e.stopPropagation();onDragStart(e,task.id,colKey);}}
-      onDragEnd={onDragEnd}
-      onDragOver={onCardDragOver?e=>onCardDragOver(e,task):undefined}
-      onDragLeave={onCardDragLeave?e=>onCardDragLeave(e,task):undefined}
-      onDrop={onCardDrop?e=>onCardDrop(e,task):undefined}
+      {...(isSortable ? sortable.attributes : {})}
+      {...(isSortable ? sortable.listeners : {})}
     >
       <div className="card-top">
         <button className={`bulk-check${selected?' on':''}`} title={selected?'Deselect task':'Select task'}
@@ -278,45 +297,42 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
         })()}
       </div>
       {open && (
-        <div className="card-project-body" onClick={e=>e.stopPropagation()}>
+        <div className="card-project-body" ref={projectDrop.setNodeRef} onClick={e=>e.stopPropagation()}>
           {kids.length === 0 && (
             <div className="card-proj-empty">Drop or add cards</div>
           )}
-          {kids.map((child,i)=>(
-            <React.Fragment key={child.id}>
-              {isDropTarget && dropIndex===i && <DropPreview task={draggingTask} theme={theme}/>}
-              <div className="card-add-zone" title="Add above"
-                onClick={e=>{e.stopPropagation();onAdd?.(task.id,null,{beforeId:child.id, parentId:task.id});}}>
-                <button tabIndex={-1}>+</button>
-              </div>
-              <TaskCard task={child} colKey={task.id} theme={theme}
-                focused={focusedId===child.id}
-                selected={selectedIds?.has(child.id)}
-                renaming={renamingId===child.id}
-                spawning={spawningSet?.has(child.id)}
-                onOpen={onOpen} onToggle={onToggle} onDelete={onDelete}
-                onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
-                onDragStart={onDragStart} onDragEnd={onDragEnd}
-                isDragging={false}
-                childrenOf={childrenOf} projectStats={projectStats}
-                collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
-                forceOpenProjects={forceOpenProjects}
-                onCardDragOver={onCardDragOver} onCardDragLeave={onCardDragLeave} onCardDrop={onCardDrop}
-                cardDragOver={cardDragOver} draggingTask={draggingTask}
-                selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawningSet} focusedId={focusedId}
-                onAdd={onAdd}
-                depth={depth+1}
-                blockingCountFor={blockingCountFor} taskTitleById={taskTitleById}
-                onContextMenu={onContextMenu} onBulkUpdate={onBulkUpdate}
-                recents={recents} onRecentTag={onRecentTag} onRecentProj={onRecentProj}
-                openPopRequest={openPopRequest} onPopHandled={onPopHandled}
-                getEffectiveLifeArea={getEffectiveLifeArea}
-                onAddTaxonomy={onAddTaxonomy}
-                onStartRename={onStartRename}
-                />
-            </React.Fragment>
-          ))}
-          {isDropTarget && dropIndex===kids.length && <DropPreview task={draggingTask} theme={theme}/>}
+          <SortableContext items={kids.map(k => k.id)} strategy={verticalListSortingStrategy}>
+            {kids.map((child)=>(
+              <React.Fragment key={child.id}>
+                <div className="card-add-zone" title="Add above"
+                  onClick={e=>{e.stopPropagation();onAdd?.(task.id,null,{beforeId:child.id, parentId:task.id});}}>
+                  <button tabIndex={-1}>+</button>
+                </div>
+                <TaskCard task={child} colKey={task.id} theme={theme}
+                  focused={focusedId===child.id}
+                  selected={selectedIds?.has(child.id)}
+                  renaming={renamingId===child.id}
+                  spawning={spawningSet?.has(child.id)}
+                  onOpen={onOpen} onToggle={onToggle} onDelete={onDelete}
+                  onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
+                  sortableData={{ kind: 'task', date: colKey, parentId: task.id }}
+                  childrenOf={childrenOf} projectStats={projectStats}
+                  collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
+                  forceOpenProjects={forceOpenProjects}
+                  selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawningSet} focusedId={focusedId}
+                  onAdd={onAdd}
+                  depth={depth+1}
+                  blockingCountFor={blockingCountFor} taskTitleById={taskTitleById}
+                  onContextMenu={onContextMenu} onBulkUpdate={onBulkUpdate}
+                  recents={recents} onRecentTag={onRecentTag} onRecentProj={onRecentProj}
+                  openPopRequest={openPopRequest} onPopHandled={onPopHandled}
+                  getEffectiveLifeArea={getEffectiveLifeArea}
+                  onAddTaxonomy={onAddTaxonomy}
+                  onStartRename={onStartRename}
+                  />
+              </React.Fragment>
+            ))}
+          </SortableContext>
           <div className="card-add-zone" title="Add card to project"
             onClick={e=>{e.stopPropagation();onAdd?.(task.id,null,{parentId:task.id});}}>
             <button tabIndex={-1}>+</button>

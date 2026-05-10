@@ -278,7 +278,16 @@ body.marquee-active *{user-select:none !important}
   100%{box-shadow:inset 0 0 0 0 transparent,inset 0 0 0 0 transparent,0 0 0 0 transparent;background:initial}
 }
 .card.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-border),var(--shadow)}
-.card.dragging{opacity:.4;transform:scale(.97) rotate(1.5deg);box-shadow:var(--shadow-lg);cursor:grabbing}
+/* Source card during drag — empty placeholder (dashed slot) while the
+   DragOverlay ghost tracks the cursor. Matches Linear/Notion pattern. */
+.card.dragging{
+  background:color-mix(in srgb,var(--accent) 8%,var(--surface));
+  outline:2px dashed var(--accent);
+  outline-offset:-2px;
+  box-shadow:none;
+  cursor:grabbing;
+}
+.card.dragging > *{visibility:hidden}
 .card.spawning{animation:spawn-pulse .7s ease}
 .card.card-stale{box-shadow:0 0 0 1px #ef4444aa,var(--shadow)}
 .card.card-stale:hover{box-shadow:0 0 0 1px #ef4444cc,var(--shadow-hover)}
@@ -865,24 +874,36 @@ body.marquee-active *{user-select:none !important}
 .stack-inner .empty h3{font-size:16px;color:var(--t1);font-weight:600;margin-bottom:4px}
 .stack-inner .empty p{font-size:12.5px}
 
-/* === STACK PHASE 4: drag-reorder === */
-.scard{user-select:none}
-/* The dragged source IS the placeholder — it's reordered into the hover
-   position via displaySorted and rendered with this dimmed style. As the
-   user moves the cursor, the auto-FLIP layout-effect slides the source
-   between candidate slots while neighbours reflow around it (Trello /
-   linear-app pattern). No separate preview card to compete with the
-   HTML5 cursor ghost. */
+/* === dnd-kit unified drag layer ===
+   While any drag is active the body carries data-dnd-active. Cursor stays
+   `grabbing` — pointer-events DnD has no OS no-drop cursor, so the "circle
+   with cross" effect that haunts native HTML5 drag is gone.
+   Avoid a `*` selector here — it forces a style invalidation on every
+   element and causes visible jank on a busy board. The cascade is enough. */
+body[data-dnd-active="true"]{cursor:grabbing;user-select:none}
+.dnd-overlay-ghost{
+  pointer-events:none;
+  transform:rotate(2deg);
+  box-shadow:0 12px 28px rgba(0,0,0,.35);
+  opacity:.95;
+  background:var(--surface);
+}
+
+/* === STACK drag-reorder ===
+   Source-dragging style. dnd-kit keeps the source in DOM at its sortable
+   slot; we render it as an empty placeholder (dashed outline, content
+   hidden) while the DragOverlay's ghost follows the cursor. This matches
+   Linear / Notion. */
+.scard{user-select:none;cursor:grab}
 .scard.is-dragging{
-  opacity:.55;
+  background:color-mix(in srgb,var(--accent) 8%,var(--surface));
   outline:2px dashed var(--accent);
   outline-offset:-2px;
-  background:color-mix(in srgb,var(--accent) 8%,var(--surface));
   box-shadow:none;
   cursor:grabbing;
 }
+.scard.is-dragging > *{visibility:hidden}
 .scard.is-dragging:hover{transform:none;box-shadow:none;border-color:var(--border-s)}
-.scard.is-dragging .scard-title{color:var(--t2)}
 .stack-body.is-dragging .scard-subs{pointer-events:none}
 .stack-body.is-dragging .scard:hover{transform:none;box-shadow:var(--shadow);border-color:var(--border-s)}
 
