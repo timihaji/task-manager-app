@@ -1535,7 +1535,37 @@ function App() {
       // silently reorders the whole list out from under the user.
       const order = tweaks.stackOrder || [];
       const filtered = order.filter(id => id !== nt.id);
-      setTweak('stackOrder', placeAtTop ? [nt.id, ...filtered] : [...filtered, nt.id]);
+      let nextOrder = null;
+      if (groupId) {
+        // Adding to an existing group: anchor next to the last member so the
+        // group's slot stays where it is. Otherwise the new task lands at
+        // index 0 of stackOrder and (in manual sort) becomes the first
+        // groupId match in `sorted`, dragging the whole group's slot to the
+        // top of the stack.
+        const memberIds = tasks
+          .filter(t => t.groupId === groupId && t.id !== nt.id)
+          .map(t => t.id);
+        const orderedMembers = memberIds
+          .map(id => ({ id, idx: filtered.indexOf(id) }))
+          .filter(x => x.idx >= 0)
+          .sort((a, b) => a.idx - b.idx);
+        const lastMember = orderedMembers[orderedMembers.length - 1];
+        if (lastMember) {
+          nextOrder = [
+            ...filtered.slice(0, lastMember.idx + 1),
+            nt.id,
+            ...filtered.slice(lastMember.idx + 1),
+          ];
+        } else if (memberIds.length) {
+          // Members exist but none are in stackOrder yet — append the new
+          // task to the end so it doesn't jump to the top.
+          nextOrder = [...filtered, nt.id];
+        }
+      }
+      if (!nextOrder) {
+        nextOrder = placeAtTop ? [nt.id, ...filtered] : [...filtered, nt.id];
+      }
+      setTweak('stackOrder', nextOrder);
     }
     setSettingsOpen(false);
     setDrawerId(null);
