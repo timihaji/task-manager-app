@@ -567,10 +567,14 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     if (!dragRef.current.id) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    if (id === dragRef.current.id) {
-      if (drag.overId !== null) setDrag(d => ({ ...d, overId: null, overPos: null }));
-      return;
-    }
+    // Don't react when the cursor is over the source itself. With
+    // displaySorted moving the source to the current hover position,
+    // the source ends up directly under the cursor — clearing overId
+    // here would create a feedback loop: clear → source slides back to
+    // original → cursor is over the previous target again → overId
+    // resets → source slides back under cursor → flicker. Just preserve
+    // the existing state.
+    if (id === dragRef.current.id) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pos = (e.clientY < rect.top + rect.height/2) ? 'before' : 'after';
     setDrag(prev => (prev.overId === id && prev.overPos === pos) ? prev : { ...prev, overId: id, overPos: pos });
@@ -591,10 +595,9 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     const rect = e.currentTarget.getBoundingClientRect();
     const upper = e.clientY < rect.top + rect.height / 2;
     const anchorId = upper ? groupTasks[0].id : groupTasks[groupTasks.length-1].id;
-    if (anchorId === dragRef.current.id) {
-      if (drag.overId !== null) setDrag(d => ({ ...d, overId: null, overPos: null }));
-      return;
-    }
+    // Same anti-flicker as handleDragOver: don't clear when the anchor is
+    // the source — displaySorted may have moved it under the cursor.
+    if (anchorId === dragRef.current.id) return;
     const pos = upper ? 'before' : 'after';
     setDrag(prev => (prev.overId === anchorId && prev.overPos === pos) ? prev : { ...prev, overId: anchorId, overPos: pos });
   };
@@ -717,13 +720,9 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
         const r = grpEl.getBoundingClientRect();
         const upper = point.y < r.top + r.height / 2;
         const anchorId = upper ? firstId : lastId;
-        if (anchorId === dragRef.current.id) {
-          if (touchHoverRef.current.overId !== null) {
-            touchHoverRef.current = { overId: null, overPos: null };
-            setDrag(d => (d.overId == null ? d : { ...d, overId: null, overPos: null }));
-          }
-          return;
-        }
+        // Same anti-flicker as the desktop handlers — preserve state when
+        // the source ends up under the cursor after a displaySorted move.
+        if (anchorId === dragRef.current.id) return;
         const pos = upper ? 'before' : 'after';
         if (touchHoverRef.current.overId === anchorId && touchHoverRef.current.overPos === pos) return;
         touchHoverRef.current = { overId: anchorId, overPos: pos };
