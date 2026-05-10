@@ -867,16 +867,29 @@ body.marquee-active *{user-select:none !important}
 
 /* === STACK PHASE 4: drag-reorder === */
 .scard{user-select:none}
-/* Source-card styling during drag. Earlier this rule collapsed the source
-   to height 0 to eliminate the "card teleports" feeling on drop, but in
-   Chromium that aggressive layout change immediately after dragstart
-   sometimes cancels the drag entirely — the browser reads the source
-   changing dramatically as a sign the drag is no longer valid. Keep the
-   source in layout, just dimmed; the FLIP pass on release slides every
-   card (including the dragged one) from its drag-state position to its
-   post-drop position, so the snap is gone without the abort risk. */
+/* Two-phase source treatment during drag:
+   Phase 1 (immediate, .is-dragging): just dim + scale. Applying layout
+     changes synchronously after dragstart causes Chromium to abort the
+     drag — it reads the source mutating dramatically as a sign the drag
+     is no longer valid. So this phase is intentionally cosmetic only.
+   Phase 2 (~80ms later, .is-dragging-collapsed): layout removal (max-height,
+     padding, margin all 0). By 80ms the drag is established and Chromium
+     won't abort. Neighbours FLIP-animate up to fill the gap. */
 .scard.is-dragging{opacity:.4;transform:scale(.985);box-shadow:var(--shadow-lg);cursor:grabbing}
 .scard.is-dragging:hover{transform:scale(.985)}
+.scard.is-dragging-collapsed{
+  opacity:0;
+  pointer-events:none;
+  max-height:0;
+  min-height:0;
+  padding-top:0;padding-bottom:0;
+  margin-top:0;margin-bottom:0;
+  border-width:0;
+  overflow:hidden;
+  transform:none;
+  box-shadow:none;
+}
+.scard.is-dragging-collapsed:hover{transform:none;box-shadow:none}
 /* Drop indicator is a dimmed-out clone of the dragged card, rendered at the
    insertion point with the destination tier's styling. Sharing the .scard
    renderer keeps dimensions and chips pixel-aligned with the post-drop

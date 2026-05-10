@@ -190,7 +190,7 @@ function ChipRow({ task, isProject, allTasks, theme }) {
 
 function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing, allTasks, theme, isFirst, isLast,
                     expanded, onToggleExpand, onOpen, onComplete, onSendToTop, onSendToBottom, onSubToggle,
-                    isDragging, dropPos, onDragStart, onDragOver, onDragEnd, onDrop, onPointerDown,
+                    isDragging, isDraggingCollapsed, dropPos, onDragStart, onDragOver, onDragEnd, onDrop, onPointerDown,
                     focused, renaming, onFocus, onContextMenu, onRename, onStartRename, onRenameDone,
                     selected, onSelect,
                     previewMode=false, previewDropProps=null }) {
@@ -219,6 +219,7 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
     isProject && 'is-project',
     completing && 'completing',
     isDragging && 'is-dragging',
+    isDraggingCollapsed && 'is-dragging-collapsed',
     dropPos === 'before' && 'drop-before',
     dropPos === 'after' && 'drop-after',
     focused && 'focused',
@@ -499,25 +500,60 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
   };
 
   // ---- Drag reorder ----
-  const [drag, setDrag] = useState({ id: null, overId: null, overPos: null });
-  const dragRef = useRef({ id: null });
+  const [drag, setDrag] = useState({ id: null, overId: null, overPos: null, collapsed: false });
+  const dragRef = useRef({ id: null, collapsed: false });
   const stackBodyRef = useRef(null);
   const autoscrollRef = useRef({ rafId: null, dy: 0 });
+  const collapseTimerRef = useRef(null);
 
   const resetDrag = () => {
+    if (collapseTimerRef.current) {
+      clearTimeout(collapseTimerRef.current);
+      collapseTimerRef.current = null;
+    }
     dragRef.current.id = null;
-    setDrag({ id: null, overId: null, overPos: null });
+    dragRef.current.collapsed = false;
+    setDrag({ id: null, overId: null, overPos: null, collapsed: false });
   };
+
+  // Source-card collapse, deferred. Apply .is-dragging immediately for the
+  // dim, then 80ms later add .is-dragging-collapsed which removes the source
+  // from layout. The delay matters: collapsing the source synchronously
+  // after dragstart (or even on the first React commit) makes Chromium read
+  // it as a sign the drag is no longer valid and abort the operation.
+  // 80ms is enough for the drag to be live but short enough that the user
+  // doesn't notice the source hanging around.
+  useEffect(() => {
+    if (!drag.id || drag.collapsed) return;
+    const id = drag.id;
+    collapseTimerRef.current = setTimeout(() => {
+      collapseTimerRef.current = null;
+      if (dragRef.current.id !== id) return;
+      // Capture neighbours before the collapse so they slide smoothly up
+      // into the gap rather than snapping. The source is the skipId so
+      // FLIP doesn't try to animate it (it's the one shrinking out).
+      dragRef.current.collapsed = true;
+      captureFlipSnapshot();
+      setDrag(d => (d.id === id ? { ...d, collapsed: true } : d));
+    }, 80);
+    return () => {
+      if (collapseTimerRef.current) {
+        clearTimeout(collapseTimerRef.current);
+        collapseTimerRef.current = null;
+      }
+    };
+  }, [drag.id, drag.collapsed]);
 
   // FLIP animation: when a reorder fires, capture every visible card's top
   // position right before the state update, then in useLayoutEffect compare
-  // to the new position and slide each card from old → new. The dragged
-  // card is included now — its old position is its dimmed-but-visible
-  // location at the original slot, so animating it from there to the
-  // destination is the smooth "slides into place" effect we want. (Earlier
-  // this skipped the dragged card because the source was being collapsed
-  // to 0 height during drag, making the "old" position the gap and the
-  // animation a confused fall; the source is no longer collapsed.)
+  // to the new position and slide each card from old → new.
+  //
+  // skipId is set when the snapshot is captured for the source-collapse
+  // moment OR for a drop while the source is collapsed. The collapsed
+  // source's "old" position is the gap (height 0), so animating it from
+  // there to wherever it lands would look like a confused fall. Skipping
+  // it lets it appear at the destination cleanly — which matches the user
+  // mental model since the destination preview was already there.
   const flipRef = useRef(null);
   const captureFlipSnapshot = () => {
     if (!stackBodyRef.current) return;
@@ -527,18 +563,19 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
       const id = c.getAttribute('data-card-id');
       if (id) positions.set(id, c.getBoundingClientRect().top);
     });
-    flipRef.current = { positions };
+    const skipId = dragRef.current.collapsed ? dragRef.current.id : null;
+    flipRef.current = { positions, skipId };
   };
 
   useLayoutEffect(() => {
     const snap = flipRef.current;
     if (!snap || !stackBodyRef.current) return;
     flipRef.current = null;
-    const { positions } = snap;
+    const { positions, skipId } = snap;
     const cards = stackBodyRef.current.querySelectorAll('[data-card-id]');
     cards.forEach(c => {
       const id = c.getAttribute('data-card-id');
-      if (!id) return;
+      if (!id || id === skipId) return;
       const oldTop = positions.get(id);
       if (oldTop == null) return;
       const newTop = c.getBoundingClientRect().top;
@@ -1021,6 +1058,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                     onSendToBottom={handleSendToBottom}
                     onSubToggle={handleSubToggle}
                     isDragging={drag.id === t.id}
+                    isDraggingCollapsed={drag.collapsed && drag.id === t.id}
                     dropPos={drag.overId === t.id ? drag.overPos : null}
                     onDragStart={handleDragStart}
                     onDragOver={handleDragOver}
