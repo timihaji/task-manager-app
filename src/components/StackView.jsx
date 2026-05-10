@@ -3,7 +3,6 @@ import { I } from '../utils/icons.jsx';
 import { D, parseTimeEst, fmtTimeEst, PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREA_NAMES } from '../data.js';
 import { lifeAreaPalette } from '../utils/colors.js';
 import { PriBars } from './PriBars.jsx';
-import { DropPreview } from './DropPreview.jsx';
 import { useTouchDrag } from '../utils/useTouchDrag.js';
 
 const PRI_RANK = { p1:0, p2:1, p3:2, p4:3 };
@@ -193,7 +192,8 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
                     expanded, onToggleExpand, onOpen, onComplete, onSendToTop, onSendToBottom, onSubToggle,
                     isDragging, dropPos, onDragStart, onDragOver, onDragEnd, onDrop, onPointerDown,
                     focused, renaming, onFocus, onContextMenu, onRename, onStartRename, onRenameDone,
-                    selected, onSelect }) {
+                    selected, onSelect,
+                    previewMode=false, previewDropProps=null }) {
   const [draft, setDraft] = useState(task.title || '');
   const inputRef = useRef(null);
   useEffect(()=>{ setDraft(task.title || ''); }, [task.id, task.title]);
@@ -224,7 +224,40 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
     focused && 'focused',
     renaming && 'renaming',
     selected && 'selected',
+    previewMode && 'is-preview',
   ].filter(Boolean).join(' ');
+
+  // In preview mode the card is acting as a drop placeholder for the dragged
+  // task. Render the same content (so dimensions and tier styling match the
+  // post-drop result), but strip every interactive handler — the card is
+  // ephemeral and any of its actions would either be confusing or fight the
+  // drag. Forward only the optional drag handlers so the preview itself is
+  // a valid drop target (otherwise the layout shift slides the cursor onto
+  // it and the browser rejects the drop with a "no-drop" cursor).
+  if (previewMode) {
+    return (
+      <div className={klass}
+           aria-hidden="true"
+           onDragOver={previewDropProps?.onDragOver}
+           onDrop={previewDropProps?.onDrop}>
+        <div className="scard-idx">{showIdx ? (idx+1) : ''}</div>
+        <div className="scard-r1">
+          {!isNow && <span className="scard-chk" aria-hidden="true"/>}
+          <div className="scard-title">
+            {task.title || 'Untitled'}
+            {isNow && <span className="scard-now-tag">Now</span>}
+          </div>
+        </div>
+        <ChipRow task={task} isProject={isProject} allTasks={allTasks} theme={theme}/>
+        {isProject && kids.length > 0 && (
+          <div className="scard-proj-prog">
+            <div className="bar"><div className="bar-fill" style={{width:projectPct+'%'}}/></div>
+            <span className="num">{doneSubs.length}/{kids.length}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const isCardSurface = (e) => {
     if (renaming) return false;
@@ -849,6 +882,33 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
             const draggingTask = drag.id ? sorted.find(x => x.id === drag.id) : null;
             let lastBucket = null;
 
+            // Render the drop placeholder as a dimmed StackCard. Sharing the
+            // renderer keeps the preview's dimensions, chips, and tier
+            // styling pixel-aligned with what the user will see after drop.
+            // insertionIdx is the slot the dragged card will land at, which
+            // drives is-now / is-deck / is-later so the user can read the
+            // destination tier from the preview itself.
+            const renderPreview = (anchorId, upper, insertionIdx) => {
+              if (!draggingTask) return null;
+              const isNow = insertionIdx === 0;
+              const isDeck = insertionIdx >= 1 && insertionIdx <= 2;
+              const isLater = insertionIdx >= 3 && compactBelowDeck;
+              return (
+                <StackCard
+                  task={draggingTask}
+                  idx={insertionIdx}
+                  showIdx={true}
+                  isNow={isNow}
+                  isDeck={isDeck}
+                  isLater={isLater}
+                  allTasks={allTasks}
+                  theme={theme}
+                  previewMode
+                  previewDropProps={previewDropProps(anchorId, upper)}
+                />
+              );
+            };
+
             const renderCard = (t, slotIdx, isFirstInSlot, slotsLen, suppressEdges = null) => {
               const isNow = slotIdx === 0;
               const isDeck = slotIdx >= 1 && slotIdx <= 2;
@@ -863,7 +923,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
               const showAfter  = wantAfter  && !(suppressEdges && suppressEdges.after);
               return (
                 <React.Fragment key={t.id}>
-                  {showBefore && <DropPreview task={draggingTask} theme={theme} {...previewDropProps(t.id, true)}/>}
+                  {showBefore && renderPreview(t.id, true, slotIdx)}
                   <StackCard
                     task={t}
                     idx={slotIdx}
@@ -900,7 +960,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                     selected={selectedIds?.has(t.id)}
                     onSelect={onSelect}
                   />
-                  {showAfter && <DropPreview task={draggingTask} theme={theme} {...previewDropProps(t.id, false)}/>}
+                  {showAfter && renderPreview(t.id, false, slotIdx + 1)}
                 </React.Fragment>
               );
             };
@@ -933,7 +993,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
               return (
                 <React.Fragment key={`__cg__${grp.id}`}>
                   {divider}
-                  {showBeforeGroup && <DropPreview task={draggingTask} theme={theme} {...previewDropProps(firstCard.id, true)}/>}
+                  {showBeforeGroup && renderPreview(firstCard.id, true, slotIdx)}
                   <div className={`grp-box stack-grp-box${tierClass}`}
                        data-grp-first-id={firstCard.id}
                        data-grp-last-id={lastCard.id}
@@ -957,7 +1017,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                       after: i === slot.tasks.length - 1,
                     }))}
                   </div>
-                  {showAfterGroup && <DropPreview task={draggingTask} theme={theme} {...previewDropProps(lastCard.id, false)}/>}
+                  {showAfterGroup && renderPreview(lastCard.id, false, slotIdx + 1)}
                 </React.Fragment>
               );
             });

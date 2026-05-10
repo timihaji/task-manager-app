@@ -865,7 +865,21 @@ body.marquee-active *{user-select:none !important}
 .scard{user-select:none}
 .scard.is-dragging{opacity:.4;transform:scale(.985);box-shadow:var(--shadow-lg);cursor:grabbing}
 .scard.is-dragging:hover{transform:scale(.985)}
-/* Drop indicator is now a card-shaped DropPreview rendered between cards. */
+/* Drop indicator is a dimmed-out clone of the dragged card, rendered at the
+   insertion point with the destination tier's styling. Sharing the .scard
+   renderer keeps dimensions and chips pixel-aligned with the post-drop
+   result. The dashed accent outline + reduced opacity read as "this is
+   where the card will land", and the inner content stays legible so the
+   user can confirm they're moving the right task. */
+.scard.is-preview{
+  cursor:default;
+  opacity:.7;
+  outline:2px dashed var(--accent);
+  outline-offset:-2px;
+  background:color-mix(in srgb,var(--accent) 8%,var(--surface));
+}
+.scard.is-preview:hover{transform:none;box-shadow:var(--shadow);border-color:var(--border-s);opacity:.7}
+.scard.is-preview .scard-title{color:var(--t2)}
 .stack-body.is-dragging .scard-subs{pointer-events:none}
 .stack-body.is-dragging .scard:hover{transform:none;box-shadow:var(--shadow);border-color:var(--border-s)}
 .stack-body.is-dragging .scard.is-dragging{transform:scale(.985)}
