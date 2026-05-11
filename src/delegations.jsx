@@ -11,12 +11,22 @@ import {
 // Loaded after tm-data.jsx and tm-drawer.jsx via Task Manager v2.html.
 // Exposed on window as DelegationsView.
 
-function DelegationsView({ tasks, onJumpTo, onUpdate, onDelete, onCheckIn }) {
+function DelegationsView({ tasks, onJumpTo, onUpdate, onDelete, onCheckIn,
+                           filter: filterProp, onFilterChange,
+                           sort: sortProp, onSortChange,
+                           expandedNames, onToggleExpanded }) {
   const { useState, useMemo } = React;
+  // Search input stays local (transient, matches every other search input
+  // in the app). Filter / sort / expanded ride the persisted settings blob
+  // via the prop pairs above so the dashboard returns to its last state.
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all'); // all | stale | overdue | quiet
-  const [sort, setSort] = useState('oldest'); // oldest | overdue | name
-  const [expanded, setExpanded] = useState(new Set());
+  const VALID_FILTERS = ['all','stale','overdue','quiet'];
+  const VALID_SORTS = ['oldest','overdue','name'];
+  const filter = VALID_FILTERS.includes(filterProp) ? filterProp : 'all';
+  const setFilter = (v) => onFilterChange?.(v);
+  const sort = VALID_SORTS.includes(sortProp) ? sortProp : 'oldest';
+  const setSort = (v) => onSortChange?.(v);
+  const expanded = useMemo(() => new Set(Array.isArray(expandedNames) ? expandedNames : []), [expandedNames]);
 
   const todayStr = D.str(D.today());
   const rollup = useMemo(() => peopleRollup(tasks || []), [tasks]);
@@ -45,11 +55,7 @@ function DelegationsView({ tasks, onJumpTo, onUpdate, onDelete, onCheckIn }) {
   }, [rollup, search, filter, sort]);
 
   const toggleExpand = (name) => {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name); else next.add(name);
-      return next;
-    });
+    onToggleExpanded?.(name);
   };
 
   const lastContactLabel = (iso) => {

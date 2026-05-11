@@ -256,6 +256,10 @@ function App() {
     calendarPxh: 80,                // calendar drawer pixels-per-hour
     calendarSnapOn: true,           // calendar drawer snap-to-grid
     navUserCollapsed: null,         // null = follow window-width default; true/false = explicit override
+    settingsTab: 'appearance',      // last tab visited in Settings drawer
+    delegationsFilter: 'all',       // Delegations view: all|stale|overdue|quiet
+    delegationsSort: 'oldest',      // Delegations view: oldest|overdue|name
+    delegationsExpanded: [],        // Delegations view: array of expanded person names
   };
   const defaultTaxonomy = () => ({
     contexts: PROJ.map(p=>({...p})),
@@ -3491,7 +3495,17 @@ function App() {
             onJumpTo={(id)=>{ setView('week'); setDrawerId(id); setFocusedId(id); }}
             onUpdate={updateTask}
             onDelete={deleteTask}
-            onCheckIn={(id, mode)=>{ const t=taskById(id); if(t && !t.done) completeTask(id, t.date||'inbox', mode); }}/>
+            onCheckIn={(id, mode)=>{ const t=taskById(id); if(t && !t.done) completeTask(id, t.date||'inbox', mode); }}
+            filter={tweaks.delegationsFilter}
+            onFilterChange={(v)=>setTweak('delegationsFilter', v)}
+            sort={tweaks.delegationsSort}
+            onSortChange={(v)=>setTweak('delegationsSort', v)}
+            expandedNames={tweaks.delegationsExpanded}
+            onToggleExpanded={(name)=>setTweakState(prev=>{
+              const cur = Array.isArray(prev.delegationsExpanded) ? prev.delegationsExpanded : [];
+              const next = cur.includes(name) ? cur.filter(n=>n!==name) : [...cur, name];
+              return { ...prev, delegationsExpanded: next };
+            })}/>
         </div>
       ) : view==='stack' ? (
         <StackView
