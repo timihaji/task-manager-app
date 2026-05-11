@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Project detail v3 — six approaches in the app's style</title>
+<style>
+  :root {
+    --shell-bg: #f3f4f6;
+    --shell-fg: #111827;
+    --shell-muted: #6b7280;
+    --shell-card: #ffffff;
+    --shell-border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--shell-bg);
+    color: var(--shell-fg);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1700px; margin: 0 auto; padding: 40px 32px 80px; }
+  .page > header { margin-bottom: 36px; max-width: 820px; }
+  .page > header h1 { margin: 0 0 10px; font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
+  .page > header .lede { margin: 0 0 8px; color: var(--shell-muted); line-height: 1.55; font-size: 15px; }
+  .page > header .recipe { margin: 0; color: var(--shell-muted); line-height: 1.55; font-size: 13px; }
+  .page > header .recipe b { color: #111827; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px; }
+  .compare-card {
+    background: var(--shell-card);
+    border: 1px solid var(--shell-border);
+    border-radius: 16px;
+    padding: 22px 22px 18px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .compare-card .label-row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+  .compare-card .num { font-size: 12px; font-weight: 700; color: #9ca3af; letter-spacing: 0.04em; }
+  .compare-card .name { font-size: 17px; font-weight: 700; letter-spacing: -0.005em; }
+  .compare-card .tags { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .compare-card .tags span {
+    font-size: 10.5px; font-weight: 500; padding: 2px 8px; border-radius: 999px;
+    background: #f3f4f6; color: #6b7280;
+  }
+  .compare-card .tradeoff { font-size: 13px; color: #4b5563; line-height: 1.5; margin: 0 0 14px; max-width: 64ch; }
+  .frame {
+    aspect-ratio: 16 / 10;
+    border-radius: 4px; overflow: hidden;
+    position: relative; border: 1px solid var(--shell-border);
+    isolation: isolate;
+  }
+  .frame > .mockup { position: absolute; inset: 0; display: flex; flex-direction: column; }
+
+  /* ============ App-style design tokens (dark teal default) ============ */
+  .mk-app {
+    --bg: #071512;
+    --bg-side: #06110f;
+    --bg-top: #06110f;
+    --bg-dr: #10201d;
+    --surface: #10201d;
+    --surface-2: #1d342f;
+    --surface-3: #2a4540;
+    --border: #1d342f;
+    --border-s: #1d342f;
+    --t1: #e6fffb;
+    --t2: #c3ddd7;
+    --t3: #8eada6;
+    --t4: #66837c;
+    --accent: #0f766e;
+    --accent-bright: #2dd4bf;
+    --accent-dim: rgba(15,118,110,.18);
+    --accent-border: rgba(15,118,110,.35);
+    --danger: #ef4444;
+    --danger-bg: rgba(239,68,68,.14);
+    --danger-border: rgba(239,68,68,.35);
+    --warning: #f59e0b;
+    --warning-bg: rgba(245,158,11,.14);
+    --warning-border: rgba(245,158,11,.35);
+    --success: #10b981;
+    --rk: 2px;
+    --rk-pill: 999px;
+    background: var(--bg);
+    color: var(--t1);
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size: 12px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mk-app-light {
+    --bg: #f3f7f4;
+    --bg-side: #e7efe9;
+    --bg-top: #fffdfa;
+    --bg-dr: #fffdfa;
+    --surface: #fffdfa;
+    --surface-2: #f3f7f4;
+    --surface-3: #d5ded7;
+    --border: #d5ded7;
+    --border-s: #d5ded7;
+    --t1: #0e1614;
+    --t2: #2a3530;
+    --t3: #46524c;
+    --t4: #5a6a63;
+    --accent: #0f766e;
+    --accent-dim: rgba(15,118,110,.10);
+    --accent-border: rgba(15,118,110,.30);
+    --danger: #b91c1c;
+    --danger-bg: #fef2f2;
+    --danger-border: rgba(239,68,68,.4);
+    --warning: #b45309;
+    --warning-bg: #fffbeb;
+  }
+
+  /* ===== shared app-flavoured atoms (used by multiple variations) ===== */
+  .mk-app .a-mono { font-family: 'Geist Mono', ui-monospace, "SF Mono", Menlo, monospace; }
+  .mk-app .a-lbl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t4); }
+  .mk-app .a-icon { width: 22px; height: 22px; background: linear-gradient(135deg,#6366f1,#8b5cf6); border-radius: var(--rk); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .mk-app .a-pill-ok { padding: 2px 7px; border-radius: var(--rk); font-size: 10px; background: var(--accent-dim); color: var(--accent-bright, var(--accent)); border: 1px solid var(--accent-border); font-weight: 500; }
+  .mk-app .a-pill-warn { padding: 2px 7px; border-radius: var(--rk); font-size: 10px; background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); font-weight: 500; }
+  .mk-app .a-pill-bad { padding: 2px 7px; border-radius: var(--rk); font-size: 10px; background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); font-weight: 500; }
+  .mk-app .a-sep { width: 1px; height: 14px; background: var(--border-s); }
+  .mk-app .a-prog { flex: 1; height: 6px; background: var(--surface-3); border-radius: 999px; overflow: hidden; max-width: 120px; }
+  .mk-app .a-prog > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+  .mk-app .a-tab { padding: 5px 10px; font-size: 11px; color: var(--t3); cursor: pointer; border-radius: var(--rk); }
+  .mk-app .a-tab.act { color: var(--t1); background: var(--surface-2); }
+  .mk-app .a-stat { display: inline-flex; gap: 4px; align-items: baseline; font-size: 11px; }
+  .mk-app .a-stat .k { color: var(--t4); }
+  .mk-app .a-stat .v { color: var(--t1); font-family: 'Geist Mono', ui-monospace, monospace; font-weight: 500; }
+  .mk-app .a-stat .v.bad { color: var(--danger); }
+  .mk-app .a-stat .v.warn { color: var(--warning); }
+  .mk-app .a-stat .v.ok { color: var(--success); }
+  .mk-app .a-card { background: var(--surface); border: 1px solid var(--border-s); border-radius: var(--rk); padding: 6px 8px; font-size: 11.5px; color: var(--t1); line-height: 1.3; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .mk-app-light .a-card { box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .mk-app .a-card .m { display: flex; gap: 5px; align-items: center; margin-top: 3px; font-size: 9.5px; color: var(--t4); font-family: 'Geist Mono', ui-monospace, monospace; }
+  .mk-app .a-card.blk { border-left: 2px solid var(--danger); }
+  .mk-app .a-card.over { border-left: 2px solid var(--warning); }
+  .mk-app .a-pdot { width: 6px; height: 6px; border-radius: 1px; flex-shrink: 0; background: var(--accent); }
+  .mk-app .a-pdot.p1 { background: var(--danger); }
+  .mk-app .a-pdot.p2 { background: var(--warning); }
+  .mk-app .a-pdot.p3 { background: var(--t4); }
+  .mk-app .a-col { background: transparent; border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+  .mk-app .a-col:last-child { border-right: none; }
+  .mk-app .a-col-hdr { padding: 8px 10px 6px; border-bottom: 1px dashed var(--border-s); }
+  .mk-app .a-col-day { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t4); }
+  .mk-app .a-col-cnt { font-size: 16px; font-weight: 600; color: var(--t2); letter-spacing: -0.4px; line-height: 1.1; margin-top: 2px; font-family: 'Geist Mono', ui-monospace, monospace; }
+  .mk-app .a-col-body { padding: 6px; display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow: hidden; }
+
+  /* ============ A1: Toolbar Stack (canonical app pattern) ============ */
+  .a1-tb { height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--bg-top); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .a1-crumb { font-size: 11.5px; color: var(--t3); display: flex; align-items: center; gap: 6px; }
+  .a1-crumb .a { color: var(--t1); font-weight: 500; }
+  .a1-crumb .id { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px; color: var(--t4); }
+  .a1-tb-r { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .a1-iconb { width: 26px; height: 26px; border-radius: var(--rk); border: none; background: transparent; color: var(--t3); display: flex; align-items: center; justify-content: center; font-size: 13px; }
+  .a1-iconb:hover { background: var(--surface-2); }
+  .a1-tb2 { height: 30px; display: flex; align-items: center; gap: 14px; padding: 0 12px; background: var(--bg-top); border-bottom: 1px solid var(--border); font-size: 11px; flex-shrink: 0; }
+  .a1-tb2 .grp { display: flex; gap: 4px; align-items: baseline; }
+  .a1-tb2 .grp .k { color: var(--t4); font-size: 10px; }
+  .a1-tb2 .grp .v { color: var(--t1); font-family: 'Geist Mono', ui-monospace, monospace; font-weight: 500; font-size: 11px; }
+  .a1-tb2 .grp .v.bad { color: var(--danger); }
+  .a1-tb2 .grp .v.warn { color: var(--warning); }
+  .a1-tb2 .grp .v.ok { color: var(--success); }
+  .a1-tb3 { height: 30px; display: flex; align-items: center; gap: 2px; padding: 0 8px; background: var(--bg); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .a1-tb3 span { padding: 4px 10px; font-size: 11px; color: var(--t3); border-radius: var(--rk); cursor: pointer; }
+  .a1-tb3 span.act { color: var(--t1); background: var(--surface-2); font-weight: 500; }
+  .a1-tb3 .right { margin-left: auto; display: flex; gap: 6px; font-size: 10px; color: var(--t4); align-items: center; }
+  .a1-body { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); min-height: 0; background: var(--bg); }
+  .a1-foot { height: 22px; display: flex; align-items: center; gap: 14px; padding: 0 12px; background: var(--bg-top); border-top: 1px solid var(--border); font-size: 10px; color: var(--t4); flex-shrink: 0; font-family: 'Geist Mono', ui-monospace, monospace; }
+  .a1-foot kbd { font-size: 9px; padding: 1px 4px; border: 1px solid var(--border-s); border-radius: 2px; background: var(--surface-2); color: var(--t3); }
+
+  /* ============ A2: Sidebar Cockpit ============ */
+  .a2 { display: flex; }
+  .a2-rail { width: 38%; background: var(--bg-side); border-right: 1px solid var(--border); padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+  .a2-head { display: flex; align-items: flex-start; gap: 8px; }
+  .a2-head h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--t1); letter-spacing: -0.2px; line-height: 1.2; }
+  .a2-head .id { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 9.5px; color: var(--t4); margin-top: 1px; }
+  .a2-pillrow { display: flex; gap: 4px; flex-wrap: wrap; }
+  .a2-sec { display: flex; flex-direction: column; }
+  .a2-sec .lbl { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t4); padding: 0 7px 4px; }
+  .a2-row { display: flex; align-items: center; gap: 7px; padding: 4px 8px; border-radius: var(--rk); font-size: 11.5px; color: var(--t3); cursor: pointer; }
+  .a2-row:hover { background: var(--surface-2); color: var(--t2); }
+  .a2-row.act { background: var(--surface-2); color: var(--t1); font-weight: 500; }
+  .a2-row.act::before { content: ''; width: 2px; height: 12px; background: var(--accent); border-radius: 1px; margin-left: -10px; margin-right: 8px; }
+  .a2-row .cnt { margin-left: auto; font-size: 10px; font-family: 'Geist Mono', ui-monospace, monospace; color: var(--t4); }
+  .a2-row.act .cnt { color: var(--accent); }
+  .a2-kpi { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 0 6px; }
+  .a2-kpi .tile { background: var(--surface); border: 1px solid var(--border-s); border-radius: var(--rk); padding: 5px 7px; }
+  .a2-kpi .tile .l { font-size: 8.5px; color: var(--t4); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  .a2-kpi .tile .v { font-size: 16px; font-weight: 600; color: var(--t1); letter-spacing: -0.3px; line-height: 1.1; margin-top: 1px; font-family: 'Geist Mono', ui-monospace, monospace; }
+  .a2-kpi .tile .v.warn { color: var(--warning); }
+  .a2-kpi .tile .v.bad { color: var(--danger); }
+  .a2-kpi .tile .v.ok { color: var(--success); }
+  .a2-stats { padding: 0 8px; display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; }
+  .a2-stats .row { display: flex; justify-content: space-between; color: var(--t3); }
+  .a2-stats .row .v { color: var(--t1); font-family: 'Geist Mono', ui-monospace, monospace; }
+  .a2-stats .row .v.ok { color: var(--success); }
+  .a2-board { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+  .a2-board-tb { height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-bottom: 1px solid var(--border); font-size: 10.5px; color: var(--t3); }
+  .a2-board-tb .ttl { font-size: 11.5px; color: var(--t1); font-weight: 500; }
+  .a2-cols { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); min-height: 0; }
+
+  /* ============ A3: Inset Card Header ============ */
+  .a3 { background: var(--bg); padding: 12px; gap: 10px; }
+  .a3-card { background: var(--surface); border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border-s)); border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.4); padding: 12px 14px 0; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+  .a3-card-head { display: flex; align-items: center; gap: 10px; }
+  .a3-card-head h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--t1); letter-spacing: -0.2px; }
+  .a3-card-head .id { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px; color: var(--t4); }
+  .a3-card-head .acts { margin-left: auto; display: flex; gap: 4px; }
+  .a3-card-head .acts span { width: 24px; height: 24px; border-radius: var(--rk); display: flex; align-items: center; justify-content: center; color: var(--t3); font-size: 12px; }
+  .a3-brief { font-size: 12px; color: var(--t2); line-height: 1.5; max-width: 76ch; }
+  .a3-brief em { color: var(--accent-bright, var(--accent)); font-style: normal; font-weight: 500; }
+  .a3-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding-bottom: 4px; }
+  .a3-kpis .tile { padding: 5px 0; }
+  .a3-kpis .tile .l { font-size: 9px; color: var(--t4); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  .a3-kpis .tile .v { font-size: 16px; font-weight: 600; color: var(--t1); letter-spacing: -0.3px; line-height: 1.1; margin-top: 1px; font-family: 'Geist Mono', ui-monospace, monospace; }
+  .a3-kpis .tile .v.warn { color: var(--warning); }
+  .a3-kpis .tile .v.bad { color: var(--danger); }
+  .a3-kpis .tile .v.ok { color: var(--success); }
+  .a3-tabs { display: flex; gap: 1px; border-top: 1px solid var(--border); margin: 0 -14px; padding: 0 8px; }
+  .a3-tabs span { padding: 7px 12px; font-size: 11px; color: var(--t3); border-bottom: 2px solid transparent; cursor: pointer; }
+  .a3-tabs span.act { color: var(--t1); border-bottom-color: var(--accent); font-weight: 500; }
+  .a3-tabs .right { margin-left: auto; padding: 7px 12px; font-size: 10px; color: var(--t4); font-family: 'Geist Mono', ui-monospace, monospace; }
+  .a3-board { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); min-height: 0; gap: 8px; }
+
+  /* ============ A4: Chip Cloud ============ */
+  .a4 { background: var(--bg); }
+  .a4-tb { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: var(--bg-top); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .a4-tb h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--t1); letter-spacing: -0.2px; }
+  .a4-tb .id { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px; color: var(--t4); }
+  .a4-chips { padding: 8px 14px; display: flex; flex-wrap: wrap; gap: 5px; background: var(--bg-top); border-bottom: 1px solid var(--border); }
+  .a4-chips .chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: var(--rk); font-size: 10.5px; border: 1px solid var(--border-s); background: var(--surface-2); color: var(--t2); }
+  .a4-chips .chip .k { color: var(--t4); font-size: 10px; }
+  .a4-chips .chip .v { color: var(--t1); font-family: 'Geist Mono', ui-monospace, monospace; font-weight: 500; }
+  .a4-chips .chip.ok { background: var(--accent-dim); color: var(--accent-bright, var(--accent)); border-color: var(--accent-border); }
+  .a4-chips .chip.warn { background: var(--warning-bg); color: var(--warning); border-color: var(--warning-border); }
+  .a4-chips .chip.bad { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-border); }
+  .a4-chips .chip.bad .v, .a4-chips .chip.warn .v, .a4-chips .chip.ok .v { color: inherit; }
+  .a4-tabs { padding: 8px 14px; display: flex; gap: 5px; background: var(--bg-top); border-bottom: 1px solid var(--border); }
+  .a4-tabs .t { padding: 4px 11px; border-radius: var(--rk); font-size: 11px; color: var(--t3); border: 1px solid var(--border-s); background: transparent; cursor: pointer; }
+  .a4-tabs .t.act { color: var(--t1); background: var(--surface-2); border-color: var(--accent-border); }
+  .a4-board { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); min-height: 0; }
+
+  /* ============ A5: Compact / High-Density ============ */
+  .a5 { background: var(--bg); }
+  .a5-tb { height: 28px; display: flex; align-items: center; gap: 10px; padding: 0 10px; background: var(--bg-top); border-bottom: 1px solid var(--border); font-size: 11px; flex-shrink: 0; }
+  .a5-tb .crumb { color: var(--t3); }
+  .a5-tb .crumb b { color: var(--t1); font-weight: 500; }
+  .a5-tb .id { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px; color: var(--t4); }
+  .a5-tb .grp { display: flex; gap: 3px; align-items: baseline; }
+  .a5-tb .grp .k { color: var(--t4); font-size: 9.5px; }
+  .a5-tb .grp .v { color: var(--t1); font-family: 'Geist Mono', ui-monospace, monospace; font-weight: 500; font-size: 10.5px; }
+  .a5-tb .grp .v.bad { color: var(--danger); }
+  .a5-tb .grp .v.warn { color: var(--warning); }
+  .a5-tb .grp .v.ok { color: var(--success); }
+  .a5-tabs { height: 24px; display: flex; align-items: center; padding: 0 6px; background: var(--bg); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .a5-tabs span { padding: 3px 8px; font-size: 10px; color: var(--t3); border-radius: 1px; cursor: pointer; }
+  .a5-tabs span.act { color: var(--t1); background: var(--surface-2); }
+  .a5-tabs .right { margin-left: auto; padding: 3px 6px; font-size: 9.5px; color: var(--t4); font-family: 'Geist Mono', ui-monospace, monospace; }
+  .a5-body { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); min-height: 0; }
+  .a5-card { background: var(--surface); border: 1px solid var(--border-s); border-radius: var(--rk); padding: 4px 6px; font-size: 10.5px; color: var(--t1); line-height: 1.25; }
+  .a5-card .m { font-size: 9px; color: var(--t4); font-family: 'Geist Mono', ui-monospace, monospace; margin-top: 1px; }
+  .a5-card.blk { border-left: 2px solid var(--danger); }
+  .a5-card.over { border-left: 2px solid var(--warning); }
+  .a5-foot { height: 18px; padding: 0 10px; background: var(--bg-top); border-top: 1px solid var(--border); font-size: 9.5px; color: var(--t4); display: flex; align-items: center; gap: 12px; font-family: 'Geist Mono', ui-monospace, monospace; flex-shrink: 0; }
+
+  /* ============ A6: Glass Floating Bar ============ */
+  .a6 { background: radial-gradient(ellipse at top, rgba(15,118,110,0.18) 0%, transparent 60%), var(--bg); position: relative; }
+  .a6-board { position: absolute; inset: 0; padding: 76px 12px 28px; display: flex; flex-direction: column; gap: 8px; }
+  .a6-cols { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); min-height: 0; gap: 8px; }
+  .a6-cols .c { background: rgba(16, 32, 29, 0.55); border: 1px solid var(--border-s); border-radius: 4px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-height: 0; backdrop-filter: blur(6px); }
+  .a6-cols .h { display: flex; justify-content: space-between; padding: 1px 4px 4px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t3); }
+  .a6-cols .h span { color: var(--t4); font-family: 'Geist Mono', ui-monospace, monospace; }
+  .a6-glass { position: absolute; top: 12px; left: 12px; right: 12px; background: rgba(7, 21, 18, 0.72); backdrop-filter: blur(14px) saturate(140%); border: 1px solid var(--border-s); border-radius: 4px; box-shadow: 0 8px 32px rgba(0,0,0,.5); padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .a6-row1 { display: flex; align-items: center; gap: 8px; }
+  .a6-row1 h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--t1); letter-spacing: -0.2px; }
+  .a6-row1 .id { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px; color: var(--t4); }
+  .a6-row2 { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 10.5px; }
+  .a6-row2 .grp { display: flex; gap: 4px; align-items: baseline; }
+  .a6-row2 .k { color: var(--t4); font-size: 10px; }
+  .a6-row2 .v { color: var(--t1); font-family: 'Geist Mono', ui-monospace, monospace; font-weight: 500; }
+  .a6-row2 .v.bad { color: var(--danger); }
+  .a6-row2 .v.warn { color: var(--warning); }
+  .a6-row2 .v.ok { color: var(--success); }
+  .a6-tabs { display: flex; gap: 1px; padding-top: 4px; border-top: 1px solid var(--border-s); }
+  .a6-tabs span { padding: 4px 10px; font-size: 10.5px; color: var(--t3); cursor: pointer; border-radius: var(--rk); }
+  .a6-tabs span.act { color: var(--t1); background: rgba(255,255,255,0.06); }
+  .a6-foot { position: absolute; bottom: 0; left: 0; right: 0; height: 20px; padding: 0 12px; background: rgba(7, 21, 18, 0.6); backdrop-filter: blur(8px); border-top: 1px solid var(--border-s); font-size: 9px; color: var(--t4); display: flex; align-items: center; gap: 10px; font-family: 'Geist Mono', ui-monospace, monospace; }
+
+  @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Project detail v3 — six approaches in the app's own style</h1>
+    <p class="lede">Locking the functional pattern: <b>permanent dense status bar(s) + tab-driven body</b> (from the v2 Tabbed Command Bar). Now varying layout, density, and tone — but every mockup uses the app's actual design tokens: Geist font, dark teal background <code style="font-size:11px">#071512</code>, teal accent <code style="font-size:11px">#0f766e</code>, 2px corners, 9.5px UPPERCASE labels, mono numbers.</p>
+    <p class="recipe"><b>Common ingredients across all six:</b> project crumb + ID, status pill, all KPIs always visible, tab strip (Board / List / Brief / Decisions / Activity / Files), kanban body. Differs only in <i>where</i> each piece sits and how loud it is.</p>
+  </header>
+  <div class="grid">
+
+    <!-- ============ 1. Toolbar Stack ============ -->
+    <div class="compare-card">
+      <div class="label-row"><span class="num">01</span><span class="name">Toolbar Stack</span></div>
+      <div class="tags"><span>3 horizontal bars</span><span>most app-native</span><span>density: medium</span></div>
+      <p class="tradeoff"><b>Tradeoff:</b> Three thin stacked bars — crumb, metrics, tabs — exactly mirroring the existing <code style="font-size:11px">.topbar</code> + <code style="font-size:11px">.col-hdr</code> rhythm. Most familiar muscle memory; trades 96px of vertical space for dense always-on context.</p>
+      <div class="frame">
+        <div class="mockup mk-app a1">
+          <div class="a1-tb">
+            <span class="a-icon">A</span>
+            <span class="a1-crumb">Projects <span style="color:var(--t4)">›</span> WORK <span style="color:var(--t4)">›</span> <span class="a">Acme — Q2 product launch</span> <span class="id">PRJ-001</span></span>
+            <span class="a-pill-ok">● Active</span>
+            <span class="a-pill-warn">◐ At risk</span>
+            <span class="a1-tb-r">
+              <span class="a1-iconb">⚲</span>
+              <span class="a1-iconb">⚙</span>
+              <span class="a1-iconb">×</span>
+            </span>
+          </div>
+          <div class="a1-tb2">
+            <span class="grp"><span class="k">done</span><span class="v">47%</span></span>
+            <span class="a-prog" style="max-width:80px"><span style="width:47%"></span></span>
+            <span class="grp"><span class="k">tasks</span><span class="v">11</span></span>
+            <span class="grp"><span class="k">blk</span><span class="v warn">2</span></span>
+            <span class="grp"><span class="k">over</span><span class="v bad">1</span></span>
+            <span class="grp"><span class="k">days_left</span><span class="v">12</span></span>
+            <span class="grp"><span class="k">vel</span><span class="v ok">+8%/wk</span></span>
+            <span class="grp"><span class="k">est</span><span class="v">42h</span></span>
+            <span class="grp"><span class="k">spent</span><span class="v">19h</span></span>
+            <span style="margin-left:auto;font-family:'Geist Mono',monospace;font-size:10px;color:var(--t4)">May 1 → Jun 15</span>
+          </div>
+          <div class="a1-tb3">
+            <span class="act">Board</span><span>List</span><span>Brief</span><span>Decisions</span><span>Activity</span><span>Files</span>
+            <span class="right"><span style="font-family:'Geist Mono',monospace">filter · group · sort</span><span style="margin:0 4px">·</span><span class="a-mono" style="font-size:9.5px">⌘K</span></span>
+          </div>
+          <div class="a1-body">
+            <div class="a-col">
+              <div class="a-col-hdr"><div class="a-col-day">To do</div><div class="a-col-cnt">4</div></div>
+              <div class="a-col-body">
+                <div class="a-card blk">Lock pricing tiers<div class="m"><span class="a-pdot p1"></span>P1 · -2d · 2h · ⊘blocked</div></div>
+                <div class="a-card">Press release draft<div class="m"><span class="a-pdot p2"></span>P2 · +5d · 3h</div></div>
+                <div class="a-card">Onboarding emails<div class="m"><span class="a-pdot p3"></span>P3 · +8d · 3h</div></div>
+                <div class="a-card">Legal ToS review<div class="m"><span class="a-pdot p2"></span>P2 · +6d</div></div>
+              </div>
+            </div>
+            <div class="a-col">
+              <div class="a-col-hdr"><div class="a-col-day">Doing</div><div class="a-col-cnt">2</div></div>
+              <div class="a-col-body">
+                <div class="a-card over">QA on staging build<div class="m"><span class="a-pdot p1"></span>P1 · today · 4h</div></div>
+                <div class="a-card">Write launch FAQ<div class="m"><span class="a-pdot p2"></span>P2 · +3d · 2h</div></div>
+              </div>
+            </div>
+            <div class="a-col">
+              <div class="a-col-hdr"><div class="a-col-day">Done</div><div class="a-col-cnt">5</div></div>
+              <div class="a-col-body">
+                <div class="a-card" style="opacity:.55">Brief approved</div>
+                <div class="a-card" style="opacity:.55">Domain registered</div>
+                <div class="a-card" style="opacity:.55">Hero copy v1</div>
+                <div class="a-card" style="opacity:.55">Stack chosen</div>
+              </div>
+            </div>
+          </div>
+          <div class="a1-foot">
+            <span><kbd>n</kbd> new</span><span><kbd>/</kbd> search</span><span><kbd>g b</kbd> board</span><span><kbd>g r</kbd> brief</span>
+            <span style="margin-left:auto;color:var(--success)">● synced · 12m ago</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 2. Sidebar Cockpit ============ -->
+    <div class="compare-card">
+      <div class="label-row"><span class="num">02</span><span class="name">Sidebar Cockpit</span></div>
+      <div class="tags"><span>vertical rail</span><span>tabs as nav</span><span>density: medium-high</span></div>
+      <p class="tradeoff"><b>Tradeoff:</b> Reuses the <code style="font-size:11px">.lnav</code> vocabulary — title, KPI tiles, tabs-as-nav-rows all in a left rail. Tabs become first-class navigation; metrics get a real home (not a thin strip). Costs 38% of horizontal width permanently.</p>
+      <div class="frame">
+        <div class="mockup mk-app a2">
+          <div class="a2-rail">
+            <div class="a2-head">
+              <span class="a-icon">A</span>
+              <div style="flex:1;min-width:0">
+                <h3>Acme — Q2 launch</h3>
+                <div class="id">PRJ-001 · WORK · May 1 → Jun 15</div>
+              </div>
+            </div>
+            <div class="a2-pillrow">
+              <span class="a-pill-ok">● Active</span>
+              <span class="a-pill-warn">◐ At risk</span>
+            </div>
+            <div class="a2-kpi">
+              <div class="tile"><div class="l">Done</div><div class="v">47%</div></div>
+              <div class="tile"><div class="l">Days left</div><div class="v">12</div></div>
+              <div class="tile"><div class="l">Blocked</div><div class="v warn">2</div></div>
+              <div class="tile"><div class="l">Overdue</div><div class="v bad">1</div></div>
+            </div>
+            <div class="a2-sec">
+              <div class="lbl">Views</div>
+              <div class="a2-row act"><span style="opacity:.7">▦</span>Board<span class="cnt">11</span></div>
+              <div class="a2-row"><span style="opacity:.7">≡</span>List<span class="cnt">11</span></div>
+              <div class="a2-row"><span style="opacity:.7">¶</span>Brief</div>
+              <div class="a2-row"><span style="opacity:.7">⊜</span>Decisions<span class="cnt">2</span></div>
+              <div class="a2-row"><span style="opacity:.7">⌖</span>Activity</div>
+              <div class="a2-row"><span style="opacity:.7">⊕</span>Files</div>
+            </div>
+            <div class="a2-sec" style="margin-top:auto">
+              <div class="lbl">Stats</div>
+              <div class="a2-stats">
+                <div class="row"><span>velocity</span><span class="v ok">+8%/wk</span></div>
+                <div class="row"><span>estimate</span><span class="v">42h</span></div>
+                <div class="row"><span>spent</span><span class="v">19h</span></div>
+                <div class="row"><span>variance</span><span class="v ok">-3h</span></div>
+                <div class="row"><span>last activity</span><span class="v">12m ago</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="a2-board">
+            <div class="a2-board-tb">
+              <span class="ttl">Board</span>
+              <span style="font-family:'Geist Mono',monospace;font-size:10px;color:var(--t4)">11 subtasks · 4 / 2 / 5</span>
+              <span style="margin-left:auto;font-size:10px;color:var(--t4)">+ new · filter</span>
+            </div>
+            <div class="a2-cols">
+              <div class="a-col">
+                <div class="a-col-hdr"><div class="a-col-day">To do</div><div class="a-col-cnt">4</div></div>
+                <div class="a-col-body">
+                  <div class="a-card blk">Lock pricing tiers<div class="m"><span class="a-pdot p1"></span>P1 · -2d</div></div>
+                  <div class="a-card">Press release<div class="m"><span class="a-pdot p2"></span>P2 · +5d</div></div>
+                  <div class="a-card">Onboarding emails<div class="m"><span class="a-pdot p3"></span>P3 · +8d</div></div>
+                  <div class="a-card">Legal ToS review<div class="m"><span class="a-pdot p2"></span>P2 · +6d</div></div>
+                </div>
+              </div>
+              <div class="a-col">
+                <div class="a-col-hdr"><div class="a-col-day">Doing</div><div class="a-col-cnt">2</div></div>
+                <div class="a-col-body">
+                  <div class="a-card over">QA staging build<div class="m"><span class="a-pdot p1"></span>P1 · today · 4h</div></div>
+                  <div class="a-card">Launch FAQ<div class="m"><span class="a-pdot p2"></span>P2 · +3d</div></div>
+                </div>
+              </div>
+              <div class="a-col">
+                <div class="a-col-hdr"><div class="a-col-day">Done</div><div class="a-col-cnt">5</div></div>
+                <div class="a-col-body">
+                  <div class="a-card" style="opacity:.55">Brief approved</div>
+                  <div class="a-card" style="opacity:.55">Domain registered</div>
+                  <div class="a-card" style="opacity:.55">Hero copy v1</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 3. Inset Card Header ============ -->
+    <div class="compare-card">
+      <div class="label-row"><span class="num">03</span><span class="name">Inset Card Header</span></div>
+      <div class="tags"><span>contained header</span><span>card-as-header</span><span>density: medium-low</span></div>
+      <p class="tradeoff"><b>Tradeoff:</b> Header is one big bordered block (matching <code style="font-size:11px">.card-project</code>). Brief lives inline above the KPIs; tabs are part of the card's footer. More breathing room, more "document"-feeling — but eats more vertical space than stacked bars.</p>
+      <div class="frame">
+        <div class="mockup mk-app a3">
+          <div class="a3-card">
+            <div class="a3-card-head">
+              <span class="a-icon">A</span>
+              <h3>Acme — Q2 product launch</h3>
+              <span class="id">PRJ-001 · WORK</span>
+              <span class="a-pill-ok">● Active</span>
+              <span class="a-pill-warn">◐ At risk</span>
+              <div class="acts"><span>⚲</span><span>⚙</span><span>×</span></div>
+            </div>
+            <div class="a3-brief">Ship Acme self-serve before the Q2 board meeting. Pricing &amp; legal are the long poles, neither on eng critical path. <em>Done when 3 pilots are paid by Jun 15 with onboarding NPS ≥ 40.</em></div>
+            <div class="a3-kpis">
+              <div class="tile"><div class="l">Done</div><div class="v">47%</div></div>
+              <div class="tile"><div class="l">Days left</div><div class="v">12</div></div>
+              <div class="tile"><div class="l">Blocked</div><div class="v warn">2</div></div>
+              <div class="tile"><div class="l">Overdue</div><div class="v bad">1</div></div>
+              <div class="tile"><div class="l">Velocity</div><div class="v ok">+8%</div></div>
+              <div class="tile"><div class="l">Time</div><div class="v">19/42h</div></div>
+            </div>
+            <div class="a3-tabs">
+              <span class="act">Board</span><span>List</span><span>Brief</span><span>Decisions</span><span>Activity</span><span>Files</span>
+              <span class="right">11 subtasks</span>
+            </div>
+          </div>
+          <div class="a3-board">
+            <div class="a-col">
+              <div class="a-col-hdr"><div class="a-col-day">To do</div><div class="a-col-cnt">4</div></div>
+              <div class="a-col-body">
+                <div class="a-card blk">Lock pricing tiers<div class="m"><span class="a-pdot p1"></span>P1 · -2d</div></div>
+                <div class="a-card">Press release<div class="m"><span class="a-pdot p2"></span>P2 · +5d</div></div>
+                <div class="a-card">Onboarding emails<div class="m"><span class="a-pdot p3"></span>P3 · +8d</div></div>
+              </div>
+            </div>
+            <div class="a-col">
+              <div class="a-col-hdr"><div class="a-col-day">Doing</div><div class="a-col-cnt">2</div></div>
+              <div class="a-col-body">
+                <div class="a-card over">QA staging build<div class="m"><span class="a-pdot p1"></span>P1 · today</div></div>
+                <div class="a-card">Launch FAQ<div class="m"><span class="a-pdot p2"></span>P2 · +3d</div></div>
+              </div>
+            </div>
+            <div class="a-col">
+              <div class="a-col-hdr"><div class="a-col-day">Done</div><div class="a-col-cnt">5</div></div>
+              <div class="a-col-body">
+                <div class="a-card" style="opacity:.55">Brief approved</div>
+                <div class="a-card" style="opacity:.55">Domain registered</div>
+                <div class="a-card" style="opacity:.55">Hero copy v1</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 4. Chip Cloud ============ -->
+    <div class="compare-card">
+      <div class="label-row"><span class="num">04</span><span class="name">Chip Cloud</span></div>
+      <div class="tags"><span>chips not bars</span><span>task-card-flavored</span><span>density: medium</span></div>
+      <p class="tradeoff"><b>Tradeoff:</b> Replaces the wall of monospace text with semantic <code style="font-size:11px">.dr-chip</code>-style chips — colour-coded, scannable, the same vocabulary as task drawer pills. Softer feel; loses some at-a-glance density.</p>
+      <div class="frame">
+        <div class="mockup mk-app a4">
+          <div class="a4-tb">
+            <span class="a-icon">A</span>
+            <h3>Acme — Q2 product launch</h3>
+            <span class="id">PRJ-001 · WORK</span>
+            <span style="margin-left:auto;display:flex;gap:4px;font-size:11px;color:var(--t4)">
+              <span style="padding:3px 7px">⚲</span><span style="padding:3px 7px">⚙</span><span style="padding:3px 7px">×</span>
+            </span>
+          </div>
+          <div class="a4-chips">
+            <span class="chip ok"><span>●</span> Active</span>
+            <span class="chip warn"><span>◐</span> At risk</span>
+            <span class="chip"><span class="k">done</span><span class="v">47%</span></span>
+            <span class="chip"><span class="k">tasks</span><span class="v">11</span></span>
+            <span class="chip warn"><span class="k">blocked</span><span class="v">2</span></span>
+            <span class="chip bad"><span class="k">overdue</span><span class="v">1</span></span>
+            <span class="chip"><span class="k">days left</span><span class="v">12</span></span>
+            <span class="chip"><span class="k">velocity</span><span class="v" style="color:var(--success)">+8%/wk</span></span>
+            <span class="chip"><span class="k">est</span><span class="v">42h</span></span>
+            <span class="chip"><span class="k">spent</span><span class="v">19h</span></span>
+            <span class="chip"><span class="k">→</span><span class="v">Jun 15</span></span>
+          </div>
+          <div class="a4-tabs">
+            <span class="t act">Board</span>
+            <span class="t">List</span>
+            <span class="t">Brief</span>
+            <span class="t">Decisions <span style="color:var(--t4);font-family:'Geist Mono',monospace;font-size:9.5px">2</span></span>
+            <span class="t">Activity</span>
+            <span class="t">Files</span>
+          </div>
+          <div class="a4-board">
+            <div class="a-col">
+              <div class="a-col-hdr"><div class="a-col-day">To do</div><div class="a-col-cnt">4</div></div>
+              <div class="a-col-body">
+                <div class="a-card blk">Lock pricing tiers<div class="m"><span class="a-pdot p1"></span>P1 · -2d</div></div>
+                <div class="a-card">Press release<div class="m"><span class="a-pdot p2"></span>P2 · +5d</div></div>
+                <div class="a-card">Onboarding emails<div class="m"><span class="a-pdot p3"></span>P3 · +8d</div></div>
+              </div>
+            </div>
+            <div class="a-col">
+              <div class="a-col-hdr"><div class="a-col-day">Doing</div><div class="a-col-cnt">2</div></div>
+              <div class="a-col-body">
+                <div class="a-card over">QA staging build<div class="m"><span class="a-pdot p1"></span>P1 · today</div></div>
+                <div class="a-card">Launch FAQ<div class="m"><span class="a-pdot p2"></span>P2 · +3d</div></div>
+              </div>
+            </div>
+            <div class="a-col">
+              <div class="a-col-hdr"><div class="a-col-day">Done</div><div class="a-col-cnt">5</div></div>
+              <div class="a-col-body">
+                <div class="a-card" style="opacity:.55">Brief approved</div>
+                <div class="a-card" style="opacity:.55">Domain registered</div>
+                <div class="a-card" style="opacity:.55">Hero copy v1</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 5. Compact / High-Density ============ -->
+    <div class="compare-card">
+      <div class="label-row"><span class="num">05</span><span class="name">Compact (single-line)</span></div>
+      <div class="tags"><span>1 thin bar</span><span>data-density=compact</span><span>density: very high</span></div>
+      <p class="tradeoff"><b>Tradeoff:</b> Single 28px bar — title, status, every KPI, all on one line. Sub-tabs in a 24px strip. Cards use <code style="font-size:11px">data-density="compact"</code> sizing. Maximum board real estate; punishing on small screens, beautiful at 1440px+.</p>
+      <div class="frame">
+        <div class="mockup mk-app a5">
+          <div class="a5-tb">
+            <span style="width:14px;height:14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:1px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff">A</span>
+            <span class="crumb"><b>Acme — Q2 launch</b></span>
+            <span class="id">PRJ-001</span>
+            <span class="a-pill-ok" style="font-size:9px;padding:1px 5px">Active</span>
+            <span class="a-pill-warn" style="font-size:9px;padding:1px 5px">At risk</span>
+            <span class="grp"><span class="k">done</span><span class="v">47%</span></span>
+            <span class="grp"><span class="k">·</span><span class="v">11</span></span>
+            <span class="grp"><span class="k">blk</span><span class="v warn">2</span></span>
+            <span class="grp"><span class="k">over</span><span class="v bad">1</span></span>
+            <span class="grp"><span class="k">d</span><span class="v">12</span></span>
+            <span class="grp"><span class="k">vel</span><span class="v ok">+8%</span></span>
+            <span class="grp"><span class="k">est</span><span class="v">42h</span></span>
+            <span class="grp"><span class="k">spent</span><span class="v">19h</span></span>
+            <span class="grp"><span class="k">var</span><span class="v ok">-3h</span></span>
+            <span style="margin-left:auto;font-family:'Geist Mono',monospace;font-size:9.5px;color:var(--t4)">May 1 → Jun 15</span>
+          </div>
+          <div class="a5-tabs">
+            <span class="act">Board</span><span>List</span><span>Brief</span><span>Decisions <span style="color:var(--t4);font-size:9px">2</span></span><span>Activity</span><span>Files</span>
+            <span class="right">filter · sort · group · ⌘K</span>
+          </div>
+          <div class="a5-body">
+            <div class="a-col">
+              <div class="a-col-hdr" style="padding:5px 8px 4px"><div class="a-col-day" style="font-size:9px">To do</div><div class="a-col-cnt" style="font-size:13px">4</div></div>
+              <div class="a-col-body" style="gap:2px;padding:4px">
+                <div class="a5-card blk">Lock pricing tiers<div class="m">P1 · -2d · 2h · ⊘</div></div>
+                <div class="a5-card">Press release draft<div class="m">P2 · +5d · 3h</div></div>
+                <div class="a5-card">Onboarding emails<div class="m">P3 · +8d · 3h</div></div>
+                <div class="a5-card">Legal ToS review<div class="m">P2 · +6d</div></div>
+              </div>
+            </div>
+            <div class="a-col">
+              <div class="a-col-hdr" style="padding:5px 8px 4px"><div class="a-col-day" style="font-size:9px">Doing</div><div class="a-col-cnt" style="font-size:13px">2</div></div>
+              <div class="a-col-body" style="gap:2px;padding:4px">
+                <div class="a5-card over">QA on staging build<div class="m">P1 · today · 4h</div></div>
+                <div class="a5-card">Write launch FAQ<div class="m">P2 · +3d · 2h</div></div>
+              </div>
+            </div>
+            <div class="a-col">
+              <div class="a-col-hdr" style="padding:5px 8px 4px"><div class="a-col-day" style="font-size:9px">Done</div><div class="a-col-cnt" style="font-size:13px">5</div></div>
+              <div class="a-col-body" style="gap:2px;padding:4px">
+                <div class="a5-card" style="opacity:.55">Brief approved</div>
+                <div class="a5-card" style="opacity:.55">Domain registered</div>
+                <div class="a5-card" style="opacity:.55">Hero copy v1</div>
+                <div class="a5-card" style="opacity:.55">Stack chosen</div>
+                <div class="a5-card" style="opacity:.55">Kickoff held</div>
+              </div>
+            </div>
+          </div>
+          <div class="a5-foot">
+            <span>n new</span><span>/ search</span><span>g b board</span><span>g r brief</span>
+            <span style="margin-left:auto;color:var(--success)">● synced 12m</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 6. Glass Floating Bar ============ -->
+    <div class="compare-card">
+      <div class="label-row"><span class="num">06</span><span class="name">Glass Floating Bar</span></div>
+      <div class="tags"><span>data-look=glass</span><span>edge-to-edge board</span><span>density: medium</span></div>
+      <p class="tradeoff"><b>Tradeoff:</b> Mirrors the app's <code style="font-size:11px">data-look="glass"</code> variant. Board fills the page; status + tabs sit in a translucent backdrop-blurred bar floating above. Most visually elevated, most "destination"-feeling. Costs the chrome's information density to a single bar.</p>
+      <div class="frame">
+        <div class="mockup mk-app a6">
+          <div class="a6-board">
+            <div class="a6-cols">
+              <div class="c">
+                <div class="h">To do <span>4</span></div>
+                <div class="a-card blk">Lock pricing tiers<div class="m"><span class="a-pdot p1"></span>P1 · -2d</div></div>
+                <div class="a-card">Press release<div class="m"><span class="a-pdot p2"></span>P2 · +5d</div></div>
+                <div class="a-card">Onboarding emails<div class="m"><span class="a-pdot p3"></span>P3 · +8d</div></div>
+                <div class="a-card">Legal ToS review<div class="m"><span class="a-pdot p2"></span>P2 · +6d</div></div>
+              </div>
+              <div class="c">
+                <div class="h">Doing <span>2</span></div>
+                <div class="a-card over">QA staging build<div class="m"><span class="a-pdot p1"></span>P1 · today · 4h</div></div>
+                <div class="a-card">Launch FAQ<div class="m"><span class="a-pdot p2"></span>P2 · +3d</div></div>
+              </div>
+              <div class="c">
+                <div class="h">Done <span>5</span></div>
+                <div class="a-card" style="opacity:.5">Brief approved</div>
+                <div class="a-card" style="opacity:.5">Domain registered</div>
+                <div class="a-card" style="opacity:.5">Hero copy v1</div>
+                <div class="a-card" style="opacity:.5">Stack chosen</div>
+              </div>
+            </div>
+          </div>
+          <div class="a6-glass">
+            <div class="a6-row1">
+              <span class="a-icon">A</span>
+              <h3>Acme — Q2 product launch</h3>
+              <span class="id">PRJ-001 · WORK</span>
+              <span class="a-pill-ok" style="margin-left:6px">● Active</span>
+              <span class="a-pill-warn">◐ At risk</span>
+              <span style="margin-left:auto;display:flex;gap:4px;color:var(--t3);font-size:12px">
+                <span style="padding:3px 6px">⚲</span><span style="padding:3px 6px">⚙</span><span style="padding:3px 6px">×</span>
+              </span>
+            </div>
+            <div class="a6-row2">
+              <span class="grp"><span class="k">done</span><span class="v">47%</span></span>
+              <span class="a-prog" style="max-width:70px"><span style="width:47%"></span></span>
+              <span class="grp"><span class="k">tasks</span><span class="v">11</span></span>
+              <span class="grp"><span class="k">blk</span><span class="v warn">2</span></span>
+              <span class="grp"><span class="k">over</span><span class="v bad">1</span></span>
+              <span class="grp"><span class="k">days</span><span class="v">12</span></span>
+              <span class="grp"><span class="k">vel</span><span class="v ok">+8%</span></span>
+              <span class="grp"><span class="k">est/spent</span><span class="v">42/19h</span></span>
+              <span style="margin-left:auto;font-family:'Geist Mono',monospace;font-size:10px;color:var(--t4)">May 1 → Jun 15</span>
+            </div>
+            <div class="a6-tabs">
+              <span class="act">Board</span><span>List</span><span>Brief</span><span>Decisions</span><span>Activity</span><span>Files</span>
+            </div>
+          </div>
+          <div class="a6-foot">
+            <span>n new</span><span>/ search</span><span>g b board</span>
+            <span style="margin-left:auto;color:var(--success)">● synced 12m ago</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

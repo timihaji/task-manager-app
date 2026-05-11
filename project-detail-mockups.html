@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Project detail — six approaches</title>
+<style>
+  :root {
+    --shell-bg: #f3f4f6;
+    --shell-fg: #111827;
+    --shell-muted: #6b7280;
+    --shell-card: #ffffff;
+    --shell-border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--shell-bg);
+    color: var(--shell-fg);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1700px; margin: 0 auto; padding: 40px 32px 80px; }
+  .page > header { margin-bottom: 36px; max-width: 760px; }
+  .page > header h1 { margin: 0 0 10px; font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
+  .page > header p { margin: 0; color: var(--shell-muted); line-height: 1.55; font-size: 15px; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px; }
+  .compare-card {
+    background: var(--shell-card);
+    border: 1px solid var(--shell-border);
+    border-radius: 16px;
+    padding: 22px 22px 18px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .compare-card .label-row {
+    display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px;
+  }
+  .compare-card .num { font-size: 12px; font-weight: 700; color: #9ca3af; letter-spacing: 0.04em; }
+  .compare-card .name { font-size: 17px; font-weight: 700; letter-spacing: -0.005em; }
+  .compare-card .tradeoff {
+    font-size: 13px; color: #4b5563; line-height: 1.5; margin: 0 0 16px; max-width: 64ch;
+  }
+  .frame {
+    aspect-ratio: 16 / 10;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid var(--shell-border);
+    isolation: isolate;
+  }
+  .frame > .mockup { position: absolute; inset: 0; display: flex; flex-direction: column; }
+
+  /* ========== M1: Trello-faithful ========== */
+  .m1 { background: #1d4ed8; color: white; font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .m1-top { padding: 10px 14px; display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.12); }
+  .m1-back { opacity: 0.7; font-size: 16px; }
+  .m1-title { font-weight: 600; font-size: 14px; }
+  .m1-pill { background: rgba(255,255,255,0.22); padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
+  .m1-icon { margin-left: auto; opacity: 0.7; font-size: 16px; }
+  .m1-cols { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px; min-height: 0; }
+  .m1-col { background: rgba(0,0,0,0.18); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+  .m1-col-h { display: flex; justify-content: space-between; font-weight: 600; font-size: 12px; padding: 2px 4px 6px; }
+  .m1-col-h span { opacity: 0.7; font-weight: 500; }
+  .m1-card { background: white; color: #1f2937; border-radius: 5px; padding: 7px 9px; font-size: 12px; box-shadow: 0 1px 0 rgba(0,0,0,0.1); }
+  .m1-card .meta { font-size: 10px; color: #9ca3af; margin-top: 4px; display: flex; gap: 6px; }
+  .m1-add { font-size: 11px; opacity: 0.7; padding: 4px; }
+
+  /* ========== M2: Notion-doc ========== */
+  .m2 { background: #ffffff; color: #2f2f2f; font: 13px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 22px 38px; overflow: hidden; }
+  .m2-crumb { font-size: 11px; color: #9b9b9b; margin-bottom: 14px; }
+  .m2-h1 { font-family: "Iowan Old Style", "Charter", Georgia, serif; font-size: 28px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 6px; line-height: 1.1; }
+  .m2-meta { font-size: 11.5px; color: #8c8c8c; margin-bottom: 14px; }
+  .m2-meta b { color: #2f2f2f; font-weight: 600; }
+  .m2-brief { font-size: 13px; color: #3a3a3a; line-height: 1.6; max-width: 64ch; margin: 0 0 16px; }
+  .m2-h2 { font-family: "Iowan Old Style", Georgia, serif; font-size: 16px; font-weight: 700; margin: 14px 0 8px; }
+  .m2-callout { background: #f7f6f3; border-radius: 6px; padding: 10px 12px; display: flex; gap: 14px; font-size: 12px; color: #4a4a4a; align-items: center; }
+  .m2-callout .dot { width: 6px; height: 6px; border-radius: 999px; background: #4f46e5; }
+  .m2-callout .stat b { color: #1f1f1f; }
+  .m2-decisions { font-size: 12px; color: #4a4a4a; line-height: 1.6; }
+  .m2-decisions li { list-style: none; padding-left: 18px; position: relative; }
+  .m2-decisions li::before { content: ''; position: absolute; left: 4px; top: 8px; width: 5px; height: 5px; background: #c8c2b3; border-radius: 999px; }
+  .m2-decisions ul { padding: 0; margin: 0; }
+  .m2-decisions time { color: #aaa; font-size: 10.5px; margin-right: 6px; }
+
+  /* ========== M3: Linear-dense ========== */
+  .m3 { background: #0f1115; color: #e6e6e7; font: 12px/1.35 ui-sans-serif, system-ui, sans-serif; }
+  .m3-top { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid #1f2228; font-size: 11.5px; }
+  .m3-id { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #818391; }
+  .m3-title { font-weight: 600; font-size: 13px; }
+  .m3-stats { margin-left: auto; display: flex; gap: 14px; align-items: center; font-family: ui-monospace, monospace; font-size: 11px; color: #a1a3b0; }
+  .m3-stats b { color: #e6e6e7; font-weight: 500; }
+  .m3-pill { padding: 1px 7px; border-radius: 4px; font-size: 10.5px; font-weight: 500; }
+  .m3-pill.ok { background: rgba(74, 222, 128, 0.12); color: #4ade80; }
+  .m3-pill.warn { background: rgba(251, 191, 36, 0.13); color: #fbbf24; }
+  .m3-pill.gray { background: #1c1f25; color: #a1a3b0; }
+  .m3-toolbar { padding: 8px 16px; display: flex; gap: 8px; font-size: 11px; color: #818391; border-bottom: 1px solid #1f2228; }
+  .m3-toolbar span { padding: 2px 6px; border-radius: 4px; }
+  .m3-toolbar span.active { background: #1c1f25; color: #e6e6e7; }
+  .m3-list { flex: 1; overflow: hidden; }
+  .m3-row { display: grid; grid-template-columns: 18px 80px 1fr 80px 80px 80px 60px; gap: 10px; padding: 6px 16px; font-size: 11.5px; border-bottom: 1px solid #14171c; align-items: center; color: #c7c8cf; }
+  .m3-row.head { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #61636e; padding: 5px 16px; border-bottom: 1px solid #1f2228; background: #12141a; }
+  .m3-stat { width: 8px; height: 8px; border-radius: 2px; }
+  .m3-stat.todo { border: 1.5px solid #61636e; background: transparent; }
+  .m3-stat.doing { border: 1.5px solid #fbbf24; background: rgba(251,191,36,0.5); }
+  .m3-stat.done { background: #4ade80; border: 1.5px solid #4ade80; }
+  .m3-stat.blk { background: #ef4444; border: 1.5px solid #ef4444; }
+  .m3-mono { font-family: ui-monospace, monospace; color: #a1a3b0; font-size: 10.5px; }
+  .m3-tag { display: inline-block; padding: 1px 6px; border-radius: 3px; background: #1c1f25; color: #a1a3b0; font-size: 10px; }
+
+  /* ========== M4: Things-calm ========== */
+  .m4 { background: #faf8f3; color: #2c2a26; font: 13px/1.6 "Iowan Old Style", "Charter", Georgia, serif; padding: 22px 0; overflow: hidden; display: flex; justify-content: center; }
+  .m4-col { width: 64%; max-width: 460px; }
+  .m4-eyebrow { font-family: -apple-system, sans-serif; font-size: 10.5px; color: #b6ac96; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; }
+  .m4-h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 4px; line-height: 1.15; }
+  .m4-sub { font-family: -apple-system, sans-serif; font-size: 12px; color: #9c9484; margin-bottom: 22px; }
+  .m4-sub .dot { display: inline-block; width: 5px; height: 5px; background: #b8a86a; border-radius: 999px; margin: 0 8px 1px; vertical-align: middle; }
+  .m4-section-h { font-family: -apple-system, sans-serif; font-size: 11px; font-weight: 600; color: #b6ac96; letter-spacing: 0.08em; text-transform: uppercase; margin: 22px 0 10px; }
+  .m4-task { display: flex; gap: 12px; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid #ece6d8; font-family: -apple-system, sans-serif; font-size: 13px; line-height: 1.4; }
+  .m4-circle { width: 14px; height: 14px; border-radius: 999px; border: 1.5px solid #d4cdb8; margin-top: 2px; flex-shrink: 0; }
+  .m4-task .meta { color: #b6ac96; font-size: 11px; margin-top: 2px; }
+  .m4-collapsed { font-family: -apple-system, sans-serif; font-size: 12px; color: #b6ac96; padding: 8px 0; cursor: pointer; }
+  .m4-collapsed::before { content: '›'; margin-right: 8px; color: #d4cdb8; }
+
+  /* ========== M5: Dashboard-first ========== */
+  .m5 { background: #fafbfc; color: #111827; font: 12px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; padding: 14px 18px; overflow: hidden; }
+  .m5-top { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+  .m5-top h2 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.005em; }
+  .m5-top .pill { background: #ecfdf5; color: #047857; font-size: 11px; padding: 1px 8px; border-radius: 999px; font-weight: 600; }
+  .m5-top .meta { color: #6b7280; font-size: 11.5px; margin-left: auto; }
+  .m5-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+  .m5-kpi { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; }
+  .m5-kpi .lbl { font-size: 10.5px; color: #6b7280; font-weight: 500; letter-spacing: 0.02em; }
+  .m5-kpi .val { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-top: 2px; line-height: 1; }
+  .m5-kpi .delta { font-size: 10.5px; color: #6b7280; margin-top: 4px; }
+  .m5-kpi .delta.warn { color: #d97706; }
+  .m5-kpi .delta.bad { color: #dc2626; }
+  .m5-charts { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .m5-chart { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; }
+  .m5-chart .h { font-size: 11px; font-weight: 600; color: #6b7280; margin-bottom: 8px; letter-spacing: 0.02em; }
+  .m5-spark { height: 56px; }
+  .m5-heat { display: grid; grid-template-columns: repeat(14, 1fr); gap: 3px; padding: 4px 0; }
+  .m5-heat span { aspect-ratio: 1; border-radius: 2px; background: #f3f4f6; }
+  .m5-heat span.l1 { background: #d1fae5; }
+  .m5-heat span.l2 { background: #6ee7b7; }
+  .m5-heat span.l3 { background: #10b981; }
+  .m5-board { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: #374151; }
+  .m5-board .chev { color: #9ca3af; }
+  .m5-board .stat { color: #6b7280; font-size: 11px; }
+  .m5-board .open { margin-left: auto; color: #2563eb; font-size: 11.5px; font-weight: 500; }
+
+  /* ========== M6: Split-pane ========== */
+  .m6 { display: flex; font: 12.5px/1.45 -apple-system, BlinkMacSystemFont, sans-serif; }
+  .m6-rail { width: 36%; background: #1f2937; color: #e5e7eb; padding: 14px 16px; overflow: hidden; }
+  .m6-rail .crumb { font-size: 10.5px; color: #9ca3af; margin-bottom: 8px; }
+  .m6-rail h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700; letter-spacing: -0.005em; }
+  .m6-rail .status { font-size: 11px; color: #93c5fd; margin-bottom: 14px; }
+  .m6-rail h4 { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; font-weight: 600; margin: 12px 0 6px; }
+  .m6-outcome { font-size: 12.5px; font-style: italic; color: #f3f4f6; line-height: 1.5; margin-bottom: 10px; padding-left: 8px; border-left: 2px solid #374151; }
+  .m6-brief { font-size: 12px; color: #d1d5db; line-height: 1.55; }
+  .m6-decisions { font-size: 11.5px; color: #d1d5db; line-height: 1.6; }
+  .m6-decisions time { color: #9ca3af; font-size: 10px; display: block; }
+  .m6-links a { display: block; font-size: 11.5px; color: #93c5fd; text-decoration: none; margin: 3px 0; }
+  .m6-board { flex: 1; background: #f9fafb; padding: 12px 14px; display: flex; flex-direction: column; min-width: 0; }
+  .m6-board-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 11.5px; color: #6b7280; }
+  .m6-board-top .pct { font-weight: 700; color: #111827; font-size: 13px; }
+  .m6-bar { flex: 1; height: 4px; background: #e5e7eb; border-radius: 999px; max-width: 120px; }
+  .m6-bar > span { display: block; height: 100%; width: 47%; background: #10b981; border-radius: 999px; }
+  .m6-cols { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; min-height: 0; }
+  .m6-col { background: #eef0f3; border-radius: 6px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+  .m6-col-h { font-size: 10.5px; font-weight: 600; color: #4b5563; padding: 2px 4px 4px; display: flex; justify-content: space-between; }
+  .m6-col-h span { color: #9ca3af; font-weight: 500; }
+  .m6-card { background: white; border-radius: 4px; padding: 5px 7px; font-size: 11px; color: #1f2937; box-shadow: 0 1px 0 rgba(0,0,0,0.05); }
+
+  @media (max-width: 1100px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Project detail view — six approaches</h1>
+    <p>Six distinct takes on what opens when you click into a project. They vary on layout, density, and tone — each makes a different tradeoff. Read the label, scan the mockup, see which one matches how you'd actually use it.</p>
+  </header>
+  <div class="grid">
+
+    <!-- ============ 1. Trello-faithful ============ -->
+    <div class="compare-card">
+      <div class="label-row"><span class="num">01</span><span class="name">Trello-faithful</span></div>
+      <p class="tradeoff"><b>Tradeoff:</b> Pure execution mode — board fills the screen, brief and metrics live behind a button. You're here to push cards, not think.</p>
+      <div class="frame">
+        <div class="mockup m1">
+          <div class="m1-top">
+            <span class="m1-back">‹</span>
+            <span class="m1-title">Acme — Q2 product launch</span>
+            <span class="m1-pill">● Active</span>
+            <span class="m1-icon">⋯</span>
+          </div>
+          <div class="m1-cols">
+            <div class="m1-col">
+              <div class="m1-col-h">To do <span>4</span></div>
+              <div class="m1-card">Lock pricing tiers<div class="meta">Jun 2 · p1</div></div>
+              <div class="m1-card">Press release draft<div class="meta">Jun 5</div></div>
+              <div class="m1-card">Onboarding emails</div>
+              <div class="m1-card">Legal review of ToS</div>
+              <div class="m1-add">+ Add card</div>
+            </div>
+            <div class="m1-col">
+              <div class="m1-col-h">Doing <span>2</span></div>
+              <div class="m1-card">QA on staging build<div class="meta">⏱ 4h · p1</div></div>
+              <div class="m1-card">Write launch FAQ<div class="meta">⏱ 2h</div></div>
+              <div class="m1-add">+ Add card</div>
+            </div>
+            <div class="m1-col">
+              <div class="m1-col-h">Done <span>5</span></div>
+              <div class="m1-card" style="opacity:0.7;text-decoration:line-through">Brief approved</div>
+              <div class="m1-card" style="opacity:0.7;text-decoration:line-through">Domain registered</div>
+              <div class="m1-card" style="opacity:0.7;text-decoration:line-through">Hero copy v1</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 2. Notion-doc ============ -->
+    <div class="compare-card">
+      <div class="label-row"><span class="num">02</span><span class="name">Notion-doc</span></div>
+      <p class="tradeoff"><b>Tradeoff:</b> Project as a thinking document. The brief IS the page; the board is a block embedded inside. Great for context, slower for execution.</p>
+      <div class="frame">
+        <div class="mockup m2">
+          <div class="m2-crumb">Projects · WORK</div>
+          <h1 class="m2-h1">Acme — Q2 product launch</h1>
+          <div class="m2-meta"><b>Active</b> · started May 1 · target Jun 15 · <b>47%</b> done</div>
+          <p class="m2-brief">Ship the Acme self-serve flow before the Q2 board meeting. Success looks like a working signup → first-task path with paid tier upgrade and at least three closed pilot accounts. The hard parts are pricing finalisation and legal review of the new ToS — neither is on the engineering critical path.</p>
+          <h2 class="m2-h2">Outcome</h2>
+          <p class="m2-brief" style="font-style:italic;color:#4a4a4a">Three pilot accounts converted to paid by June 15, with onboarding NPS ≥ 40.</p>
+          <h2 class="m2-h2">Open work</h2>
+          <div class="m2-callout">
+            <span class="dot"></span>
+            <span class="stat"><b>11</b> subtasks</span>
+            <span class="stat"><b>4</b> to do · <b>2</b> doing · <b>5</b> done</span>
+            <span style="margin-left:auto;color:#7c7269">Open board ›</span>
+          </div>
+          <h2 class="m2-h2">Decisions</h2>
+          <div class="m2-decisions">
+            <ul>
+              <li><time>May 6</time>Pricing: $19 / $49 / custom (capped at 3 tiers per Sam's call).</li>
+              <li><time>May 3</time>Drop the freemium tier — burn-rate vs. conversion math didn't pencil.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 3. Linear-dense ============ -->
+    <div class="compare-card">
+      <div class="label-row"><span class="num">03</span><span class="name">Linear-dense</span></div>
+      <p class="tradeoff"><b>Tradeoff:</b> Every datum visible at once — power-user surface. List view defaults over kanban. Doesn't breathe; rewards reading. Hostile to first-timers.</p>
+      <div class="frame">
+        <div class="mockup m3">
+          <div class="m3-top">
+            <span class="m3-id">PRJ-001</span>
+            <span class="m3-title">Acme — Q2 product launch</span>
+            <span class="m3-stats">
+              <span class="m3-pill ok">active</span>
+              <span class="m3-pill warn">at risk</span>
+              <b>47%</b><span>done</span>
+              <b>11</b><span>tasks</span>
+              <b>2</b><span>blocked</span>
+              <b>1</b><span>overdue</span>
+              <span>May 1 → Jun 15</span>
+            </span>
+          </div>
+          <div class="m3-toolbar">
+            <span class="active">List</span><span>Board</span><span>Timeline</span><span>Activity</span>
+            <span style="margin-left:auto">filter · sort · group · ⌘K</span>
+          </div>
+          <div class="m3-row head">
+            <span></span><span>id</span><span>title</span><span>priority</span><span>due</span><span>est</span><span>tags</span>
+          </div>
+          <div class="m3-row"><span class="m3-stat doing"></span><span class="m3-mono">PRJ-001-7</span><span>QA on staging build</span><span class="m3-mono">P1</span><span class="m3-mono">+0d</span><span class="m3-mono">4h</span><span><span class="m3-tag">qa</span></span></div>
+          <div class="m3-row"><span class="m3-stat blk"></span><span class="m3-mono">PRJ-001-8</span><span>Lock pricing tiers</span><span class="m3-mono">P1</span><span class="m3-mono">-2d</span><span class="m3-mono">2h</span><span><span class="m3-tag">block</span></span></div>
+          <div class="m3-row"><span class="m3-stat doing"></span><span class="m3-mono">PRJ-001-9</span><span>Write launch FAQ</span><span class="m3-mono">P2</span><span class="m3-mono">+3d</span><span class="m3-mono">2h</span><span><span class="m3-tag">copy</span></span></div>
+          <div class="m3-row"><span class="m3-stat todo"></span><span class="m3-mono">PRJ-001-10</span><span>Press release draft</span><span class="m3-mono">P2</span><span class="m3-mono">+5d</span><span class="m3-mono">3h</span><span><span class="m3-tag">comms</span></span></div>
+          <div class="m3-row"><span class="m3-stat todo"></span><span class="m3-mono">PRJ-001-11</span><span>Onboarding emails</span><span class="m3-mono">P3</span><span class="m3-mono">+8d</span><span class="m3-mono">3h</span><span><span class="m3-tag">copy</span></span></div>
+          <div class="m3-row"><span class="m3-stat done"></span><span class="m3-mono">PRJ-001-3</span><span>Brief approved</span><span class="m3-mono">P2</span><span class="m3-mono">—</span><span class="m3-mono">—</span><span></span></div>
+          <div class="m3-row"><span class="m3-stat done"></span><span class="m3-mono">PRJ-001-4</span><span>Domain registered</span><span class="m3-mono">P3</span><span class="m3-mono">—</span><span class="m3-mono">—</span><span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 4. Things-calm ============ -->
+    <div class="compare-card">
+      <div class="label-row"><span class="num">04</span><span class="name">Things-calm</span></div>
+      <p class="tradeoff"><b>Tradeoff:</b> Hides almost everything. Shows the next 3 actions, nothing else, in a centred narrow column. Calm over complete; gives up multi-state visibility.</p>
+      <div class="frame">
+        <div class="mockup m4">
+          <div class="m4-col">
+            <div class="m4-eyebrow">Project</div>
+            <h1 class="m4-h1">Acme — Q2 product launch</h1>
+            <div class="m4-sub">Active <span class="dot"></span> Jun 15 <span class="dot"></span> 47% done</div>
+
+            <div class="m4-section-h">Next</div>
+            <div class="m4-task"><span class="m4-circle"></span><div>QA on staging build<div class="meta">Today · 4h</div></div></div>
+            <div class="m4-task"><span class="m4-circle"></span><div>Lock pricing tiers<div class="meta">Overdue · 2h</div></div></div>
+            <div class="m4-task"><span class="m4-circle"></span><div>Write launch FAQ<div class="meta">Tomorrow · 2h</div></div></div>
+
+            <div class="m4-collapsed">Later (8)</div>
+            <div class="m4-collapsed">Brief & decisions</div>
+            <div class="m4-collapsed">Done (5)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 5. Dashboard-first ============ -->
+    <div class="compare-card">
+      <div class="label-row"><span class="num">05</span><span class="name">Dashboard-first</span></div>
+      <p class="tradeoff"><b>Tradeoff:</b> KPIs and charts up top, board collapsed below. Optimised for monitoring and weekly review, not card-pushing. Best for the "how am I doing?" question.</p>
+      <div class="frame">
+        <div class="mockup m5">
+          <div class="m5-top">
+            <h2>Acme — Q2 product launch</h2>
+            <span class="pill">Active</span>
+            <span class="meta">May 1 → Jun 15 · WORK</span>
+          </div>
+          <div class="m5-kpis">
+            <div class="m5-kpi"><div class="lbl">Done</div><div class="val">47%</div><div class="delta">+8% this week</div></div>
+            <div class="m5-kpi"><div class="lbl">Days left</div><div class="val">12</div><div class="delta">on schedule</div></div>
+            <div class="m5-kpi"><div class="lbl">Blocked</div><div class="val">2</div><div class="delta warn">since May 5</div></div>
+            <div class="m5-kpi"><div class="lbl">Overdue</div><div class="val">1</div><div class="delta bad">Lock pricing tiers</div></div>
+          </div>
+          <div class="m5-charts">
+            <div class="m5-chart">
+              <div class="h">Burndown</div>
+              <svg class="m5-spark" viewBox="0 0 200 56" preserveAspectRatio="none">
+                <polyline fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="3 3" points="0,4 200,52"/>
+                <polyline fill="none" stroke="#10b981" stroke-width="2" points="0,4 25,9 50,12 75,18 100,22 125,28 150,28 175,30 200,30"/>
+                <circle cx="200" cy="30" r="3" fill="#10b981"/>
+              </svg>
+            </div>
+            <div class="m5-chart">
+              <div class="h">Activity (last 14 days)</div>
+              <div class="m5-heat">
+                <span></span><span class="l1"></span><span class="l2"></span><span class="l3"></span><span class="l1"></span><span></span><span></span>
+                <span class="l2"></span><span class="l3"></span><span class="l3"></span><span class="l2"></span><span class="l1"></span><span class="l1"></span><span class="l2"></span>
+              </div>
+            </div>
+          </div>
+          <div class="m5-board">
+            <span class="chev">▸</span>
+            <b>Board</b>
+            <span class="stat">11 subtasks · 4 to do · 2 doing · 5 done</span>
+            <span class="open">Expand ›</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 6. Split-pane ============ -->
+    <div class="compare-card">
+      <div class="label-row"><span class="num">06</span><span class="name">Split-pane / persistent context</span></div>
+      <p class="tradeoff"><b>Tradeoff:</b> Brief, outcome, and decisions never scroll away. Costs ~⅓ of horizontal room for the board. Best when context evolves alongside execution.</p>
+      <div class="frame">
+        <div class="mockup m6">
+          <div class="m6-rail">
+            <div class="crumb">Projects · WORK</div>
+            <h3>Acme — Q2 launch</h3>
+            <div class="status">● Active · 47% · Jun 15</div>
+
+            <h4>Outcome</h4>
+            <div class="m6-outcome">3 pilots paid by Jun 15, NPS ≥ 40.</div>
+
+            <h4>Brief</h4>
+            <p class="m6-brief">Ship self-serve flow before Q2 board meeting. Hard parts are pricing &amp; legal — not on eng critical path.</p>
+
+            <h4>Decisions</h4>
+            <div class="m6-decisions">
+              <div><time>May 6</time>Pricing: $19 / $49 / custom</div>
+              <div style="margin-top:6px"><time>May 3</time>Drop freemium tier</div>
+            </div>
+
+            <h4>Links</h4>
+            <div class="m6-links">
+              <a>↗ Brief doc (Notion)</a>
+              <a>↗ Pricing model (Sheet)</a>
+              <a>↗ Staging build</a>
+            </div>
+          </div>
+          <div class="m6-board">
+            <div class="m6-board-top">
+              <span class="pct">47%</span>
+              <div class="m6-bar"><span></span></div>
+              <span style="margin-left:auto">11 subtasks</span>
+            </div>
+            <div class="m6-cols">
+              <div class="m6-col">
+                <div class="m6-col-h">To do <span>4</span></div>
+                <div class="m6-card">Lock pricing</div>
+                <div class="m6-card">Press release</div>
+                <div class="m6-card">Onboarding emails</div>
+                <div class="m6-card">Legal ToS review</div>
+              </div>
+              <div class="m6-col">
+                <div class="m6-col-h">Doing <span>2</span></div>
+                <div class="m6-card">QA staging</div>
+                <div class="m6-card">Launch FAQ</div>
+              </div>
+              <div class="m6-col">
+                <div class="m6-col-h">Done <span>5</span></div>
+                <div class="m6-card" style="opacity:.6">Brief approved</div>
+                <div class="m6-card" style="opacity:.6">Domain</div>
+                <div class="m6-card" style="opacity:.6">Hero copy</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

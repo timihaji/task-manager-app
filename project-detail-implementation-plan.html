@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Project Detail View — implementation plan</title>
+<style>
+  /* ============ Document shell ============ */
+  :root {
+    --doc-bg: #fafaf7;
+    --doc-fg: #1a1a1a;
+    --doc-muted: #6b7280;
+    --doc-faint: #9ca3af;
+    --doc-border: #e5e7eb;
+    --doc-card: #ffffff;
+    --doc-accent: #0f766e;
+    --doc-accent-bg: #f0fdfa;
+    --doc-warn: #b45309;
+    --doc-warn-bg: #fffbeb;
+    --doc-danger: #b91c1c;
+    --doc-danger-bg: #fef2f2;
+    --doc-code-bg: #f3f4f6;
+    --doc-code-fg: #1f2937;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--doc-bg);
+    color: var(--doc-fg);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.55;
+  }
+  .doc { max-width: 1080px; margin: 0 auto; padding: 56px 40px 120px; }
+
+  /* ============ Hero ============ */
+  .hero { margin-bottom: 56px; padding-bottom: 36px; border-bottom: 1px solid var(--doc-border); }
+  .hero .eyebrow { font-size: 11px; font-weight: 700; color: var(--doc-accent); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 14px; }
+  .hero h1 { margin: 0 0 14px; font-size: 38px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.05; }
+  .hero .lede { margin: 0 0 20px; font-size: 17px; color: var(--doc-muted); line-height: 1.55; max-width: 64ch; }
+  .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 24px; }
+  .meta-tile { background: var(--doc-card); border: 1px solid var(--doc-border); border-radius: 8px; padding: 12px 14px; }
+  .meta-tile .l { font-size: 10.5px; font-weight: 600; color: var(--doc-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .meta-tile .v { font-size: 16px; font-weight: 600; color: var(--doc-fg); }
+  .meta-tile .v small { display: block; font-size: 12px; font-weight: 400; color: var(--doc-muted); margin-top: 2px; }
+
+  /* ============ Sections ============ */
+  section { margin-bottom: 56px; }
+  section > h2 { font-size: 24px; font-weight: 700; letter-spacing: -0.015em; margin: 0 0 6px; }
+  section > .sec-sub { color: var(--doc-muted); font-size: 14px; margin: 0 0 24px; max-width: 64ch; }
+  h3 { font-size: 16px; font-weight: 700; letter-spacing: -0.005em; margin: 32px 0 10px; }
+  p { margin: 0 0 14px; max-width: 70ch; }
+  p code, li code { background: var(--doc-code-bg); color: var(--doc-code-fg); padding: 1px 5px; border-radius: 3px; font-size: 0.88em; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  /* ============ Tables ============ */
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 12px; vertical-align: top; }
+  th { font-weight: 600; color: var(--doc-muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: 10.5px; border-bottom: 1px solid var(--doc-border); padding-top: 0; padding-bottom: 8px; }
+  td { border-bottom: 1px solid var(--doc-border); }
+  td.mono, th.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+  tr:last-child td { border-bottom: none; }
+  td .pill { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
+  td .pill.new { background: var(--doc-accent-bg); color: var(--doc-accent); }
+  td .pill.modify { background: #fef3c7; color: var(--doc-warn); }
+  td .pill.reuse { background: #f3f4f6; color: var(--doc-muted); }
+  td .pill.s { background: #ecfdf5; color: #047857; }
+  td .pill.m { background: #eff6ff; color: #1d4ed8; }
+  td .pill.l { background: #fef2f2; color: var(--doc-danger); }
+
+  /* ============ Code blocks ============ */
+  pre { background: #0f1115; color: #e6e6e7; padding: 14px 16px; border-radius: 6px; overflow-x: auto; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; line-height: 1.55; margin: 12px 0 18px; }
+  pre .c { color: #818391; }
+  pre .k { color: #c084fc; }
+  pre .s { color: #86efac; }
+  pre .n { color: #fbbf24; }
+  pre .f { color: #93c5fd; }
+
+  /* ============ Callouts ============ */
+  .callout { border-left: 3px solid var(--doc-accent); background: var(--doc-accent-bg); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 16px 0; font-size: 13.5px; }
+  .callout.warn { border-color: var(--doc-warn); background: var(--doc-warn-bg); }
+  .callout.danger { border-color: var(--doc-danger); background: var(--doc-danger-bg); }
+  .callout strong { font-weight: 600; }
+
+  /* ============ Phase cards ============ */
+  .phases { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 18px; }
+  .phase { background: var(--doc-card); border: 1px solid var(--doc-border); border-radius: 8px; padding: 18px 20px; display: grid; grid-template-columns: 64px 1fr; gap: 18px; }
+  .phase .num { font-size: 32px; font-weight: 700; color: var(--doc-accent); letter-spacing: -0.02em; line-height: 1; }
+  .phase h4 { margin: 0 0 4px; font-size: 16px; font-weight: 700; }
+  .phase .why { font-size: 13px; color: var(--doc-muted); margin: 0 0 12px; }
+  .phase ul { margin: 0; padding-left: 20px; font-size: 13.5px; color: var(--doc-fg); }
+  .phase ul li { margin: 4px 0; line-height: 1.5; }
+  .phase .effort { display: inline-block; padding: 2px 8px; background: #f3f4f6; color: var(--doc-muted); font-size: 11px; font-weight: 600; border-radius: 999px; margin-left: 8px; vertical-align: 1px; }
+
+  /* ============ Tab spec cards ============ */
+  .tab-grid { display: grid; grid-template-columns: 1fr; gap: 24px; margin-top: 24px; }
+  .tab-card { background: var(--doc-card); border: 1px solid var(--doc-border); border-radius: 10px; overflow: hidden; }
+  .tab-card .tc-head { padding: 16px 20px 12px; border-bottom: 1px solid var(--doc-border); display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .tab-card .tc-head .name { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .tab-card .tc-head .pill { font-size: 10.5px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+  .tab-card .tc-head .phase-pill { background: var(--doc-accent-bg); color: var(--doc-accent); }
+  .tab-card .tc-head .effort-pill { background: #eff6ff; color: #1d4ed8; }
+  .tab-card .tc-head .stub-pill { background: #f3f4f6; color: var(--doc-muted); }
+  .tab-card .tc-body { padding: 18px 20px; display: grid; grid-template-columns: 1fr 1.4fr; gap: 24px; align-items: start; }
+  .tab-card .tc-body p:last-child { margin-bottom: 0; }
+  .tab-card .tc-body h5 { font-size: 11px; font-weight: 700; color: var(--doc-muted); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 8px; }
+  .tab-card .tc-body h5:not(:first-child) { margin-top: 16px; }
+  .tab-card .tc-body ul { margin: 0; padding-left: 18px; font-size: 13px; }
+  .tab-card .tc-body li { margin: 3px 0; }
+  .tab-card .tc-mockup { border: 1px solid var(--doc-border); border-radius: 6px; overflow: hidden; aspect-ratio: 16/10; position: relative; }
+  .tab-card .tc-mockup .mockup { position: absolute; inset: 0; display: flex; flex-direction: column; }
+
+  /* ============ Hero mockup ============ */
+  .hero-mockup-wrap { background: var(--doc-card); border: 1px solid var(--doc-border); border-radius: 10px; padding: 18px; margin: 28px 0 12px; }
+  .hero-mockup { aspect-ratio: 16/9; border: 1px solid var(--doc-border); border-radius: 6px; overflow: hidden; position: relative; }
+  .hero-mockup .mockup { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  .hero-caption { font-size: 12px; color: var(--doc-muted); text-align: center; margin-top: 12px; }
+
+  /* ============ Storyboard ============ */
+  .storyboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 18px 0; }
+  .sb { background: var(--doc-card); border: 1px solid var(--doc-border); border-radius: 8px; padding: 14px; }
+  .sb .step { font-size: 11px; font-weight: 700; color: var(--doc-accent); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .sb h6 { margin: 0 0 6px; font-size: 13.5px; font-weight: 600; }
+  .sb p { font-size: 12px; color: var(--doc-muted); margin: 0; }
+  .sb-frame { border: 1px solid var(--doc-border); border-radius: 4px; overflow: hidden; aspect-ratio: 4/3; margin-top: 10px; position: relative; }
+  .sb-frame .mockup { position: absolute; inset: 0; display: flex; flex-direction: column; }
+
+  /* ============ Risk cards ============ */
+  .risk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .risk { background: var(--doc-card); border: 1px solid var(--doc-border); border-radius: 8px; padding: 14px 16px; border-left: 3px solid var(--doc-warn); }
+  .risk h5 { margin: 0 0 4px; font-size: 14px; font-weight: 700; }
+  .risk p { margin: 0; font-size: 12.5px; color: var(--doc-muted); }
+  .risk.danger { border-left-color: var(--doc-danger); }
+
+  /* ============ App-mockup theme (matches src/styles.css) ============ */
+  .mk-app {
+    --bg: #071512;
+    --bg-side: #06110f;
+    --bg-top: #06110f;
+    --surface: #10201d;
+    --surface-2: #1d342f;
+    --surface-3: #2a4540;
+    --border: #1d342f;
+    --border-s: #1d342f;
+    --t1: #e6fffb;
+    --t2: #c3ddd7;
+    --t3: #8eada6;
+    --t4: #66837c;
+    --accent: #0f766e;
+    --accent-bright: #2dd4bf;
+    --accent-dim: rgba(15,118,110,.18);
+    --accent-border: rgba(15,118,110,.35);
+    --danger: #ef4444;
+    --danger-bg: rgba(239,68,68,.14);
+    --danger-border: rgba(239,68,68,.35);
+    --warning: #f59e0b;
+    --warning-bg: rgba(245,158,11,.14);
+    --warning-border: rgba(245,158,11,.35);
+    --success: #10b981;
+    --rk: 2px;
+    background: var(--bg);
+    color: var(--t1);
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size: 12px;
+  }
+  .mk-app .mono { font-family: 'Geist Mono', ui-monospace, "SF Mono", Menlo, monospace; }
+  .mk-app .icon { width: 22px; height: 22px; background: linear-gradient(135deg,#6366f1,#8b5cf6); border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .mk-app .icon.sm { width: 16px; height: 16px; font-size: 9px; border-radius: 1px; }
+  .mk-app .pill-ok { padding: 2px 7px; border-radius: 2px; font-size: 10px; background: var(--accent-dim); color: var(--accent-bright); border: 1px solid var(--accent-border); font-weight: 500; }
+  .mk-app .pill-warn { padding: 2px 7px; border-radius: 2px; font-size: 10px; background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); font-weight: 500; }
+  .mk-app .pill-bad { padding: 2px 7px; border-radius: 2px; font-size: 10px; background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); font-weight: 500; }
+  .mk-app .pdot { width: 6px; height: 6px; border-radius: 1px; flex-shrink: 0; background: var(--t4); display: inline-block; vertical-align: middle; margin-right: 3px; }
+  .mk-app .pdot.p1 { background: var(--danger); }
+  .mk-app .pdot.p2 { background: var(--warning); }
+  .mk-app .pdot.p3 { background: var(--t4); }
+
+  /* Toolbar Stack chrome (the 3 bars) */
+  .ts-tb1 { height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--bg-top); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .ts-tb1 .crumb { font-size: 11.5px; color: var(--t3); display: flex; align-items: center; gap: 6px; }
+  .ts-tb1 .crumb .a { color: var(--t1); font-weight: 500; }
+  .ts-tb1 .crumb .id { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px; color: var(--t4); }
+  .ts-tb1 .acts { margin-left: auto; display: flex; gap: 4px; }
+  .ts-tb1 .acts span { width: 24px; height: 24px; border-radius: 2px; display: flex; align-items: center; justify-content: center; color: var(--t3); font-size: 12px; }
+  .ts-tb2 { height: 30px; display: flex; align-items: center; gap: 14px; padding: 0 12px; background: var(--bg-top); border-bottom: 1px solid var(--border); font-size: 11px; flex-shrink: 0; }
+  .ts-tb2 .grp { display: flex; gap: 4px; align-items: baseline; }
+  .ts-tb2 .grp .k { color: var(--t4); font-size: 10px; }
+  .ts-tb2 .grp .v { color: var(--t1); font-family: 'Geist Mono', ui-monospace, monospace; font-weight: 500; font-size: 11px; }
+  .ts-tb2 .grp .v.bad { color: var(--danger); }
+  .ts-tb2 .grp .v.warn { color: var(--warning); }
+  .ts-tb2 .grp .v.ok { color: var(--success); }
+  .ts-tb2 .prog { flex: 0 0 auto; width: 70px; height: 5px; background: var(--surface-3); border-radius: 999px; overflow: hidden; }
+  .ts-tb2 .prog > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+  .ts-tb3 { height: 30px; display: flex; align-items: center; gap: 2px; padding: 0 8px; background: var(--bg); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .ts-tb3 span { padding: 4px 10px; font-size: 11px; color: var(--t3); border-radius: 2px; cursor: pointer; }
+  .ts-tb3 span.act { color: var(--t1); background: var(--surface-2); font-weight: 500; }
+  .ts-tb3 .right { margin-left: auto; padding: 0 8px; font-size: 10px; color: var(--t4); font-family: 'Geist Mono', ui-monospace, monospace; }
+  .ts-foot { height: 22px; display: flex; align-items: center; gap: 14px; padding: 0 12px; background: var(--bg-top); border-top: 1px solid var(--border); font-size: 10px; color: var(--t4); flex-shrink: 0; font-family: 'Geist Mono', ui-monospace, monospace; }
+  .ts-foot kbd { font-size: 9px; padding: 1px 4px; border: 1px solid var(--border-s); border-radius: 2px; background: var(--surface-2); color: var(--t3); }
+
+  /* Body areas */
+  .ts-body { flex: 1; min-height: 0; background: var(--bg); }
+  .ts-cols { height: 100%; display: grid; grid-template-columns: repeat(3, 1fr); }
+  .ts-col { border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .ts-col:last-child { border-right: none; }
+  .ts-col-h { padding: 8px 10px 6px; border-bottom: 1px dashed var(--border-s); flex-shrink: 0; }
+  .ts-col-day { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t4); }
+  .ts-col-cnt { font-size: 16px; font-weight: 600; color: var(--t2); letter-spacing: -0.4px; line-height: 1.1; margin-top: 2px; font-family: 'Geist Mono', ui-monospace, monospace; }
+  .ts-col-body { padding: 6px; display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow: hidden; }
+  .card { background: var(--surface); border: 1px solid var(--border-s); border-radius: 2px; padding: 6px 8px; font-size: 11.5px; color: var(--t1); line-height: 1.3; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .card .m { display: flex; gap: 5px; align-items: center; margin-top: 3px; font-size: 9.5px; color: var(--t4); font-family: 'Geist Mono', ui-monospace, monospace; }
+  .card.blk { border-left: 2px solid var(--danger); }
+  .card.over { border-left: 2px solid var(--warning); }
+
+  /* Brief tab body */
+  .ts-brief { padding: 24px 32px; max-width: 720px; margin: 0 auto; overflow-y: auto; }
+  .ts-brief h2 { font-size: 13px; font-weight: 700; color: var(--t4); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 8px; }
+  .ts-brief h2:not(:first-child) { margin-top: 22px; }
+  .ts-brief p { font-size: 13px; color: var(--t2); line-height: 1.6; max-width: 64ch; margin: 0 0 8px; }
+  .ts-brief blockquote { font-size: 13.5px; color: var(--t1); font-style: italic; line-height: 1.5; padding: 8px 12px; border-left: 2px solid var(--accent); margin: 0; background: var(--accent-dim); border-radius: 0 2px 2px 0; }
+  .ts-brief .meta { display: flex; gap: 16px; font-size: 11px; color: var(--t4); margin-top: 14px; font-family: 'Geist Mono', ui-monospace, monospace; }
+  .ts-brief .meta span b { color: var(--t2); font-weight: 500; }
+
+  /* Decisions tab body */
+  .ts-dec { padding: 18px 24px; overflow-y: auto; }
+  .ts-dec .row { padding: 8px 0; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 70px 1fr auto; gap: 12px; align-items: baseline; }
+  .ts-dec .row time { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px; color: var(--t4); }
+  .ts-dec .row .body { font-size: 12.5px; color: var(--t2); line-height: 1.5; }
+  .ts-dec .row .body b { color: var(--t1); font-weight: 600; }
+  .ts-dec .row .by { font-size: 10px; color: var(--t4); }
+  .ts-dec .add { margin-top: 12px; padding: 6px 10px; background: var(--surface-2); border: 1px dashed var(--border-s); border-radius: 2px; font-size: 11px; color: var(--t4); }
+
+  /* List tab body */
+  .ts-list { overflow: auto; }
+  .ts-list table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .ts-list th { text-align: left; padding: 6px 10px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t4); border-bottom: 1px solid var(--border); background: var(--bg-top); position: sticky; top: 0; }
+  .ts-list td { padding: 5px 10px; border-bottom: 1px solid var(--border); color: var(--t2); }
+  .ts-list td.mono { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; color: var(--t3); }
+  .ts-list td.bad { color: var(--danger); }
+  .ts-list td.warn { color: var(--warning); }
+  .ts-list .stat { width: 8px; height: 8px; border-radius: 1px; display: inline-block; }
+  .ts-list .stat.todo { border: 1.5px solid var(--t4); }
+  .ts-list .stat.doing { background: var(--warning); }
+  .ts-list .stat.done { background: var(--success); }
+  .ts-list .stat.blk { background: var(--danger); }
+
+  /* Activity tab body */
+  .ts-act { padding: 16px 24px; overflow-y: auto; }
+  .ts-act .item { display: grid; grid-template-columns: 60px 14px 1fr; gap: 10px; padding: 5px 0; align-items: baseline; font-size: 12px; }
+  .ts-act .item time { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px; color: var(--t4); }
+  .ts-act .item .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-top: 5px; }
+  .ts-act .item .body { color: var(--t2); }
+  .ts-act .item .body b { color: var(--t1); font-weight: 500; }
+  .ts-act .item .body em { font-style: normal; color: var(--accent-bright); }
+
+  /* Card link / outbound icons */
+  .doc a { color: var(--doc-accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--doc-accent) 30%, transparent); }
+  .doc a:hover { border-bottom-color: var(--doc-accent); }
+
+  @media (max-width: 900px) {
+    .doc { padding: 36px 24px 80px; }
+    .meta-grid { grid-template-columns: repeat(2, 1fr); }
+    .tab-card .tc-body { grid-template-columns: 1fr; }
+    .storyboard { grid-template-columns: 1fr; }
+    .risk-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="doc">
+
+  <!-- ===================== HERO ===================== -->
+  <div class="hero">
+    <div class="eyebrow">Implementation plan · Project detail view</div>
+    <h1>Project as a destination, not a folder</h1>
+    <p class="lede">Click a project card and land on a full-page workspace built around the <b>Toolbar Stack</b> pattern: three thin horizontal bars (crumb · metrics · tabs) over a tab-driven body. Defaults to a kanban board; brief, list, decisions, activity, and files live one click away. Same dark teal app, deeper room.</p>
+    <div class="meta-grid">
+      <div class="meta-tile">
+        <div class="l">Pattern</div>
+        <div class="v">Toolbar Stack<small>3 stacked bars + tab body</small></div>
+      </div>
+      <div class="meta-tile">
+        <div class="l">Surface</div>
+        <div class="v">Full-page view<small>view = projectDetail</small></div>
+      </div>
+      <div class="meta-tile">
+        <div class="l">Phases</div>
+        <div class="v">5<small>~3-4 weeks total</small></div>
+      </div>
+      <div class="meta-tile">
+        <div class="l">Schema delta</div>
+        <div class="v">7 fields<small>+ 1 subtask field</small></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== HERO MOCKUP ===================== -->
+  <section>
+    <h2>The destination</h2>
+    <p class="sec-sub">What you see when you click into <i>Acme — Q2 product launch</i>. Kanban board is the default tab; the three top bars never go away.</p>
+    <div class="hero-mockup-wrap">
+      <div class="hero-mockup">
+        <div class="mockup mk-app">
+          <div class="ts-tb1">
+            <span class="icon">A</span>
+            <span class="crumb">Projects <span style="color:var(--t4)">›</span> WORK <span style="color:var(--t4)">›</span> <span class="a">Acme — Q2 product launch</span> <span class="id">PRJ-001</span></span>
+            <span class="pill-ok">● Active</span>
+            <span class="pill-warn">◐ At risk</span>
+            <span class="acts"><span>⚲</span><span>★</span><span>⚙</span><span>×</span></span>
+          </div>
+          <div class="ts-tb2">
+            <span class="grp"><span class="k">done</span><span class="v">47%</span></span>
+            <span class="prog"><span style="width:47%"></span></span>
+            <span class="grp"><span class="k">tasks</span><span class="v">11</span></span>
+            <span class="grp"><span class="k">blk</span><span class="v warn">2</span></span>
+            <span class="grp"><span class="k">over</span><span class="v bad">1</span></span>
+            <span class="grp"><span class="k">days_left</span><span class="v">12</span></span>
+            <span class="grp"><span class="k">vel</span><span class="v ok">+8%/wk</span></span>
+            <span class="grp"><span class="k">est</span><span class="v">42h</span></span>
+            <span class="grp"><span class="k">spent</span><span class="v">19h</span></span>
+            <span style="margin-left:auto" class="grp"><span class="k mono">May 1 → Jun 15</span></span>
+          </div>
+          <div class="ts-tb3">
+            <span class="act">Board</span><span>List</span><span>Brief</span><span>Decisions</span><span>Activity</span><span>Files</span>
+            <span class="right">filter · group · sort · ⌘K</span>
+          </div>
+          <div class="ts-body">
+            <div class="ts-cols">
+              <div class="ts-col">
+                <div class="ts-col-h"><div class="ts-col-day">To do</div><div class="ts-col-cnt">4</div></div>
+                <div class="ts-col-body">
+                  <div class="card blk">Lock pricing tiers<div class="m"><span class="pdot p1"></span>P1 · -2d · 2h · ⊘blocked</div></div>
+                  <div class="card">Press release draft<div class="m"><span class="pdot p2"></span>P2 · +5d · 3h</div></div>
+                  <div class="card">Onboarding emails<div class="m"><span class="pdot p3"></span>P3 · +8d · 3h</div></div>
+                  <div class="card">Legal ToS review<div class="m"><span class="pdot p2"></span>P2 · +6d</div></div>
+                </div>
+              </div>
+              <div class="ts-col">
+                <div class="ts-col-h"><div class="ts-col-day">Doing</div><div class="ts-col-cnt">2</div></div>
+                <div class="ts-col-body">
+                  <div class="card over">QA on staging build<div class="m"><span class="pdot p1"></span>P1 · today · 4h</div></div>
+                  <div class="card">Write launch FAQ<div class="m"><span class="pdot p2"></span>P2 · +3d · 2h</div></div>
+                </div>
+              </div>
+              <div class="ts-col">
+                <div class="ts-col-h"><div class="ts-col-day">Done</div><div class="ts-col-cnt">5</div></div>
+                <div class="ts-col-body">
+                  <div class="card" style="opacity:.55">Brief approved</div>
+                  <div class="card" style="opacity:.55">Domain registered</div>
+                  <div class="card" style="opacity:.55">Hero copy v1</div>
+                  <div class="card" style="opacity:.55">Stack chosen</div>
+                  <div class="card" style="opacity:.55">Kickoff held</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ts-foot">
+            <span><kbd>n</kbd> new</span><span><kbd>/</kbd> search</span><span><kbd>g b</kbd> board</span><span><kbd>g r</kbd> brief</span><span><kbd>esc</kbd> back</span>
+            <span style="margin-left:auto;color:var(--success)">● synced · 12m ago</span>
+          </div>
+        </div>
+      </div>
+      <div class="hero-caption">Hero state: kanban board, all chrome visible, real data populating every bar.</div>
+    </div>
+  </section>
+
+  <!-- ===================== WHAT THIS IS ===================== -->
+  <section>
+    <h2>What this is — and isn't</h2>
+    <p><strong>Goal.</strong> Make a project feel like a place you go, not a row that expands. Concentrate everything you need to think about a project — the brief, the active work, the metrics, the decisions, the history — in one workspace. Everything else (Inbox, Stack, Week) keeps working unchanged.</p>
+    <p><strong>Non-goals.</strong> Custom fields per project, an automation/rules engine, sub-projects (project nested in project), and per-project custom statuses. The board uses a fixed three-status model (To&nbsp;do / Doing / Done) for v1; per-project columns are a v2 conversation.</p>
+    <div class="callout">
+      <strong>The single load-bearing decision:</strong> a dedicated full-page view (<code>view = {type:'projectDetail', id}</code>), not a drawer or modal. Already aligned with how the existing view-routing works in <a href="src/App.jsx">App.jsx</a>.
+    </div>
+  </section>
+
+  <!-- ===================== NAV STORYBOARD ===================== -->
+  <section>
+    <h2>How you get there</h2>
+    <p class="sec-sub">Three frames: where the user is, the click, and the destination. No router needed — just an additional case in the existing view dispatcher.</p>
+    <div class="storyboard">
+      <div class="sb">
+        <div class="step">Step 1</div>
+        <h6>Stack view, today</h6>
+        <p>User sees a project card inline.</p>
+        <div class="sb-frame">
+          <div class="mockup mk-app">
+            <div style="padding:6px 8px; border-bottom: 1px solid var(--border); font-size: 10px; color: var(--t4); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700;">Stack</div>
+            <div style="padding: 8px; flex:1; display:flex; flex-direction: column; gap: 4px; background: var(--bg);">
+              <div class="card" style="padding: 8px 10px;">QA on staging build<div class="m"><span class="pdot p1"></span>P1 · today</div></div>
+              <div class="card" style="padding: 8px 10px; border-color: color-mix(in srgb, var(--accent) 38%, var(--border-s)); cursor: pointer; box-shadow: 0 0 0 2px var(--accent-dim);">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span class="icon sm">A</span>
+                  <span style="font-weight: 600;">Acme — Q2 launch</span>
+                  <span style="margin-left: auto; font-size: 9.5px; color: var(--t4); font-family: 'Geist Mono', monospace;">5/11</span>
+                </div>
+                <div style="height: 5px; background: var(--surface-3); border-radius: 999px; margin-top: 6px; overflow: hidden;"><div style="height: 100%; width: 47%; background: var(--accent);"></div></div>
+              </div>
+              <div class="card" style="padding: 8px 10px; opacity: 0.6">Write launch FAQ<div class="m"><span class="pdot p2"></span>P2 · +3d</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="sb">
+        <div class="step">Step 2</div>
+        <h6>Click the project title</h6>
+        <p>Chevron still toggles inline; clicking the title opens the detail view.</p>
+        <div class="sb-frame">
+          <div class="mockup mk-app" style="display: flex; align-items: center; justify-content: center;">
+            <div style="text-align: center; padding: 12px;">
+              <div class="icon" style="margin: 0 auto 8px; width: 32px; height: 32px; font-size: 14px;">A</div>
+              <div style="font-size: 13px; font-weight: 600; color: var(--t1); margin-bottom: 4px;">Acme — Q2 launch</div>
+              <div class="mono" style="font-size: 10px; color: var(--t4);">opening...</div>
+              <div style="margin-top: 14px; height: 3px; width: 80px; background: var(--surface-3); margin-left: auto; margin-right: auto; border-radius: 999px; overflow: hidden;"><div style="height:100%; width: 65%; background: var(--accent);"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="sb">
+        <div class="step">Step 3</div>
+        <h6>Project detail page</h6>
+        <p>Three bars + board; <code>esc</code> returns to last view.</p>
+        <div class="sb-frame">
+          <div class="mockup mk-app">
+            <div class="ts-tb1" style="height: 24px; padding: 0 8px;">
+              <span class="icon sm">A</span>
+              <span style="font-size: 10px; color: var(--t1); font-weight: 500;">Acme — Q2 launch</span>
+              <span class="pill-ok" style="font-size: 8.5px; padding: 1px 5px;">Active</span>
+            </div>
+            <div class="ts-tb3" style="height: 20px; padding: 0 6px;">
+              <span class="act" style="font-size: 9px; padding: 2px 6px;">Board</span>
+              <span style="font-size: 9px; padding: 2px 6px;">List</span>
+              <span style="font-size: 9px; padding: 2px 6px;">Brief</span>
+            </div>
+            <div class="ts-body">
+              <div class="ts-cols">
+                <div class="ts-col"><div class="ts-col-h" style="padding: 4px 6px;"><div class="ts-col-day" style="font-size:8px">To do</div><div class="ts-col-cnt" style="font-size: 11px;">4</div></div><div class="ts-col-body" style="padding: 4px;"><div class="card" style="padding: 3px 5px; font-size: 9px;">Lock pricing</div><div class="card" style="padding: 3px 5px; font-size: 9px;">Press release</div></div></div>
+                <div class="ts-col"><div class="ts-col-h" style="padding: 4px 6px;"><div class="ts-col-day" style="font-size:8px">Doing</div><div class="ts-col-cnt" style="font-size: 11px;">2</div></div><div class="ts-col-body" style="padding: 4px;"><div class="card" style="padding: 3px 5px; font-size: 9px;">QA staging</div></div></div>
+                <div class="ts-col"><div class="ts-col-h" style="padding: 4px 6px;"><div class="ts-col-day" style="font-size:8px">Done</div><div class="ts-col-cnt" style="font-size: 11px;">5</div></div><div class="ts-col-body" style="padding: 4px;"><div class="card" style="padding: 3px 5px; font-size: 9px; opacity: 0.5;">Brief OK</div></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <h3>The route change in App.jsx</h3>
+<pre><span class="c">// view shape gains a new variant</span>
+<span class="k">const</span> view = <span class="n">{</span><span class="f">type</span>: <span class="s">'projectDetail'</span>, <span class="f">id</span>: <span class="s">'p1'</span><span class="n">}</span>
+
+<span class="c">// dispatcher (existing pattern)</span>
+<span class="k">if</span> (view === <span class="s">'stack'</span>)        <span class="k">return</span> &lt;StackView ... /&gt;
+<span class="k">if</span> (view === <span class="s">'inbox'</span>)        <span class="k">return</span> &lt;InboxView ... /&gt;
+<span class="k">if</span> (view?.type === <span class="s">'project'</span>)        <span class="k">return</span> &lt;FilteredView projectId={view.id} /&gt;  <span class="c">// existing filter</span>
+<span class="k">if</span> (view?.type === <span class="s">'projectDetail'</span>)  <span class="k">return</span> &lt;ProjectDetailView projectId={view.id} /&gt;  <span class="c">// NEW</span>
+
+<span class="c">// entry from TaskCard.jsx — clicking the title (not chevron) on a cardType:'project'</span>
+onClick: () =&gt; setView({ <span class="f">type</span>: <span class="s">'projectDetail'</span>, <span class="f">id</span>: task.id })
+<span class="c">// exit: Esc handler restores `lastView` (already tracked in App.jsx)</span></pre>
+  </section>
+
+  <!-- ===================== DATA MODEL ===================== -->
+  <section>
+    <h2>Data model</h2>
+    <p class="sec-sub">Seven new project-level fields plus one subtask-level field. Migrate via a single Supabase migration; map snake_case ↔ camelCase in <code>db.js</code>.</p>
+    <table>
+      <thead>
+        <tr><th class="mono">Column</th><th>Type</th><th>Default</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">status</td><td>text</td><td><code>'active'</code></td><td>Project lifecycle: <code>planned</code> · <code>active</code> · <code>on_hold</code> · <code>done</code> · <code>abandoned</code>. Project-level only (NULL on regular tasks).</td></tr>
+        <tr><td class="mono">outcome</td><td>text</td><td>NULL</td><td>One-line "this is done when…" pinned at the top of the Brief tab.</td></tr>
+        <tr><td class="mono">start_date</td><td>date</td><td>NULL</td><td>Project start; powers the days-left math and the upcoming timeline tab.</td></tr>
+        <tr><td class="mono">target_date</td><td>date</td><td>NULL</td><td>Project target; "May 1 → Jun 15" in the toolbar.</td></tr>
+        <tr><td class="mono">accent_color</td><td>text</td><td>NULL</td><td>Hex or palette token; tints the project icon and progress bar.</td></tr>
+        <tr><td class="mono">cover</td><td>text</td><td>NULL</td><td>Single-character emoji or icon glyph for the gradient tile.</td></tr>
+        <tr><td class="mono">pinned_at</td><td>timestamptz</td><td>NULL</td><td>Powers the "Pinned projects" sidebar section. NULL = unpinned.</td></tr>
+        <tr><td class="mono">subtask_status</td><td>text</td><td><code>'todo'</code></td><td>On regular tasks only: <code>todo</code> · <code>doing</code> · <code>done</code>. Drives kanban columns. (Existing <code>done</code> boolean stays — we set it from this when status='done'.)</td></tr>
+      </tbody>
+    </table>
+    <h3>Decisions and links — JSONB on the project</h3>
+    <p>Decisions and links don't justify their own tables for v1. Store as JSONB arrays on the project row:</p>
+<pre><span class="c">-- on the project task row</span>
+decisions <span class="k">jsonb</span> <span class="k">DEFAULT</span> <span class="s">'[]'::jsonb</span>
+<span class="c">-- shape: [{ id, at: timestamptz, body: text, by?: text }]</span>
+
+links <span class="k">jsonb</span> <span class="k">DEFAULT</span> <span class="s">'[]'::jsonb</span>
+<span class="c">-- shape: [{ id, url: text, label?: text }]</span></pre>
+    <h3>Derived (no schema change)</h3>
+    <ul style="margin: 0 0 0 22px; padding: 0; font-size: 13.5px; color: var(--doc-fg);">
+      <li><b>Health</b> — <code>at_risk</code> if any subtask overdue or blocked or stale &gt; 7 days; <code>off_track</code> if any subtask overdue &gt; 3 days; else <code>on_track</code>. Computed in a <code>useProjectStats</code> hook, not stored.</li>
+      <li><b>% done</b> — count of subtasks with <code>subtask_status='done'</code> ÷ total. Computed each render.</li>
+      <li><b>Velocity</b> — completions over the last N days vs. the prior N. Computed from the existing <code>completedAt</code> timestamps.</li>
+      <li><b>Time spent</b> — sum of <code>timeEstimate</code> on done subtasks; "estimate" sums all subtasks.</li>
+    </ul>
+    <div class="callout warn">
+      <strong>Realtime:</strong> the existing Supabase <code>subscribeTasks</code> stub in <a href="src/lib/db.js">db.js</a> is unwired (per <a href="HANDOFF.md">HANDOFF.md</a>). This plan does <em>not</em> require it — every metric is derived client-side from already-loaded tasks. If realtime ships separately, the metrics auto-update.
+    </div>
+  </section>
+
+  <!-- ===================== COMPONENT MAP ===================== -->
+  <section>
+    <h2>Component map</h2>
+    <p class="sec-sub">Six new files, four to modify, two to extract for reuse. File paths relative to <code>src/</code>.</p>
+    <table>
+      <thead>
+        <tr><th class="mono">File</th><th>Status</th><th>Effort</th><th>Role</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">components/ProjectDetailView.jsx</td><td><span class="pill new">new</span></td><td><span class="pill m">M</span></td><td>Top-level wrapper. Owns tab state. Composes the three bars + body.</td></tr>
+        <tr><td class="mono">components/ProjectToolbarStack.jsx</td><td><span class="pill new">new</span></td><td><span class="pill s">S</span></td><td>The three bars: crumb, metrics, tabs. Pure presentational.</td></tr>
+        <tr><td class="mono">components/ProjectBoardTab.jsx</td><td><span class="pill new">new</span></td><td><span class="pill m">M</span></td><td>Kanban: To do / Doing / Done columns; drag between via extracted <code>useDragReorder</code>.</td></tr>
+        <tr><td class="mono">components/ProjectBriefTab.jsx</td><td><span class="pill new">new</span></td><td><span class="pill s">S</span></td><td>Renders <code>description</code> as plain text in v1 (markdown later). Inline-edit on click.</td></tr>
+        <tr><td class="mono">components/ProjectDecisionsTab.jsx</td><td><span class="pill new">new</span></td><td><span class="pill s">S</span></td><td>Append-only timestamped list. Add bar at top.</td></tr>
+        <tr><td class="mono">components/ProjectListTab.jsx</td><td><span class="pill new">new</span></td><td><span class="pill s">S</span></td><td>Subtask table — status / title / priority / due / est / tags.</td></tr>
+        <tr><td class="mono">components/ProjectActivityTab.jsx</td><td><span class="pill new">new</span></td><td><span class="pill s">S</span></td><td>Reads existing <code>activity</code> jsonb from subtasks and project, sorts by time.</td></tr>
+        <tr><td class="mono">hooks/useProjectStats.js</td><td><span class="pill new">new</span></td><td><span class="pill s">S</span></td><td>% done · health · blocked · overdue · velocity · time. Memoized off subtask list.</td></tr>
+        <tr><td class="mono">hooks/useDragReorder.js</td><td><span class="pill new">new</span></td><td><span class="pill m">M</span></td><td>Extract from StackView's drag/FLIP machinery so kanban reuses it. Preserves the two Chromium gotchas documented in CLAUDE.md.</td></tr>
+        <tr><td class="mono">App.jsx</td><td><span class="pill modify">modify</span></td><td><span class="pill s">S</span></td><td>Add <code>{type:'projectDetail',id}</code> case to view dispatcher; wire Esc → lastView.</td></tr>
+        <tr><td class="mono">data.js</td><td><span class="pill modify">modify</span></td><td><span class="pill s">S</span></td><td>Extend <code>makeTask</code> with new defaults; demonstrate in <code>INIT_TASKS</code>.</td></tr>
+        <tr><td class="mono">components/TaskCard.jsx</td><td><span class="pill modify">modify</span></td><td><span class="pill s">S</span></td><td>On <code>cardType:'project'</code> title click (not chevron) → set view to projectDetail.</td></tr>
+        <tr><td class="mono">components/sidebar.jsx</td><td><span class="pill modify">modify</span></td><td><span class="pill s">S</span></td><td>Add "Pinned projects" section above Locations.</td></tr>
+        <tr><td class="mono">lib/db.js</td><td><span class="pill modify">modify</span></td><td><span class="pill s">S</span></td><td>Map new fields in <code>TASK_TO_ROW_KEYS</code> / <code>ROW_TO_TASK_KEYS</code>.</td></tr>
+        <tr><td class="mono">supabase/migrations/0002_project_fields.sql</td><td><span class="pill new">new</span></td><td><span class="pill s">S</span></td><td>Adds the 8 columns + jsonb defaults. Idempotent.</td></tr>
+        <tr><td class="mono">components/StackView.jsx</td><td><span class="pill reuse">reuse</span></td><td>—</td><td>Lift drag/FLIP into <code>useDragReorder</code>; no behavioural change.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===================== TAB SPECS ===================== -->
+  <section>
+    <h2>Tabs, in detail</h2>
+    <p class="sec-sub">One spec per tab — purpose, data, mockup, interactions. Phase number indicates when it lands.</p>
+
+    <div class="tab-grid">
+
+      <!-- BOARD -->
+      <div class="tab-card">
+        <div class="tc-head">
+          <span class="name">Board</span>
+          <span class="pill phase-pill">Phase 2 · default</span>
+          <span class="pill effort-pill">Effort: M</span>
+          <span style="font-size:13px; color: var(--doc-muted); margin-left: auto;">The kanban; drives the metaphor.</span>
+        </div>
+        <div class="tc-body">
+          <div>
+            <h5>Purpose</h5>
+            <p>Move subtasks between <b>To do · Doing · Done</b>. The headline view; what most muscle memory will form around.</p>
+            <h5>Data</h5>
+            <ul>
+              <li>Reads <code>subtaskStatus</code> on each child task.</li>
+              <li>Drag-drop sets new <code>subtaskStatus</code>; if status='done' also sets <code>done=true</code> + <code>completedAt=now</code>.</li>
+              <li>Existing <code>childOrder</code> still controls within-column order.</li>
+            </ul>
+            <h5>Interactions</h5>
+            <ul>
+              <li>Drag a card across columns; FLIP animates.</li>
+              <li><code>n</code> in any column focuses that column's quick-add bar.</li>
+              <li>Click a card opens the existing task drawer.</li>
+              <li>Empty column shows "Drop here" hint, accent-tinted.</li>
+            </ul>
+          </div>
+          <div class="tc-mockup">
+            <div class="mockup mk-app">
+              <div class="ts-tb1" style="height:28px; padding: 0 10px;"><span class="icon sm">A</span><span style="font-size: 10.5px; font-weight: 500;">Acme — Q2 launch</span><span class="pill-ok" style="font-size: 9px;">Active</span></div>
+              <div class="ts-tb3" style="height: 22px; padding: 0 6px;"><span class="act" style="font-size: 9.5px; padding: 2px 7px;">Board</span><span style="font-size: 9.5px; padding: 2px 7px;">List</span><span style="font-size: 9.5px; padding: 2px 7px;">Brief</span><span style="font-size: 9.5px; padding: 2px 7px;">Decisions</span></div>
+              <div class="ts-body">
+                <div class="ts-cols">
+                  <div class="ts-col"><div class="ts-col-h"><div class="ts-col-day">To do</div><div class="ts-col-cnt">4</div></div><div class="ts-col-body"><div class="card blk">Lock pricing tiers<div class="m"><span class="pdot p1"></span>P1 · -2d</div></div><div class="card">Press release<div class="m"><span class="pdot p2"></span>P2 · +5d</div></div><div class="card">Onboarding emails<div class="m"><span class="pdot p3"></span>P3 · +8d</div></div><div class="card">Legal ToS<div class="m"><span class="pdot p2"></span>P2 · +6d</div></div></div></div>
+                  <div class="ts-col"><div class="ts-col-h"><div class="ts-col-day">Doing</div><div class="ts-col-cnt">2</div></div><div class="ts-col-body"><div class="card over">QA staging<div class="m"><span class="pdot p1"></span>P1 · today · 4h</div></div><div class="card">Launch FAQ<div class="m"><span class="pdot p2"></span>P2 · +3d</div></div></div></div>
+                  <div class="ts-col"><div class="ts-col-h"><div class="ts-col-day">Done</div><div class="ts-col-cnt">5</div></div><div class="ts-col-body"><div class="card" style="opacity:.5">Brief approved</div><div class="card" style="opacity:.5">Domain</div><div class="card" style="opacity:.5">Hero copy</div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIST -->
+      <div class="tab-card">
+        <div class="tc-head">
+          <span class="name">List</span>
+          <span class="pill phase-pill">Phase 4</span>
+          <span class="pill effort-pill">Effort: S</span>
+          <span style="font-size:13px; color: var(--doc-muted); margin-left: auto;">Power-user dense table.</span>
+        </div>
+        <div class="tc-body">
+          <div>
+            <h5>Purpose</h5>
+            <p>Scan / sort / bulk-edit subtasks. The view you switch to when the kanban is too sparse for the task at hand.</p>
+            <h5>Data</h5>
+            <ul>
+              <li>Same subtask data as Board — just a different visualization.</li>
+              <li>Columns: status · title · priority · due · est · tags.</li>
+              <li>Click row → drawer; click status icon → cycle.</li>
+            </ul>
+            <h5>Interactions</h5>
+            <ul>
+              <li>Multi-select with <code>shift+click</code>; bulk bar appears at the bottom.</li>
+              <li><code>j/k</code> to move row focus; <code>x</code> to toggle done.</li>
+              <li>Sort header click toggles asc/desc.</li>
+            </ul>
+          </div>
+          <div class="tc-mockup">
+            <div class="mockup mk-app">
+              <div class="ts-tb1" style="height:28px; padding: 0 10px;"><span class="icon sm">A</span><span style="font-size: 10.5px; font-weight: 500;">Acme — Q2 launch</span></div>
+              <div class="ts-tb3" style="height: 22px; padding: 0 6px;"><span style="font-size: 9.5px; padding: 2px 7px;">Board</span><span class="act" style="font-size: 9.5px; padding: 2px 7px;">List</span><span style="font-size: 9.5px; padding: 2px 7px;">Brief</span></div>
+              <div class="ts-list">
+                <table>
+                  <thead><tr><th></th><th>Title</th><th>Pri</th><th>Due</th><th>Est</th></tr></thead>
+                  <tbody>
+                    <tr><td><span class="stat doing"></span></td><td>QA on staging build</td><td class="mono">P1</td><td class="mono">+0d</td><td class="mono">4h</td></tr>
+                    <tr><td><span class="stat blk"></span></td><td>Lock pricing tiers</td><td class="mono">P1</td><td class="mono bad">-2d</td><td class="mono">2h</td></tr>
+                    <tr><td><span class="stat doing"></span></td><td>Write launch FAQ</td><td class="mono">P2</td><td class="mono">+3d</td><td class="mono">2h</td></tr>
+                    <tr><td><span class="stat todo"></span></td><td>Press release draft</td><td class="mono">P2</td><td class="mono">+5d</td><td class="mono">3h</td></tr>
+                    <tr><td><span class="stat todo"></span></td><td>Legal ToS review</td><td class="mono">P2</td><td class="mono">+6d</td><td class="mono">—</td></tr>
+                    <tr><td><span class="stat todo"></span></td><td>Onboarding emails</td><td class="mono">P3</td><td class="mono">+8d</td><td class="mono">3h</td></tr>
+                    <tr><td><span class="stat done"></span></td><td style="opacity:.55; text-decoration: line-through;">Brief approved</td><td class="mono" style="opacity:.55">P2</td><td class="mono" style="opacity:.55">—</td><td class="mono" style="opacity:.55">—</td></tr>
+                    <tr><td><span class="stat done"></span></td><td style="opacity:.55; text-decoration: line-through;">Domain registered</td><td class="mono" style="opacity:.55">P3</td><td class="mono" style="opacity:.55">—</td><td class="mono" style="opacity:.55">—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BRIEF -->
+      <div class="tab-card">
+        <div class="tc-head">
+          <span class="name">Brief</span>
+          <span class="pill phase-pill">Phase 3</span>
+          <span class="pill effort-pill">Effort: S</span>
+          <span style="font-size:13px; color: var(--doc-muted); margin-left: auto;">The "why" of the project.</span>
+        </div>
+        <div class="tc-body">
+          <div>
+            <h5>Purpose</h5>
+            <p>Outcome statement + freeform body. The doc you re-read on Monday morning to remember what this project actually means.</p>
+            <h5>Data</h5>
+            <ul>
+              <li><code>outcome</code> — single line, italic-quoted at top.</li>
+              <li><code>description</code> (existing) — body text, plain in v1.</li>
+              <li>Project-level <code>start_date</code> · <code>target_date</code> shown as meta.</li>
+            </ul>
+            <h5>Interactions</h5>
+            <ul>
+              <li>Click outcome → inline edit.</li>
+              <li>Click body → switches to a textarea.</li>
+              <li>Save on blur or <code>⌘+enter</code>.</li>
+              <li><strong>Markdown rendering:</strong> deferred to phase 5; ship as plain-text first.</li>
+            </ul>
+          </div>
+          <div class="tc-mockup">
+            <div class="mockup mk-app">
+              <div class="ts-tb1" style="height:28px; padding: 0 10px;"><span class="icon sm">A</span><span style="font-size: 10.5px; font-weight: 500;">Acme — Q2 launch</span></div>
+              <div class="ts-tb3" style="height: 22px; padding: 0 6px;"><span style="font-size: 9.5px; padding: 2px 7px;">Board</span><span style="font-size: 9.5px; padding: 2px 7px;">List</span><span class="act" style="font-size: 9.5px; padding: 2px 7px;">Brief</span></div>
+              <div class="ts-brief">
+                <h2>Outcome</h2>
+                <blockquote>3 pilot accounts paid by Jun 15, with onboarding NPS ≥ 40.</blockquote>
+                <h2>Brief</h2>
+                <p>Ship the Acme self-serve flow before the Q2 board meeting. Success looks like a working signup → first-task path with paid tier upgrade and at least three closed pilots.</p>
+                <p>The hard parts are pricing finalisation and legal review of the new ToS — neither is on the engineering critical path.</p>
+                <div class="meta">
+                  <span><b>Start</b> May 1</span>
+                  <span><b>Target</b> Jun 15</span>
+                  <span><b>Owner</b> Tim</span>
+                  <span><b>Tags</b> #q2 #launch</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DECISIONS -->
+      <div class="tab-card">
+        <div class="tc-head">
+          <span class="name">Decisions</span>
+          <span class="pill phase-pill">Phase 3</span>
+          <span class="pill effort-pill">Effort: S</span>
+          <span style="font-size:13px; color: var(--doc-muted); margin-left: auto;">Append-only "we decided X because Y" log.</span>
+        </div>
+        <div class="tc-body">
+          <div>
+            <h5>Purpose</h5>
+            <p>Capture the moments where the project's direction changed. Cheap to maintain, priceless during retros and when a stakeholder asks "wait, why aren't we doing freemium?"</p>
+            <h5>Data</h5>
+            <ul>
+              <li><code>decisions</code> jsonb on the project: <code>[{ id, at, body, by? }]</code>.</li>
+              <li>Append-only in UI; edits allowed within 24h, then locked (audit-friendly).</li>
+            </ul>
+            <h5>Interactions</h5>
+            <ul>
+              <li>Top input: "What did you decide?" → enter to commit.</li>
+              <li>Each row: timestamp · body · author chip.</li>
+              <li>Hover row → small "↺ revert" chip if within 24h.</li>
+            </ul>
+          </div>
+          <div class="tc-mockup">
+            <div class="mockup mk-app">
+              <div class="ts-tb1" style="height:28px; padding: 0 10px;"><span class="icon sm">A</span><span style="font-size: 10.5px; font-weight: 500;">Acme — Q2 launch</span></div>
+              <div class="ts-tb3" style="height: 22px; padding: 0 6px;"><span style="font-size: 9.5px; padding: 2px 7px;">Board</span><span style="font-size: 9.5px; padding: 2px 7px;">List</span><span style="font-size: 9.5px; padding: 2px 7px;">Brief</span><span class="act" style="font-size: 9.5px; padding: 2px 7px;">Decisions</span></div>
+              <div class="ts-dec">
+                <div class="add">+ What did you decide?</div>
+                <div class="row" style="margin-top: 14px;"><time>May 6</time><div class="body"><b>Pricing tiers locked</b> at $19 / $49 / custom. Capped at 3 tiers per Sam's call — keep it simple for v1.</div><div class="by">tim</div></div>
+                <div class="row"><time>May 3</time><div class="body"><b>Drop the freemium tier.</b> Burn-rate vs. conversion math didn't pencil. Revisit Q3 if we stall on pilot acquisition.</div><div class="by">tim</div></div>
+                <div class="row"><time>May 1</time><div class="body"><b>Acme is the v1 design partner.</b> They've signed the LOI; we ship to them first, generalise after.</div><div class="by">tim</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACTIVITY -->
+      <div class="tab-card">
+        <div class="tc-head">
+          <span class="name">Activity</span>
+          <span class="pill phase-pill">Phase 4</span>
+          <span class="pill effort-pill">Effort: S</span>
+          <span style="font-size:13px; color: var(--doc-muted); margin-left: auto;">What happened, when.</span>
+        </div>
+        <div class="tc-body">
+          <div>
+            <h5>Purpose</h5>
+            <p>A scrollable timeline of project events, scoped to this project. The existing <code>activity</code> jsonb already exists on every task — this tab just aggregates and renders.</p>
+            <h5>Data</h5>
+            <ul>
+              <li>Source: every subtask's <code>activity</code> entries + project's own.</li>
+              <li>Sorted desc by timestamp; grouped by day.</li>
+              <li>No new schema.</li>
+            </ul>
+            <h5>Interactions</h5>
+            <ul>
+              <li>Click an event → drawer opens to that subtask.</li>
+              <li>Filter chips: <em>all · status · decisions · subtasks</em>.</li>
+            </ul>
+          </div>
+          <div class="tc-mockup">
+            <div class="mockup mk-app">
+              <div class="ts-tb1" style="height:28px; padding: 0 10px;"><span class="icon sm">A</span><span style="font-size: 10.5px; font-weight: 500;">Acme — Q2 launch</span></div>
+              <div class="ts-tb3" style="height: 22px; padding: 0 6px;"><span style="font-size: 9.5px; padding: 2px 7px;">Board</span><span style="font-size: 9.5px; padding: 2px 7px;">List</span><span style="font-size: 9.5px; padding: 2px 7px;">Brief</span><span style="font-size: 9.5px; padding: 2px 7px;">Decisions</span><span class="act" style="font-size: 9.5px; padding: 2px 7px;">Activity</span></div>
+              <div class="ts-act">
+                <div class="item"><time>13:42</time><div class="dot" style="background: var(--warning);"></div><div class="body">Status flipped to <em>at-risk</em> · auto</div></div>
+                <div class="item"><time>13:18</time><div class="dot" style="background: var(--danger);"></div><div class="body"><b>Lock pricing tiers</b> → blocked · waiting on Sam</div></div>
+                <div class="item"><time>11:04</time><div class="dot" style="background: var(--success);"></div><div class="body"><b>Hero copy v1</b> → done</div></div>
+                <div class="item"><time>09:50</time><div class="dot"></div><div class="body"><b>QA staging build</b> moved to <em>doing</em></div></div>
+                <div class="item" style="margin-top:14px;"><time>May 6</time><div class="dot" style="background: var(--accent-bright);"></div><div class="body">Decision logged: <em>pricing tiers locked</em></div></div>
+                <div class="item"><time>May 5</time><div class="dot"></div><div class="body"><b>Press release draft</b> created</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FILES -->
+      <div class="tab-card">
+        <div class="tc-head">
+          <span class="name">Files</span>
+          <span class="pill stub-pill">Phase 5+ · stubbed</span>
+          <span class="pill effort-pill">Effort: M</span>
+          <span style="font-size:13px; color: var(--doc-muted); margin-left: auto;">Links + attachments. Tab present, body is a placeholder until later.</span>
+        </div>
+        <div class="tc-body">
+          <div>
+            <h5>Why stubbed</h5>
+            <p>The Files tab needs Supabase Storage integration — orthogonal to the rest of this work, deserves its own focused PR. Ship the tab structure now (so the toolbar count is honest) and a "Coming soon" body. Links can land in v1 if there's appetite — they're just JSONB on the project.</p>
+            <h5>v1 scope (if pulled forward)</h5>
+            <ul>
+              <li><code>links</code> jsonb on project — paste a URL, get a fav-icon row.</li>
+              <li>No upload, no storage, no preview.</li>
+            </ul>
+            <h5>v2 scope</h5>
+            <ul>
+              <li>Drag a file onto the tab → upload to Supabase Storage.</li>
+              <li>Image / PDF preview inline.</li>
+              <li>Storage bucket per workspace, RLS-scoped.</li>
+            </ul>
+          </div>
+          <div class="tc-mockup">
+            <div class="mockup mk-app">
+              <div class="ts-tb1" style="height:28px; padding: 0 10px;"><span class="icon sm">A</span><span style="font-size: 10.5px; font-weight: 500;">Acme — Q2 launch</span></div>
+              <div class="ts-tb3" style="height: 22px; padding: 0 6px;"><span style="font-size: 9.5px; padding: 2px 7px;">Board</span><span style="font-size: 9.5px; padding: 2px 7px;">List</span><span style="font-size: 9.5px; padding: 2px 7px;">Brief</span><span style="font-size: 9.5px; padding: 2px 7px;">Decisions</span><span style="font-size: 9.5px; padding: 2px 7px;">Activity</span><span class="act" style="font-size: 9.5px; padding: 2px 7px;">Files</span></div>
+              <div style="flex:1; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 6px; color: var(--t4); font-size: 12px;">
+                <div style="font-size: 18px;">🗎</div>
+                <div>Files coming in phase 5</div>
+                <div style="font-size: 10px; opacity: 0.7;">Drag a URL to add a link · Supabase Storage planned</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================== PHASING ===================== -->
+  <section>
+    <h2>Phased rollout</h2>
+    <p class="sec-sub">Each phase is independently shippable. Stop after any phase and the app still works — earlier phases just have fewer tabs.</p>
+    <div class="phases">
+      <div class="phase">
+        <div class="num">1</div>
+        <div>
+          <h4>Skeleton + routing<span class="effort">~2 days</span></h4>
+          <p class="why">Get to the destination first. No interactivity inside.</p>
+          <ul>
+            <li>Run the schema migration; extend <code>makeTask</code> + <code>db.js</code> mappings.</li>
+            <li>Build <code>ProjectDetailView.jsx</code> shell + <code>ProjectToolbarStack.jsx</code>.</li>
+            <li>Wire <code>{type:'projectDetail', id}</code> in App.jsx; click handler in TaskCard; Esc → lastView.</li>
+            <li>All tabs present in the strip; only <b>Board</b> renders content (read-only kanban via existing data).</li>
+            <li><code>useProjectStats</code> implemented + driving the metric bar.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="num">2</div>
+        <div>
+          <h4>Board interactions<span class="effort">~3 days</span></h4>
+          <p class="why">The kanban metaphor only works if you can move cards.</p>
+          <ul>
+            <li>Extract <code>useDragReorder</code> from StackView; preserve the dragover-on-source guard and ≥80ms defer rule (per <a href="CLAUDE.md">CLAUDE.md</a>).</li>
+            <li>Drag-between-columns updates <code>subtaskStatus</code>; if 'done', set <code>done=true</code> + <code>completedAt</code>.</li>
+            <li>Quick-add bar at the bottom of each column; <code>n</code> focuses current column.</li>
+            <li>Click card → existing drawer.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="num">3</div>
+        <div>
+          <h4>Brief + Decisions<span class="effort">~2 days</span></h4>
+          <p class="why">Make the project feel like more than a folder.</p>
+          <ul>
+            <li><code>ProjectBriefTab</code>: outcome edit-on-click, body textarea.</li>
+            <li><code>ProjectDecisionsTab</code>: append-only, JSONB on project.</li>
+            <li>Header chrome shows outcome as a pinned strip (above board) when set.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="num">4</div>
+        <div>
+          <h4>List + Activity<span class="effort">~2 days</span></h4>
+          <p class="why">Sort/scan power-tools and the receipts.</p>
+          <ul>
+            <li><code>ProjectListTab</code>: sortable subtask table, <code>j/k/x</code> keys.</li>
+            <li><code>ProjectActivityTab</code>: aggregate <code>activity</code> jsonb across project + subtasks.</li>
+            <li>Sidebar: <b>Pinned projects</b> section (uses <code>pinned_at</code>).</li>
+          </ul>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="num">5</div>
+        <div>
+          <h4>Polish + Files<span class="effort">~3-4 days</span></h4>
+          <p class="why">Sand off the rough edges; ship what's left.</p>
+          <ul>
+            <li>Markdown rendering for Brief (decide library; <code>marked</code> + DOMPurify is the obvious cheap pick).</li>
+            <li><code>ProjectFilesTab</code>: links MVP (paste URL → favicon row).</li>
+            <li>Mobile-friendly: stack toolbars vertically, scroll-snap kanban columns, touch-drag tested.</li>
+            <li>Keyboard: <code>g b/l/r/d/a/f</code> to switch tabs; <code>esc</code> to back.</li>
+            <li>Cover/icon/accent picker in toolbar's gear menu.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== RISKS ===================== -->
+  <section>
+    <h2>Critical implementation notes</h2>
+    <p class="sec-sub">Things that have bitten this codebase before, and the schema move that needs care.</p>
+    <div class="risk-grid">
+      <div class="risk danger">
+        <h5>Drag bug #1 — source mutation aborts drag</h5>
+        <p>Setting <code>display:none</code> / removing the source synchronously after dragstart cancels the drag in Chromium. When extracting <code>useDragReorder</code>, defer any visibility change ≥80ms. <a href="CLAUDE.md">CLAUDE.md</a> covers this in detail.</p>
+      </div>
+      <div class="risk danger">
+        <h5>Drag bug #2 — element under cursor flickers</h5>
+        <p>If the source slides under the cursor on hover, dragover-on-source triggers a state reset → flicker loop at 60Hz. Preserve the early-return on dragover-on-source from StackView when extracting.</p>
+      </div>
+      <div class="risk">
+        <h5>Schema migration order</h5>
+        <p>Apply <code>0002_project_fields.sql</code> in dev Supabase first. Verify <code>MigrateFromLocal.jsx</code> still works (or extend it to carry the new fields). RLS policies remain unchanged — new columns inherit <code>auth.uid() = user_id</code>.</p>
+      </div>
+      <div class="risk">
+        <h5>Naming clash — "project"</h5>
+        <p><code>task.project</code> is a context (LIFE/WORK/HOME), not a project container. UI already says "Location" in some places — finish that rename pass as part of phase 4 to prevent every new project feature from inheriting the ambiguity. Data-model rename is deferred.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== VERIFICATION ===================== -->
+  <section>
+    <h2>How we know it works</h2>
+    <p class="sec-sub">Synthetic-DOM passes have missed real bugs. Test interactively in the preview.</p>
+    <h3>Setup</h3>
+    <ul style="margin: 0 0 14px 22px; padding: 0; font-size: 13.5px;">
+      <li><code>http://localhost:5174/?dev=1</code> bypasses Supabase auth and seeds <code>INIT_TASKS</code> (per <a href="CLAUDE.md">CLAUDE.md</a>).</li>
+      <li>Add a sample project to <code>INIT_TASKS</code> with all new fields populated so the chrome lights up.</li>
+    </ul>
+    <h3>Interaction tests (per phase)</h3>
+    <table>
+      <thead><tr><th>Phase</th><th>Test</th><th>Expected</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Click a project card title in Stack</td><td>View transitions to projectDetail; toolbar shows real metrics; Esc returns to Stack.</td></tr>
+        <tr><td>2</td><td>Drag a To-do card to Doing</td><td>Card animates; <code>subtaskStatus</code> updates; metric bar's "doing" count increments. No flicker.</td></tr>
+        <tr><td>2</td><td>Drag a Doing card to Done</td><td><code>done=true</code> + <code>completedAt</code> set; card greys out; % done increases.</td></tr>
+        <tr><td>2</td><td>Press <code>n</code> in Doing column</td><td>Quick-add input focuses in that column.</td></tr>
+        <tr><td>3</td><td>Click outcome line</td><td>Inline edit; save on blur; toolbar reflects nothing (outcome is brief-only).</td></tr>
+        <tr><td>3</td><td>Type a decision + enter</td><td>Row appears at top of list with current timestamp.</td></tr>
+        <tr><td>4</td><td>List view, sort by Due</td><td>Overdue items at top; mono dates; click row → drawer.</td></tr>
+        <tr><td>4</td><td>Pin a project from toolbar</td><td>Sidebar gains "Pinned projects" section with this entry.</td></tr>
+        <tr><td>5</td><td>Mobile (375px), tab switch</td><td>Toolbar stacks; tabs scrollable; kanban scroll-snaps between columns.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===================== OPEN QUESTIONS ===================== -->
+  <section>
+    <h2>Open questions</h2>
+    <p class="sec-sub">Decisions to make during implementation, not before. Each is small enough to flip without re-architecting.</p>
+    <ul style="margin: 0 0 0 22px; padding: 0; font-size: 14px; line-height: 1.7;">
+      <li>When a project flips to <b>Done</b>, do we auto-complete remaining subtasks, or surface a "mark all done?" prompt? <i>Lean: prompt, never auto.</i></li>
+      <li>Pin order in sidebar — manual reorder, or last-opened-first? <i>Lean: manual; explicit beats clever.</i></li>
+      <li>Does the quick-add bar accept <code>/commands</code> (e.g. <code>/today</code>, <code>/p1</code>) inline in v2? <i>Defer; ship plain text first.</i></li>
+      <li>If a card is dragged from Doing to Done while it has open subtasks-of-subtasks (we don't currently nest, but might), what happens? <i>Out of scope — sub-projects are explicitly rejected.</i></li>
+      <li>When does Velocity (+8%/wk) show vs. hide? Need a baseline of ≥ 7 days of activity to mean anything. <i>Lean: hide chip if &lt; 7d of data.</i></li>
+    </ul>
+  </section>
+
+</div>
+</body>
+</html>
