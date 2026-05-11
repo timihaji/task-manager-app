@@ -227,7 +227,12 @@ export async function fetchTasks(workspaceId) {
       .eq('workspace_id', workspaceId)
       .order('position', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true });
-    if (!error) return (data || []).map(rowToTask).map(normalizeTask);
+    if (!error) {
+      const tasks = (data || []).map(rowToTask).map(normalizeTask);
+      const sample = tasks.filter(t => t.date && !t.parentId && !t.done && !t.archived).slice(0, 8).map(t => ({ id: t.id, date: t.date, position: t.position, title: (t.title||'').slice(0,30) }));
+      console.log('[DIAG fetchTasks] returned %d tasks. position-ordered sample:', tasks.length, sample);
+      return tasks;
+    }
     if (!/position/i.test(error.message || '')) throw error;
     _positionColumnMissing = true;
     console.warn('[tasks] `position` column missing — apply migration 0007 to enable persistent task ordering. Falling back to created_at order.');
@@ -244,16 +249,18 @@ export async function fetchTasks(workspaceId) {
 export async function upsertTask(task, userId, workspaceId) {
   if (!supabase) throw new Error('Supabase client not configured');
   const row = taskToRow(task, userId, workspaceId);
+  console.log('[DIAG upsertTask] _positionColumnMissing=%s, sending row:', _positionColumnMissing, { id: row.id, date: row.date, position: row.position, position_in_row: 'position' in row, title: (row.title||'').slice(0,30) });
   const { error } = await supabase.from('tasks').upsert(row);
-  if (error) throw error;
+  if (error) { console.error('[DIAG upsertTask] error:', error); throw error; }
 }
 
 export async function upsertTasks(tasks, userId, workspaceId) {
   if (!supabase) throw new Error('Supabase client not configured');
   if (!tasks?.length) return;
   const rows = tasks.map((t) => taskToRow(t, userId, workspaceId));
+  console.log('[DIAG upsertTasks] _positionColumnMissing=%s, sending %d rows:', _positionColumnMissing, rows.length, rows.map(r => ({ id: r.id, date: r.date, position: r.position, position_in_row: 'position' in r })));
   const { error } = await supabase.from('tasks').upsert(rows);
-  if (error) throw error;
+  if (error) { console.error('[DIAG upsertTasks] error:', error); throw error; }
 }
 
 export async function deleteTask(id) {
