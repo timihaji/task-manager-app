@@ -2361,7 +2361,7 @@ function App() {
         // empty body). The middle of the body resolves to a subtask, handled
         // in the oData.kind === 'task' branch below.
         if (oData.kind === 'project-body') {
-          const srcIds = [activeId];
+          const srcIds = selectedIds.has(activeId) && selectedIds.size > 1 ? [...selectedIds] : [activeId];
           // Cursor-Y in body's top 8px → nest as first child. Otherwise append.
           const bodyEl = document.querySelector(`.card[data-card-id="${oData.targetId}"] .card-project-body`);
           let dropIndex;
@@ -2374,7 +2374,7 @@ function App() {
         }
         // Drop on a custom-group box → join group, optionally move date.
         if (oData.kind === 'group-target') {
-          const srcIds = [activeId];
+          const srcIds = selectedIds.has(activeId) && selectedIds.size > 1 ? [...selectedIds] : [activeId];
           const newDate = oData.colKey === 'inbox' ? null : oData.colKey;
           pushSnapshotUndo();
           setTasks(prev => {
@@ -2409,7 +2409,7 @@ function App() {
             // (read from data-drop-line stamped in dndOnDragOver).
             if (overTask.parentId) {
               const parent = taskById(overTask.parentId);
-              const srcIds = [activeId];
+              const srcIds = selectedIds.has(activeId) && selectedIds.size > 1 ? [...selectedIds] : [activeId];
               if (parent) {
                 const order = parent.childOrder || [];
                 const idx = order.indexOf(overTask.id);
