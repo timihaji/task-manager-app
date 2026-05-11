@@ -2204,6 +2204,104 @@ function App() {
     });
   };
 
+  // Multi-id variants of reorderInDate / reorderToInbox. When a multi-selected
+  // card is dragged, every selected card moves together as a contiguous group
+  // at the drop point, preserving their source-array order. `anchorId` is the
+  // over-card's id; if it's part of `taskIds` (drop on self when the target is
+  // also selected), we slide to the next non-moved card in the destination.
+  const computeGroupPositions = (above, below, count) => {
+    const A = above && Number.isFinite(above.position) ? above.position : null;
+    const B = below && Number.isFinite(below.position) ? below.position : null;
+    const out = [];
+    if (A != null && B != null) {
+      const step = (B - A) / (count + 1);
+      for (let i = 0; i < count; i++) out.push(A + step * (i + 1));
+    } else if (A != null) {
+      for (let i = 0; i < count; i++) out.push(A + i + 1);
+    } else if (B != null) {
+      const start = B - count;
+      for (let i = 0; i < count; i++) out.push(start + i + 1);
+    } else {
+      for (let i = 0; i < count; i++) out.push(i + 1);
+    }
+    return out;
+  };
+
+  const reorderManyInDate = (taskIds, dateKey, anchorId) => {
+    if (!taskIds || !taskIds.length) return;
+    setTasks(prev => {
+      const idSet = new Set(taskIds);
+      const movedOrdered = prev.filter(t => idSet.has(t.id));
+      if (!movedOrdered.length) return prev;
+      const remaining = prev.filter(t => !idSet.has(t.id));
+      const inCol = remaining.filter(t => t.date===dateKey && !t.done && !t.parentId && !t.archived && !t.snoozedUntil && !t.someday);
+      let anchorTask = anchorId ? inCol.find(t => t.id === anchorId) : null;
+      // If anchor was itself selected (moved), slide to the next inCol member.
+      if (!anchorTask && anchorId) {
+        const anchorPrevIdx = prev.findIndex(t => t.id === anchorId);
+        if (anchorPrevIdx >= 0) {
+          for (const c of inCol) {
+            if (prev.indexOf(c) > anchorPrevIdx) { anchorTask = c; break; }
+          }
+        }
+      }
+      const anchorIdxInCol = anchorTask ? inCol.indexOf(anchorTask) : inCol.length;
+      const above = anchorIdxInCol > 0 ? inCol[anchorIdxInCol - 1] : null;
+      const below = anchorTask;
+      const positions = computeGroupPositions(above, below, movedOrdered.length);
+      const patched = movedOrdered.map((t, i) => ({...t, date: dateKey, parentId: null, position: positions[i]}));
+      const insertAt = anchorTask
+        ? remaining.indexOf(anchorTask)
+        : (inCol.length ? remaining.indexOf(inCol[inCol.length - 1]) + 1 : remaining.length);
+      const result = [...remaining];
+      result.splice(insertAt, 0, ...patched);
+      const parentIds = new Set(movedOrdered.filter(t => t.parentId).map(t => t.parentId));
+      if (parentIds.size) {
+        return result.map(t => parentIds.has(t.id)
+          ? {...t, childOrder: (t.childOrder||[]).filter(cid => !idSet.has(cid))}
+          : t);
+      }
+      return result;
+    });
+  };
+
+  const reorderManyToInbox = (taskIds, anchorId) => {
+    if (!taskIds || !taskIds.length) return;
+    setTasks(prev => {
+      const idSet = new Set(taskIds);
+      const movedOrdered = prev.filter(t => idSet.has(t.id));
+      if (!movedOrdered.length) return prev;
+      const remaining = prev.filter(t => !idSet.has(t.id));
+      const inbox = remaining.filter(t => !t.date && !t.done && !t.parentId && !t.archived);
+      let anchorTask = anchorId ? inbox.find(t => t.id === anchorId) : null;
+      if (!anchorTask && anchorId) {
+        const anchorPrevIdx = prev.findIndex(t => t.id === anchorId);
+        if (anchorPrevIdx >= 0) {
+          for (const c of inbox) {
+            if (prev.indexOf(c) > anchorPrevIdx) { anchorTask = c; break; }
+          }
+        }
+      }
+      const anchorIdxInInbox = anchorTask ? inbox.indexOf(anchorTask) : inbox.length;
+      const above = anchorIdxInInbox > 0 ? inbox[anchorIdxInInbox - 1] : null;
+      const below = anchorTask;
+      const positions = computeGroupPositions(above, below, movedOrdered.length);
+      const patched = movedOrdered.map((t, i) => ({...t, date: null, parentId: null, position: positions[i]}));
+      const insertAt = anchorTask
+        ? remaining.indexOf(anchorTask)
+        : (inbox.length ? remaining.indexOf(inbox[inbox.length - 1]) + 1 : remaining.length);
+      const result = [...remaining];
+      result.splice(insertAt, 0, ...patched);
+      const parentIds = new Set(movedOrdered.filter(t => t.parentId).map(t => t.parentId));
+      if (parentIds.size) {
+        return result.map(t => parentIds.has(t.id)
+          ? {...t, childOrder: (t.childOrder||[]).filter(cid => !idSet.has(cid))}
+          : t);
+      }
+      return result;
+    });
+  };
+
   // Snapshot the entire tasks array for atomic undo of multi-task ops.
   const pushSnapshotUndo = () => setUndoStack(s => [...s.slice(-9), {bulk:true, before:tasks}]);
 
@@ -2333,22 +2431,58 @@ function App() {
       haptics.drop();
 
       // Stack reorder — both source and target are stack tasks.
+      // Multi-select: when the dragged card is part of a multi-selection, every
+      // selected stack card moves as a contiguous group at the drop point,
+      // preserving sortable order. Matches arrayMove semantics for direction:
+      // dragging downward inserts after the target, upward inserts before.
       if (aData.kind === 'stack-task' && oData.kind === 'stack-task') {
         const ids = aData.sortableIds || [];
         const fromIdx = ids.indexOf(activeId);
         const toIdx = ids.indexOf(String(over.id));
         if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
-          const next = arrayMove(ids, fromIdx, toIdx);
+          const srcSet = (selectedIds.has(activeId) && selectedIds.size > 1)
+            ? new Set(ids.filter(id => selectedIds.has(id)))
+            : new Set([activeId]);
+          const srcIds = ids.filter(id => srcSet.has(id));
+          let next;
+          if (srcIds.length === 1) {
+            next = arrayMove(ids, fromIdx, toIdx);
+          } else {
+            const remaining = ids.filter(id => !srcSet.has(id));
+            const targetId = String(over.id);
+            let insertAt;
+            if (srcSet.has(targetId)) {
+              // Target is also selected — slide to next non-moved id at or after toIdx.
+              let anchor = null;
+              for (let i = toIdx + 1; i < ids.length; i++) {
+                if (!srcSet.has(ids[i])) { anchor = ids[i]; break; }
+              }
+              insertAt = anchor ? remaining.indexOf(anchor) : remaining.length;
+            } else {
+              insertAt = remaining.indexOf(targetId);
+              if (toIdx > fromIdx) insertAt += 1; // downward: insert after target
+            }
+            next = [...remaining.slice(0, insertAt), ...srcIds, ...remaining.slice(insertAt)];
+          }
           setTweak('stackOrder', next);
           const stackSort = tweaks.stackSort;
           if (stackSort && stackSort !== 'manual') setTweak('stackSort', 'manual');
+          // Group reconcile: the dragged card adopts the target's groupId (or null
+          // if target is ungrouped). Apply to every moved card so the whole
+          // selection joins/leaves the group together.
           const targetTask = taskById(String(over.id));
           const draggedTask = taskById(activeId);
           if (draggedTask && targetTask) {
             const validGid = new Set((tweaks?.customGroups || []).map(g => g.id));
             const tg = targetTask.groupId && validGid.has(targetTask.groupId) ? targetTask.groupId : null;
             const dg = draggedTask.groupId && validGid.has(draggedTask.groupId) ? draggedTask.groupId : null;
-            if (tg !== dg) updateTask(activeId, { groupId: tg });
+            if (tg !== dg) {
+              if (srcIds.length === 1) {
+                updateTask(activeId, { groupId: tg });
+              } else {
+                setTasks(prev => prev.map(t => srcSet.has(t.id) ? {...t, groupId: tg} : t));
+              }
+            }
           }
         }
         return;
@@ -2397,10 +2531,7 @@ function App() {
         // Drop on a task in a different column → cross-column move at that index.
         // Drop on column body → drop at end of that column.
         const aDate = aData.date === undefined ? null : aData.date;
-        const aParent = aData.parentId || null;
         let targetDate = aDate;
-        let targetParent = aParent;
-        let targetIndex = null;
         if (oData.kind === 'task') {
           const overTask = taskById(String(over.id));
           if (overTask) {
@@ -2426,45 +2557,33 @@ function App() {
               return;
             }
             targetDate = oData.date === undefined ? overTask.date || null : oData.date;
-            targetParent = oData.parentId || null;
           }
-          // Convert over-card to a column-level index. over.sortable.index is now
-          // per-group (post per-group SortableContext refactor in Column.jsx /
-          // InboxCol), so it can't be passed straight to reorderInDate /
-          // reorderToInbox which both expect a within-column index. Look up
-          // over.id's position in the destination column's flat active-task list,
-          // matching reorderInDate / reorderToInbox's own filter exactly.
-          const overId = String(over.id);
-          let inCol;
-          if (targetDate == null) {
-            inCol = tasks.filter(t => !t.date && !t.done && !t.parentId && !t.archived);
-          } else {
-            inCol = tasks.filter(t => t.date === targetDate && !t.done && !t.parentId && !t.archived && !t.snoozedUntil && !t.someday);
-          }
-          const colIdx = inCol.findIndex(t => t.id === overId);
-          if (colIdx >= 0) targetIndex = colIdx;
+          // Anchor for multi-id reorder is over.id (set below). reorderMany*
+          // resolves anchor post-removal even when the anchor was itself selected.
         } else if (oData.kind === 'column') {
           targetDate = oData.date === undefined ? null : oData.date;
-          targetParent = null;
-          targetIndex = null; // append to end
         }
-        // Inbox column = targetDate null
+        // Multi-select fan-out: every selected card moves with the dragged
+        // card. Cards keep their source-array order at the drop point.
+        const srcIds = (selectedIds.has(activeId) && selectedIds.size > 1)
+          ? [...selectedIds]
+          : [activeId];
+        const anchorId = oData.kind === 'task' ? String(over.id) : null;
         if (targetDate == null) {
-          reorderToInbox(activeId, targetIndex);
+          reorderManyToInbox(srcIds, anchorId);
         } else {
           // Detect drag-into-past BEFORE reorder so we read pre-move task state.
           // Skip projects with open kids — completeTask would pop a confirm modal mid-drag.
-          const draggedTask = taskById(activeId);
-          const isProjectWithOpenKids =
-            draggedTask?.cardType === 'project' &&
-            tasks.some(t => t.parentId === activeId && !t.done);
-          const autoComplete =
-            D.isPast(targetDate) &&
-            draggedTask && !draggedTask.done &&
-            !isProjectWithOpenKids;
-          reorderInDate(activeId, targetDate, targetIndex);
-          if (autoComplete) {
-            completeTask(activeId, targetDate);
+          const past = D.isPast(targetDate);
+          reorderManyInDate(srcIds, targetDate, anchorId);
+          if (past) {
+            for (const id of srcIds) {
+              const t = taskById(id);
+              if (!t || t.done) continue;
+              const hasOpenKids = t.cardType === 'project' && tasks.some(c => c.parentId === id && !c.done);
+              if (hasOpenKids) continue;
+              completeTask(id, targetDate);
+            }
             setCompletedOpen(s => new Set([...s, targetDate]));
           }
         }
