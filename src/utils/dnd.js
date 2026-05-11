@@ -43,9 +43,11 @@ export function compositeCollisionDetection(args) {
   // cursor is hovering, not on cursor X. Hitting a subtask = positional nest at
   // that subtask. Hitting body padding/gap = fall through to the closest
   // top-level sibling (drop "under the project" works naturally). Top 8px =
-  // nest as first child for the "drop at start" case.
+  // nest as first child. This applies symmetrically to external drags
+  // (dragging into the project) and internal drags (dragging a subtask out
+  // of its own project) — without symmetry, internal drags can't escape the
+  // body because closest-subtask routing always pulls the active task back.
   if (pointer) {
-    const activeParentId = args.active?.data?.current?.parentId || null;
     const pointerHits = pointerWithin(args);
     for (const cont of args.droppableContainers) {
       const d = cont.data?.current;
@@ -56,16 +58,15 @@ export function compositeCollisionDetection(args) {
       if (pointer.x < bodyRect.left || pointer.x > bodyRect.right) continue;
       if (pointer.y < bodyRect.top || pointer.y > bodyRect.bottom) continue;
       const targetId = d.targetId;
-      // Internal drag (subtask reordering inside its own body): skip this step
-      // so the standard sortable strategy handles the shift.
-      if (activeParentId === targetId) break;
 
-      // External drag in body.
       // a) Top 8px → nest as first child.
       if (pointer.y - bodyRect.top <= NEST_EDGE_PX) {
         return [{ id: cont.id, data: { droppableContainer: cont, value: 0 } }];
       }
       // b) Cursor on a subtask of this body → positional nest at that subtask.
+      //    For internal drag, this is the normal sortable reorder path; the
+      //    active item itself is included so dnd-kit's strategy keeps shifting
+      //    cleanly even when the cursor sits on the source.
       const subtaskHit = pointerHits.find(c => {
         const cd = c.data?.droppableContainer?.data?.current;
         return cd?.kind === 'task' && cd?.parentId === targetId;
@@ -73,8 +74,9 @@ export function compositeCollisionDetection(args) {
       if (subtaskHit) return [subtaskHit];
       // c) Cursor in body padding/gap (not on a subtask) → fall through to the
       //    closest top-level sibling so "drop under the project" becomes a
-      //    sibling reorder. This is what makes a tall expanded body feel
-      //    transparent to the user dragging past it.
+      //    sibling reorder. Same path lets an internal drag escape the body
+      //    when the cursor leaves the subtask column without exiting the
+      //    body's geometric bounds.
       let closestSib = null;
       let minDist = Infinity;
       for (const c of args.droppableContainers) {
