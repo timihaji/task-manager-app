@@ -1091,6 +1091,33 @@ function App() {
     }
   }, [view]);
 
+  // Keep the leftmost-visible date pinned across COL_W changes. scrollLeft
+  // is in pixels and COL_W can change for many reasons (day-window tab,
+  // inbox/project panel collapse or resize, window resize, lnav toggle).
+  // Without this, the pixel offset is preserved but the date it points at
+  // drifts — the timeline appears to jump to a random spot.
+  const prevColWRef = useRef(null);
+  const prevViewForColRef = useRef(view);
+  useLayoutEffect(() => {
+    const prevView = prevViewForColRef.current;
+    prevViewForColRef.current = view;
+    if (view !== 'week') { prevColWRef.current = null; return; }
+    if (prevView !== 'week') { prevColWRef.current = COL_W; return; }
+    const prevColW = prevColWRef.current;
+    prevColWRef.current = COL_W;
+    if (!prevColW || prevColW === COL_W) return;
+    if (pendingTodayJump.current || pendingGoToDate.current) return;
+    const el = boardRef.current;
+    if (!el) return;
+    const leftIdx = Math.round(el.scrollLeft / prevColW);
+    const target = Math.max(0, leftIdx * COL_W);
+    if (Math.abs(el.scrollLeft - target) < 1) return;
+    if (typeof el.scrollTo === 'function') el.scrollTo({left:target, behavior:'auto'});
+    else el.scrollLeft = target;
+    const shell = boardShellRef.current;
+    setBoardMetrics({scrollLeft:el.scrollLeft, width:el.clientWidth, boardWidth:shell?.clientWidth||el.clientWidth});
+  }, [COL_W, view]);
+
   // Belt-and-braces: on first mount, the board's measured width can settle in
   // stages (initial paint → font load → sidebar/inbox width applied), and a
   // single layout-effect pass anchors against a stale COL_W. Re-anchor today
