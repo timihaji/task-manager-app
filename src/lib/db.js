@@ -42,6 +42,7 @@ const TASK_TO_ROW_KEYS = {
   expiryOf: 'expiry_of',
   lastContactAt: 'last_contact_at',
   delegationHistory: 'delegation_history',
+  cardColor: 'card_color',
   sourceId: 'source_id',
   createdAt: 'created_at',
   updatedAt: 'updated_at',
@@ -66,7 +67,7 @@ const TASK_DB_COLUMNS = new Set([
   'expiry_date', 'expiry_task_id', 'expiry_of',
   'last_contact_at', 'delegation_history',
   'activity', 'archived', 'source', 'source_id',
-  'subtasks', 'position',
+  'subtasks', 'position', 'card_color',
   'created_at', 'updated_at',
 ]);
 
