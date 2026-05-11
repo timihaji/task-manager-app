@@ -1960,7 +1960,7 @@ button:active:not(:disabled):not(.no-press),
               border-color .12s var(--ease-out),
               color .12s var(--ease-out);
 }
-.card:active,.tb-btn:active,.tb-icon-btn:active,
+.tb-btn:active,.tb-icon-btn:active,
 .tb-btn-group .tb-btn:active,.fdd-item:active,.lnav-item:active,
 .project-pill:active,.col-add:active,.col-groupby:active,
 .bulk-check:active,.card-chk:active,.scard-sub-chk:active,
@@ -1971,15 +1971,6 @@ button:active:not(:disabled):not(.no-press),
 .del-card-hdr:active,.del-task-title:active{
   transform: scale(.97);
 }
-/* .scard press animation only fires when the card surface itself is pressed.
-   When a descendant button/input is :active (kebab menu items, rail arrows,
-   checkbox, rename input) the card stays still — CSS :active otherwise
-   propagates to ancestors regardless of JS stopPropagation(). */
-.scard:active:not(:has(:is(button, input, select, textarea, [role="button"]):active)){
-  transform: scale(.97);
-}
-/* Press compress (hover lift removed — cards tint instead). */
-.card:hover:active{transform: scale(.97)}
 
 /* ── 2 · easing & motion polish (re-declare existing keyframes) ─────── */
 
