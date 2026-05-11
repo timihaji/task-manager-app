@@ -180,7 +180,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);display:flex;f
 /* week columns */
 .col{flex:0 0 var(--col-w,240px);width:var(--col-w,240px);border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--bg);transition:background .12s}
 .col:last-child{border-right:none}
-.col.today-pinned{position:sticky;flex:0 0 var(--col-w,240px);width:var(--col-w,240px);z-index:23;background:var(--bg)}
+.col.today-pinned{position:sticky;flex:0 0 var(--col-w,240px);width:var(--col-w,240px);z-index:26;background:var(--bg)}
 .col.today-pinned.pin-right{right:0;border-left:1px solid var(--border);border-right:none;box-shadow:-10px 0 18px rgba(0,0,0,.06)}
 .col.today-pinned.pin-left{left:0;border-right:1px solid var(--border);border-left:none;box-shadow:10px 0 18px rgba(0,0,0,.06)}
 .col.today-pinned .col-hdr{background:var(--bg)}
