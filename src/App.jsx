@@ -73,7 +73,7 @@ import { useDndSensors, getInsertionIndex, compositeCollisionDetection } from '.
 import * as haptics from './utils/haptics.js';
 
 // ── extracted leaf components ────────────────────────────────────────────
-import { CardPopover } from './components/CardPopover.jsx';
+import { CardPopover, StackPickerPopover } from './components/CardPopover.jsx';
 import { MiniCalendar } from './components/MiniCalendar.jsx';
 import { TagPicker, ProjPicker, TimePicker, DatePicker, PriPicker, SnoozePicker } from './components/pickers.jsx';
 import { ContextMenu } from './components/ContextMenu.jsx';
@@ -515,6 +515,7 @@ function App() {
   const [contextMenu,setContextMenu] = useState(null); // {task, x, y}
   const [cardColorPickerFor,setCardColorPickerFor] = useState(null); // {id, x, y}
   const [popRequest,setPopRequest] = useState(null); // {id, field}
+  const [stackPicker,setStackPicker] = useState(null); // {id, field, x, y} — Stack-view right-click picker
   const [renamingGroupId,setRenamingGroupId] = useState(null);
   const [marquee,setMarquee] = useState(null); // {x0,y0,x1,y1} viewport coords
   const marqueeBaseRef = useRef(null);
@@ -3098,7 +3099,18 @@ function App() {
   };
   const ctxItems = contextMenu ? (() => {
     const t = contextMenu.task;
-    const open = field => { setPopRequest({id:t.id, field}); setFocusedId(t.id); };
+    // Stack view's StackCard doesn't host the per-card picker popovers that
+    // TaskCard does, so popRequest never opens anything there. Route the
+    // Edit-submenu items through a portal popover anchored at the menu's
+    // own coords instead — same UX, decoupled from the card chrome.
+    const open = field => {
+      if (view === 'stack') {
+        setStackPicker({id:t.id, field, x:contextMenu.x, y:contextMenu.y});
+      } else {
+        setPopRequest({id:t.id, field});
+      }
+      setFocusedId(t.id);
+    };
     return [
       {type:'lbl', label:'Edit'},
       {label:'Tag…',      onClick:()=>open('tag'),    kbd:'T'},
@@ -3643,6 +3655,37 @@ function App() {
           onClear={() => updateTask(cardColorPickerFor.id, { cardColor: null })}
           onClose={() => setCardColorPickerFor(null)}/>
       );
+    })()}
+    {stackPicker && (() => {
+      const tk = tasks.find(t => t.id === stackPicker.id);
+      if (!tk) return null;
+      const close = () => setStackPicker(null);
+      const change = (patch, recentVal) => {
+        updateTask(stackPicker.id, patch);
+        if (recentVal) {
+          if ('tags' in patch) pushRecent('tags', recentVal);
+          if ('project' in patch) pushRecent('projects', recentVal);
+        } else if (patch.project) {
+          pushRecent('projects', patch.project);
+        }
+      };
+      let inner = null;
+      if (stackPicker.field === 'tag') {
+        inner = <TagPicker task={tk} theme={theme} recents={recents.tags}
+          onChange={change} onAddTaxonomy={(kind,label)=>taxonomyActions.add(kind,label)} onClose={close}/>;
+      } else if (stackPicker.field === 'proj') {
+        inner = <ProjPicker task={tk} recents={recents.projects}
+          onChange={change} onAddTaxonomy={(kind,label)=>taxonomyActions.add(kind,label)} onClose={close}/>;
+      } else if (stackPicker.field === 'time') {
+        inner = <TimePicker task={tk} onChange={change} onClose={close}/>;
+      } else if (stackPicker.field === 'date') {
+        inner = <DatePicker task={tk} onChange={change} onClose={close}/>;
+      } else if (stackPicker.field === 'pri') {
+        inner = <PriPicker task={tk} onChange={change} onClose={close}/>;
+      } else if (stackPicker.field === 'snooze') {
+        inner = <SnoozePicker task={tk} onChange={change} onClose={close}/>;
+      }
+      return <StackPickerPopover x={stackPicker.x} y={stackPicker.y} onClose={close}>{inner}</StackPickerPopover>;
     })()}
     {/* DragOverlay renders the floating ghost that tracks the cursor. dnd-kit's
         sortable strategy keeps the source card in its grid slot (snapping
