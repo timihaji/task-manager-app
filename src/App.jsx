@@ -2481,10 +2481,11 @@ function App() {
 
   const reorderManyInDate = (taskIds, dateKey, anchorId) => {
     if (!taskIds || !taskIds.length) return;
+    console.log('[DIAG reorderManyInDate] taskIds=%o, dateKey=%s, anchorId=%s', taskIds, dateKey, anchorId);
     setTasks(prev => {
       const idSet = new Set(taskIds);
       const movedOrdered = prev.filter(t => idSet.has(t.id));
-      if (!movedOrdered.length) return prev;
+      if (!movedOrdered.length) { console.log('[DIAG reorderManyInDate] no movedOrdered, returning prev'); return prev; }
       const remaining = prev.filter(t => !idSet.has(t.id));
       const inCol = remaining.filter(t => t.date===dateKey && !t.done && !t.parentId && !t.archived && !t.snoozedUntil && !t.someday);
       let anchorTask = anchorId ? inCol.find(t => t.id === anchorId) : null;
@@ -2501,6 +2502,7 @@ function App() {
       const above = anchorIdxInCol > 0 ? inCol[anchorIdxInCol - 1] : null;
       const below = anchorTask;
       const positions = computeGroupPositions(above, below, movedOrdered.length);
+      console.log('[DIAG reorderManyInDate] above=%o below=%o newPositions=%o oldPositions=%o', above && {id:above.id, pos:above.position}, below && {id:below.id, pos:below.position}, positions, movedOrdered.map(t=>({id:t.id, pos:t.position})));
       const patched = movedOrdered.map((t, i) => ({...t, date: dateKey, parentId: null, position: positions[i]}));
       const insertAt = anchorTask
         ? remaining.indexOf(anchorTask)
@@ -2678,8 +2680,9 @@ function App() {
     const aData = active.data.current || {};
     const oData = over?.data.current || {};
     const activeId = String(active.id);
+    console.log('[DIAG dragEnd]', { activeId, overId: over?.id || null, aKind: aData.kind, oKind: oData.kind, aDate: aData.date, oDate: oData.date });
     try {
-      if (!over) return;
+      if (!over) { console.log('[DIAG dragEnd] EARLY RETURN: no over target'); return; }
       haptics.drop();
 
       // Stack reorder — both source and target are stack tasks.
