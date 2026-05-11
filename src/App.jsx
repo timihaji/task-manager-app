@@ -3099,15 +3099,16 @@ function App() {
   };
   const ctxItems = contextMenu ? (() => {
     const t = contextMenu.task;
-    // Stack view's StackCard doesn't host the per-card picker popovers that
-    // TaskCard does, so popRequest never opens anything there. Route the
-    // Edit-submenu items through a portal popover anchored at the menu's
-    // own coords instead — same UX, decoupled from the card chrome.
+    // Only TaskCard (Column / Timeline / week view) consumes popRequest and
+    // hosts the per-card picker popovers. StackCard (.scard) and ListTaskItem
+    // (.list-item) don't, so popRequest is a no-op there. For any non-Timeline
+    // view, open the Edit-submenu pickers as a portal popover anchored at the
+    // menu's cursor coords instead.
     const open = field => {
-      if (view === 'stack') {
-        setStackPicker({id:t.id, field, x:contextMenu.x, y:contextMenu.y});
-      } else {
+      if (view === 'week') {
         setPopRequest({id:t.id, field});
+      } else {
+        setStackPicker({id:t.id, field, x:contextMenu.x, y:contextMenu.y});
       }
       setFocusedId(t.id);
     };
@@ -3422,11 +3423,13 @@ function App() {
       ) : view==='list' ? (
         <ListView title="List" tasks={allOpenTopLevel} onOpen={openTask} onFocus={setFocusedId}
           onSelect={toggleSelected} selectedIds={selectedIds}
-          focusedCardId={focusedId} renamingId={renamingId} onRename={updateTask} onRenameDone={()=>setRenamingId(null)}/>
+          focusedCardId={focusedId} renamingId={renamingId} onRename={updateTask} onRenameDone={()=>setRenamingId(null)}
+          onContextMenu={onCardContextMenu}/>
       ) : (
         <ListView title={viewTitle} tasks={listTasks()} onOpen={openTask} onFocus={setFocusedId}
           onSelect={toggleSelected} selectedIds={selectedIds}
-          focusedCardId={focusedId} renamingId={renamingId} onRename={updateTask} onRenameDone={()=>setRenamingId(null)}/>
+          focusedCardId={focusedId} renamingId={renamingId} onRename={updateTask} onRenameDone={()=>setRenamingId(null)}
+          onContextMenu={onCardContextMenu}/>
       )}
     </div>
     {selectedTasks.length>0 && (
