@@ -526,7 +526,18 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
             </Card>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,marginTop:24,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Stack view</div>
             <Card>
-              <SRow label="Card density" desc="Vertical padding and gap between cards. Compact fits more on screen; Comfortable gives each card more breathing room."><Seg id="stackCardDensity" opts={['compact','cozy','comfortable']}/></SRow>
+              <SRow label="Card height" desc="Vertical padding inside each card. Lower fits more on screen; higher gives each card more breathing room.">
+                <input type="range" min={2} max={20} step={1} value={tweaks.stackPadY ?? 7}
+                  onChange={e=>setTweak('stackPadY',Number(e.target.value))}
+                  style={{width:120,accentColor:'var(--accent)'}}/>
+                <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--t4)',minWidth:28,textAlign:'right'}}>{tweaks.stackPadY ?? 7}px</span>
+              </SRow>
+              <SRow label="Card spacing" desc="Vertical gap between stacked cards.">
+                <input type="range" min={0} max={24} step={1} value={tweaks.stackGap ?? 8}
+                  onChange={e=>setTweak('stackGap',Number(e.target.value))}
+                  style={{width:120,accentColor:'var(--accent)'}}/>
+                <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--t4)',minWidth:28,textAlign:'right'}}>{tweaks.stackGap ?? 8}px</span>
+              </SRow>
               <SRow label="Compact below deck" desc="Cards in positions 4+ render in a denser style to keep focus on the top three."><Tog id="stackCompactBelowDeck"/></SRow>
               <SRow label="Show completed today" desc="Expandable footer listing tasks you ticked off today, with a one-click restore."><Tog id="stackShowCompleted"/></SRow>
               <SRow label="Group by start date" desc="Insert sticky section headers (Overdue, Today, Tomorrow, This week, Later, No start date) between cards. Only takes effect when sort is set to Start."><Tog id="stackGroupByDate"/></SRow>

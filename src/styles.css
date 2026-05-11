@@ -880,17 +880,12 @@ body[data-density="compact"] .scard-proj-prog{padding-left:17px}
 body[data-density="airy"] .scard{padding-top:10px;padding-bottom:10px;padding-left:12px}
 body[data-density="airy"] .scard-r2{padding-left:23px}
 
-/* Stack-specific card density — overrides global data-density for Stack view.
-   stackCardDensity tweak: compact | cozy (default) | comfortable */
-body[data-stack-density="compact"] .scard{padding-top:4px;padding-bottom:4px;gap:3px}
-body[data-stack-density="compact"] .stack-inner{gap:4px}
-body[data-stack-density="cozy"] .scard{padding-top:7px;padding-bottom:7px;gap:4px}
-body[data-stack-density="cozy"] .stack-inner{gap:8px}
-body[data-stack-density="comfortable"] .scard{padding-top:11px;padding-bottom:11px;gap:7px}
-body[data-stack-density="comfortable"] .stack-inner{gap:14px}
-body[data-stack-density="comfortable"] .scard-title-text{font-size:13px}
-body[data-stack-density="comfortable"] .scard-chk{width:15px;height:15px}
-body[data-stack-density="comfortable"] .scard-rail button{width:20px;height:20px;font-size:12px}
+/* Stack card sizing — driven by stackPadY (card height) and stackGap
+   (between-card spacing) tweaks. Variables are set on body in App.jsx.
+   The body[data-density] prefix bumps specificity to override the
+   global density rules at lines 877-881 (which set padding-top/bottom). */
+body[data-density] .scard{padding-top:var(--stack-pad-y, 7px);padding-bottom:var(--stack-pad-y, 7px);gap:4px}
+.stack-inner{gap:var(--stack-gap, 8px)}
 
 /* === STACK rail (Approach 3 + controls): inline horizontal rail at right
    end of the title row. 4 buttons: move-up, move-down, kebab menu, edit.
@@ -1965,7 +1960,7 @@ button:active:not(:disabled):not(.no-press),
               border-color .12s var(--ease-out),
               color .12s var(--ease-out);
 }
-.card:active,.scard:active,.tb-btn:active,.tb-icon-btn:active,
+.card:active,.tb-btn:active,.tb-icon-btn:active,
 .tb-btn-group .tb-btn:active,.fdd-item:active,.lnav-item:active,
 .project-pill:active,.col-add:active,.col-groupby:active,
 .bulk-check:active,.card-chk:active,.scard-sub-chk:active,
@@ -1974,6 +1969,13 @@ button:active:not(:disabled):not(.no-press),
 .inbox-capture button:active,.card-add-zone button:active,
 .grp-dd-item:active,.confirm-acts button:active,
 .del-card-hdr:active,.del-task-title:active{
+  transform: scale(.97);
+}
+/* .scard press animation only fires when the card surface itself is pressed.
+   When a descendant button/input is :active (kebab menu items, rail arrows,
+   checkbox, rename input) the card stays still — CSS :active otherwise
+   propagates to ancestors regardless of JS stopPropagation(). */
+.scard:active:not(:has(:is(button, input, select, textarea, [role="button"]):active)){
   transform: scale(.97);
 }
 /* Press compress (hover lift removed — cards tint instead). */

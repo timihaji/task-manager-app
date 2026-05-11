@@ -837,7 +837,6 @@ function App() {
     document.body.setAttribute('data-theme', t);
     document.body.setAttribute('data-look', tweaks.look||'minimal');
     document.body.setAttribute('data-density', tweaks.density||'normal');
-    document.body.setAttribute('data-stack-density', tweaks.stackCardDensity||'cozy');
     const R = document.body;
     R.style.setProperty('--font', tweaks.font==='serif'?"'DM Serif Display',serif":tweaks.font==='mono'?"'Geist Mono',monospace":"'Geist',sans-serif");
     R.style.setProperty('--accent', tweaks.accentColor);
@@ -846,6 +845,8 @@ function App() {
     R.style.setProperty('--radius-card', tweaks.cardRadius+'px');
     R.style.setProperty('--group-radius', (Number(tweaks.groupRadius ?? 4))+'px');
     R.style.setProperty('--card-gap', (Number(tweaks.cardGap ?? 3))+'px');
+    R.style.setProperty('--stack-pad-y', (Number(tweaks.stackPadY ?? 7))+'px');
+    R.style.setProperty('--stack-gap', (Number(tweaks.stackGap ?? 8))+'px');
     const shadow = Math.max(0, Math.min(1, Number(tweaks.shadowIntensity ?? .35)));
     const mkShadow = (...parts) => shadow <= 0 ? 'none' : parts.map(([x,y,b,a])=>`${x}px ${y}px ${b}px rgba(0,0,0,${(a*shadow).toFixed(3)})`).join(',');
     R.style.setProperty('--shadow', mkShadow([0,1,2,.10],[0,3,10,.12]));
