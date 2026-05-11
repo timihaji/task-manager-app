@@ -28,7 +28,7 @@ function GrpDroppable({ id, data, baseClass, isCustom, children }) {
   );
 }
 
-function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, groupBy, collapsedGrps, completedOpen, blockedOpen,
+function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, tweaks, groupBy, collapsedGrps, completedOpen, blockedOpen,
   onToggleGrp, onToggleCompleted, onToggleBlocked, onAdd, onOpen, onToggle, onDelete,
   onFocus, onSelect, renamingId, onRename, onRenameDone,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
@@ -142,7 +142,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                   <div className="card-add-zone" title="Add above" onClick={e=>{e.stopPropagation();onAdd(colKey,date,{beforeId:task.id, ...(grp.custom?{groupId:grp.groupId}:{})});}}>
                     <button tabIndex={-1}>+</button>
                   </div>
-                  <TaskCard task={task} colKey={colKey} theme={theme} focused={focusedCardId===task.id}
+                  <TaskCard task={task} colKey={colKey} theme={theme} tweaks={tweaks} focused={focusedCardId===task.id}
                     selected={selectedIds?.has(task.id)}
                     renaming={renamingId===task.id} spawning={spawning?.has(task.id)} onOpen={onOpen} onToggle={onToggle} onDelete={onDelete}
                     onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
@@ -184,7 +184,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
               <span className="grp-cnt">{blocked.length}</span>
             </div>
             {blockedOpen && blocked.map(task=>(
-              <TaskCard key={task.id} task={task} colKey={colKey} theme={theme}
+              <TaskCard key={task.id} task={task} colKey={colKey} theme={theme} tweaks={tweaks}
                 focused={focusedCardId===task.id} renaming={renamingId===task.id} spawning={spawning?.has(task.id)}
                 selected={selectedIds?.has(task.id)}
                 onOpen={onOpen} onToggle={onToggle} onDelete={onDelete}
@@ -208,7 +208,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
               <span className="grp-cnt">{done.length}</span>
             </div>
             {completedOpen && done.map(task=>(
-              <TaskCard key={task.id} task={task} colKey={colKey} theme={theme}
+              <TaskCard key={task.id} task={task} colKey={colKey} theme={theme} tweaks={tweaks}
                 focused={focusedCardId===task.id} renaming={renamingId===task.id} spawning={spawning?.has(task.id)}
                 selected={selectedIds?.has(task.id)}
                 onOpen={onOpen} onToggle={onToggle} onDelete={onDelete}
@@ -241,7 +241,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
 }
 
 // ── InboxColumn ──────────────────────────────────────────────────────────
-function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawning, width, collapsed, panelView, onPanelView, onCollapse, onResizeStart, onAdd, onOpen, onToggle, onDelete, onFocus, onSelect, onRename, onRenameDone,
+function InboxCol({ tasks, theme, tweaks, focusedCardId, selectedIds, renamingId, spawning, width, collapsed, panelView, onPanelView, onCollapse, onResizeStart, onAdd, onOpen, onToggle, onDelete, onFocus, onSelect, onRename, onRenameDone,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
   inboxFilters, onCycleInboxFilter, onClearInboxFilters, inboxFilterCount,
   inboxGroupBy, onInboxGroupBy, collapsedGrps, onToggleGrp, cardExtras }) {
@@ -428,7 +428,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
                     {insertable && <div className="card-add-zone" title="Add above" onClick={e=>{e.stopPropagation();onAdd(null,null,'Untitled',{beforeId:task.id, ...(grp.custom?{groupId:grp.groupId}:{})});}}>
                       <button tabIndex={-1}>+</button>
                     </div>}
-                    <TaskCard task={task} colKey={task.date||'inbox'} theme={theme} focused={focusedCardId===task.id}
+                    <TaskCard task={task} colKey={task.date||'inbox'} theme={theme} tweaks={tweaks} focused={focusedCardId===task.id}
                       selected={selectedIds?.has(task.id)}
                       renaming={renamingId===task.id} spawning={spawning?.has(task.id)} onOpen={onOpen} onToggle={onToggle}
                       onDelete={onDelete} onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
@@ -453,7 +453,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
         {doneTasks.length>0 && (
           <div style={{marginTop:6,paddingTop:6,borderTop:'1px solid var(--border)'}}>
             {visibleDoneTasks.map(task=>(
-              <TaskCard key={task.id} task={task} colKey={task.date||'inbox'} theme={theme} focused={focusedCardId===task.id}
+              <TaskCard key={task.id} task={task} colKey={task.date||'inbox'} theme={theme} tweaks={tweaks} focused={focusedCardId===task.id}
                 selected={selectedIds?.has(task.id)}
                 renaming={renamingId===task.id} spawning={false} onOpen={onOpen} onToggle={onToggle} onDelete={onDelete}
                 onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}

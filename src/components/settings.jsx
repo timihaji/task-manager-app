@@ -441,6 +441,55 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
                 </Card>
               </React.Fragment>
             ))}
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,marginTop:24,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Card colour</div>
+            <Card>
+              <SRow label="Default palette" desc="Which group of swatches appears when you right-click a card → Card colour…">
+                <select value={tweaks.cardColorPalette||'Sunset'}
+                  onChange={e=>setTweak('cardColorPalette', e.target.value)}
+                  style={{font:'12px var(--font)',padding:'4px 8px',border:'1px solid var(--border-s)',borderRadius:3,background:'var(--surface)',color:'var(--t1)',cursor:'pointer'}}>
+                  {NICE_SWATCH_GROUPS.map(g=><option key={g.name} value={g.name}>{g.name}</option>)}
+                </select>
+              </SRow>
+              <SRow label="Display style" desc="How the chosen colour is applied to the card body. Mix blends with the surface; Pure replaces it; Overlay layers a translucent film on top.">
+                <select value={tweaks.cardColorMethod||'srgb'}
+                  onChange={e=>setTweak('cardColorMethod', e.target.value)}
+                  style={{font:'12px var(--font)',padding:'4px 8px',border:'1px solid var(--border-s)',borderRadius:3,background:'var(--surface)',color:'var(--t1)',cursor:'pointer'}}>
+                  <option value="srgb">Mix sRGB (linear)</option>
+                  <option value="oklch">Mix OKLCH (perceptual)</option>
+                  <option value="hsl">Mix HSL (vivid)</option>
+                  <option value="solid">Pure colour</option>
+                  <option value="overlay">Overlay (colour film)</option>
+                </select>
+              </SRow>
+            </Card>
+            {[['Dark mode','Dark'],['Light mode','Light']].map(([title,modeKey])=>(
+              <React.Fragment key={modeKey}>
+                <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,marginTop:20,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Card colour — {title}</div>
+                <Card>
+                  <SRow label="Strength" desc="How much of the colour shows through. 0 = invisible, 100 = the colour fully replaces the surface.">
+                    <input type="range" min={0} max={100} step={5}
+                      value={tweaks[`cardColor${modeKey}Pct`] ?? (modeKey==='Light'?50:20)}
+                      onChange={e=>setTweak(`cardColor${modeKey}Pct`, Number(e.target.value))}
+                      style={{width:140,accentColor:'var(--accent)'}}/>
+                    <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--t4)',minWidth:36,textAlign:'right'}}>{tweaks[`cardColor${modeKey}Pct`] ?? (modeKey==='Light'?50:20)}%</span>
+                  </SRow>
+                  <SRow label="Saturation" desc="Multiplies the saturation of the chosen colour before applying. 0 = grey, 100 = original, 200 = boosted.">
+                    <input type="range" min={0} max={200} step={5}
+                      value={tweaks[`cardColor${modeKey}Sat`] ?? (modeKey==='Light'?70:110)}
+                      onChange={e=>setTweak(`cardColor${modeKey}Sat`, Number(e.target.value))}
+                      style={{width:140,accentColor:'var(--accent)'}}/>
+                    <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--t4)',minWidth:36,textAlign:'right'}}>{tweaks[`cardColor${modeKey}Sat`] ?? (modeKey==='Light'?70:110)}%</span>
+                  </SRow>
+                  <SRow label="Lightness shift" desc="Pushes the colour darker (-) or lighter (+) before applying. Helpful when a palette feels off against this theme's surface.">
+                    <input type="range" min={-50} max={50} step={5}
+                      value={tweaks[`cardColor${modeKey}LightShift`] ?? 0}
+                      onChange={e=>setTweak(`cardColor${modeKey}LightShift`, Number(e.target.value))}
+                      style={{width:140,accentColor:'var(--accent)'}}/>
+                    <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--t4)',minWidth:36,textAlign:'right'}}>{tweaks[`cardColor${modeKey}LightShift`] ?? 0}%</span>
+                  </SRow>
+                </Card>
+              </React.Fragment>
+            ))}
           </>}
           {tab==='layout' && <>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Board</div>
@@ -551,4 +600,65 @@ function SettingsDrawer({ open, tweaks, setTweak, taxonomy, taxonomyActions, onC
 }
 
 
-export { SwatchPicker, SettingsScrollPane, TaxonomyManager, PRESETS_DATA, SettingsView, SettingsDrawer };
+// ── CardColorPopover ─────────────────────────────────────────────────────
+// Auto-opening swatch picker for the right-click → "Card colour…" menu item.
+// Renders at cursor position via portal, filters swatches by user's chosen
+// palette (default 'Sunset'), includes a "Clear colour" action.
+function CardColorPopover({ x, y, value, palette='Sunset', onChange, onClear, onClose }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const onDoc = e => { if (ref.current && !ref.current.contains(e.target)) onClose?.(); };
+    const onKey = e => { if (e.key === 'Escape') onClose?.(); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+  const group = NICE_SWATCH_GROUPS.find(g => g.name === palette) || NICE_SWATCH_GROUPS[0];
+  const colors = group.colors;
+  const w = 268, margin = 8;
+  const rows = Math.ceil(colors.length / 6);
+  const h = 28 + rows * 38 + 36;
+  const ax = Math.min(Math.max(margin, x), window.innerWidth - w - margin);
+  const ay = Math.min(Math.max(margin, y), window.innerHeight - h - margin);
+  const norm = (c) => (c || '').toLowerCase();
+  return ReactDOM.createPortal(
+    <div ref={ref}
+      style={{
+        position:'fixed', top:ay, left:ax, zIndex:1000, width:w,
+        background:'var(--surface)', border:'1px solid var(--border-s)', borderRadius:6,
+        boxShadow:'var(--shadow-lg)', padding:10,
+      }}
+      onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()}>
+      <div style={{fontSize:9.5,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:8}}>
+        {group.name} <span style={{color:'var(--t4)',opacity:.7,fontWeight:500,letterSpacing:0,textTransform:'none'}}>· change in Settings</span>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(6, 1fr)',gap:6}}>
+        {colors.map(([name,color])=>(
+          <button key={`${name}-${color}`} type="button" title={`${name}  ${color}`}
+            onClick={()=>{ onChange?.(color); onClose?.(); }}
+            style={{
+              aspectRatio:'1', border:norm(value)===norm(color)?'2px solid var(--accent)':'1px solid var(--border-s)',
+              borderRadius:4, background:color, cursor:'pointer', padding:0,
+              boxShadow:'inset 0 0 0 1px rgba(255,255,255,.25)',
+            }}/>
+        ))}
+      </div>
+      <button type="button" onClick={()=>{ onClear?.(); onClose?.(); }}
+        disabled={!value}
+        style={{
+          marginTop:10, width:'100%', padding:'6px 8px',
+          fontSize:11, color:value?'var(--t2)':'var(--t4)',
+          background:'transparent', border:'1px solid var(--border-s)', borderRadius:4,
+          cursor:value?'pointer':'default',
+        }}>
+        Clear colour
+      </button>
+    </div>,
+    document.body
+  );
+}
+
+export { SwatchPicker, CardColorPopover, SettingsScrollPane, TaxonomyManager, PRESETS_DATA, SettingsView, SettingsDrawer };

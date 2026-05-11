@@ -2342,3 +2342,78 @@ body[data-armed-col="2000-01-01"] { /* dummy keep-rule to anchor attr selector *
 .side-panel.inbox-col.col-armed .inbox-cnt,
 .side-panel.inbox-col:has(.col-body.drag-over) .inbox-title,
 .side-panel.inbox-col:has(.col-body.drag-over) .inbox-cnt{color: var(--accent) !important}
+
+/* ============================================================================
+   Card colour wash (right-click → Card colour…)
+   --card-color, --eff-color, --overlay-rgba are set inline by JS (cardColorVars)
+   --card-tint-pct is set on body when the active theme's pct changes
+   data-color-style on body picks the method (srgb / oklch / hsl / solid / overlay)
+
+   !important is required to beat existing forced-background rules:
+     - body[data-look="glass"] .card { background: ... !important }   (line ~56)
+     - .col.is-today .card { background: var(--surface) !important } (line ~213)
+   The glass-look composition rules below mix the wash into the same 70%-transparent
+   base used by the bare glass rule, so the glass blur stays intact under the tint.
+   ============================================================================ */
+
+body[data-color-style="srgb"] .card[style*="--card-color"],
+body[data-color-style="srgb"] .scard[style*="--card-color"]{
+  background: color-mix(in srgb, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface)) !important;
+}
+body[data-color-style="srgb"] .card.selected[style*="--card-color"],
+body[data-color-style="srgb"] .scard.selected[style*="--card-color"]{
+  background: color-mix(in srgb, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface-2)) !important;
+}
+
+body[data-color-style="oklch"] .card[style*="--card-color"],
+body[data-color-style="oklch"] .scard[style*="--card-color"]{
+  background: color-mix(in oklch, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface)) !important;
+}
+body[data-color-style="oklch"] .card.selected[style*="--card-color"],
+body[data-color-style="oklch"] .scard.selected[style*="--card-color"]{
+  background: color-mix(in oklch, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface-2)) !important;
+}
+
+body[data-color-style="hsl"] .card[style*="--card-color"],
+body[data-color-style="hsl"] .scard[style*="--card-color"]{
+  background: color-mix(in hsl, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface)) !important;
+}
+body[data-color-style="hsl"] .card.selected[style*="--card-color"],
+body[data-color-style="hsl"] .scard.selected[style*="--card-color"]{
+  background: color-mix(in hsl, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface-2)) !important;
+}
+
+body[data-color-style="solid"] .card[style*="--card-color"],
+body[data-color-style="solid"] .scard[style*="--card-color"]{
+  background: var(--eff-color, var(--card-color)) !important;
+}
+
+body[data-color-style="overlay"] .card[style*="--card-color"],
+body[data-color-style="overlay"] .scard[style*="--card-color"]{
+  background-color: var(--surface) !important;
+  background-image: linear-gradient(var(--overlay-rgba, transparent), var(--overlay-rgba, transparent)) !important;
+}
+body[data-color-style="overlay"] .card.selected[style*="--card-color"],
+body[data-color-style="overlay"] .scard.selected[style*="--card-color"]{
+  background-color: var(--surface-2) !important;
+  background-image: linear-gradient(var(--overlay-rgba, transparent), var(--overlay-rgba, transparent)) !important;
+}
+
+body[data-look="glass"][data-color-style="srgb"] .card[style*="--card-color"],
+body[data-look="glass"][data-color-style="srgb"] .scard[style*="--card-color"]{
+  background: color-mix(in srgb,
+    color-mix(in srgb, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface))
+    70%, transparent) !important;
+}
+body[data-look="glass"][data-color-style="oklch"] .card[style*="--card-color"],
+body[data-look="glass"][data-color-style="oklch"] .scard[style*="--card-color"]{
+  background: color-mix(in srgb,
+    color-mix(in oklch, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface))
+    70%, transparent) !important;
+}
+body[data-look="glass"][data-color-style="hsl"] .card[style*="--card-color"],
+body[data-look="glass"][data-color-style="hsl"] .scard[style*="--card-color"]{
+  background: color-mix(in srgb,
+    color-mix(in hsl, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface))
+    70%, transparent) !important;
+}

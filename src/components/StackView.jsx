@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { I } from '../utils/icons.jsx';
 import { D, parseTimeEst, fmtTimeEst, PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREA_NAMES } from '../data.js';
 import { lifeAreaPalette } from '../utils/colors.js';
+import { cardColorVars } from '../utils/cardColor.js';
 import { PriBars } from './PriBars.jsx';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -193,7 +194,7 @@ function ChipRow({ task, isProject, allTasks, theme }) {
   );
 }
 
-function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing, allTasks, theme, isFirst, isLast,
+function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing, allTasks, theme, tweaks, isFirst, isLast,
                     expanded, onToggleExpand, onOpen, onComplete, onSendToTop, onSendToBottom, onSubToggle,
                     sortableIds,
                     focused, renaming, onFocus, onContextMenu, onRename, onStartRename, onRenameDone,
@@ -260,7 +261,7 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
   return (
     <div className={klass}
          ref={setNodeRef}
-         style={dragStyle}
+         style={{...dragStyle, ...cardColorVars(task.cardColor, tweaks, theme)}}
          data-card-id={task.id}
          data-task-id={task.id}
          {...attributes}
@@ -642,6 +643,7 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                   completing={completing.has(t.id)}
                   allTasks={allTasks}
                   theme={theme}
+                  tweaks={tweaks}
                   expanded={expanded.has(t.id)}
                   onToggleExpand={toggleExpand}
                   onOpen={onOpen}

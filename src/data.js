@@ -412,6 +412,7 @@ const makeTask = (overrides={}) => syncTaskSnooze({
   checkInSchedule:null, checkInTaskIds:[], checkInOf:null, checkInDayOffset:null,
   expiryDate:null, expiryTaskId:null, expiryOf:null,
   lastContactAt:null, delegationHistory:[],
+  cardColor:null,
   ...overrides,
 });
 
