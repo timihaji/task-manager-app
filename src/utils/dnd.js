@@ -34,15 +34,19 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 //   3. Outside everything → closestCenter / rectIntersection fallback.
 const SPECIFIC_KINDS = new Set(['task', 'stack-task']);
 const CONTAINER_KINDS = new Set(['column', 'group-target', 'project-body']);
-const NEST_X_FRAC = 0.45;   // cursor X right of this fraction of the card = nest
-const NEST_EDGE_PX = 8;     // top/bottom strip inside body → nest-first/-last
+const NEST_EDGE_PX = 8;     // top strip inside body → nest as first child
 
 export function compositeCollisionDetection(args) {
   const pointer = args.pointerCoordinates;
 
-  // Step 0: cursor-X depth resolution for project bodies.
+  // Step 0: cursor inside an EXPANDED project body — route based on what the
+  // cursor is hovering, not on cursor X. Hitting a subtask = positional nest at
+  // that subtask. Hitting body padding/gap = fall through to the closest
+  // top-level sibling (drop "under the project" works naturally). Top 8px =
+  // nest as first child for the "drop at start" case.
   if (pointer) {
     const activeParentId = args.active?.data?.current?.parentId || null;
+    const pointerHits = pointerWithin(args);
     for (const cont of args.droppableContainers) {
       const d = cont.data?.current;
       if (d?.kind !== 'project-body') continue;
@@ -55,45 +59,35 @@ export function compositeCollisionDetection(args) {
       // Internal drag (subtask reordering inside its own body): skip this step
       // so the standard sortable strategy handles the shift.
       if (activeParentId === targetId) break;
-      // External drag: cursor X picks depth.
-      const projectCard = typeof document !== 'undefined'
-        ? document.querySelector(`.card[data-card-id="${targetId}"]`)
-        : null;
-      if (!projectCard) break;
-      const pr = projectCard.getBoundingClientRect();
-      const isNest = pointer.x >= pr.left + pr.width * NEST_X_FRAC;
-      if (isNest) {
-        // Edge zones → over = body itself (drop = nest as first/last).
-        const offTop = pointer.y - bodyRect.top;
-        const offBot = bodyRect.bottom - pointer.y;
-        if (offTop <= NEST_EDGE_PX || offBot <= NEST_EDGE_PX) {
-          return [{ id: cont.id, data: { droppableContainer: cont, value: 0 } }];
-        }
-        // Middle of body → closest subtask by cursor Y (direct DOM measure).
-        let closest = null;
-        let minDist = Infinity;
-        for (const c of args.droppableContainers) {
-          const cd = c.data?.current;
-          if (cd?.kind !== 'task' || cd.parentId !== targetId) continue;
-          const n = c.node?.current;
-          if (!n) continue;
-          const r = n.getBoundingClientRect();
-          const mid = r.top + r.height / 2;
-          const dist = Math.abs(pointer.y - mid);
-          if (dist < minDist) { minDist = dist; closest = c; }
-        }
-        if (closest) return [{ id: closest.id, data: { droppableContainer: closest, value: minDist } }];
-        // Empty body — fall through to the body container itself.
+
+      // External drag in body.
+      // a) Top 8px → nest as first child.
+      if (pointer.y - bodyRect.top <= NEST_EDGE_PX) {
         return [{ id: cont.id, data: { droppableContainer: cont, value: 0 } }];
       }
-      // Sibling mode: over = the project card itself, so the existing
-      // sibling-reorder path stamps a drop-line on it.
-      const projCont = args.droppableContainers.find(
-        c => c.data?.current?.kind === 'task' && String(c.id) === String(targetId),
-      );
-      if (projCont) {
-        return [{ id: projCont.id, data: { droppableContainer: projCont, value: 0 } }];
+      // b) Cursor on a subtask of this body → positional nest at that subtask.
+      const subtaskHit = pointerHits.find(c => {
+        const cd = c.data?.droppableContainer?.data?.current;
+        return cd?.kind === 'task' && cd?.parentId === targetId;
+      });
+      if (subtaskHit) return [subtaskHit];
+      // c) Cursor in body padding/gap (not on a subtask) → fall through to the
+      //    closest top-level sibling so "drop under the project" becomes a
+      //    sibling reorder. This is what makes a tall expanded body feel
+      //    transparent to the user dragging past it.
+      let closestSib = null;
+      let minDist = Infinity;
+      for (const c of args.droppableContainers) {
+        const cd = c.data?.current;
+        if (cd?.kind !== 'task' || cd.parentId) continue;
+        const n = c.node?.current;
+        if (!n) continue;
+        const r = n.getBoundingClientRect();
+        const mid = r.top + r.height / 2;
+        const dist = Math.abs(pointer.y - mid);
+        if (dist < minDist) { minDist = dist; closestSib = c; }
       }
+      if (closestSib) return [{ id: closestSib.id, data: { droppableContainer: closestSib, value: minDist } }];
       break;
     }
   }
