@@ -318,9 +318,11 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
                    if (e.key === 'Escape') { e.preventDefault(); finishRename(false); }
                  }}/>
         ) : (
-          <div className="scard-title"
-               onDoubleClick={(e)=>{ e.stopPropagation(); onStartRename?.(task.id); }}>
-            {task.title}
+          <div className="scard-title">
+            <span className="scard-title-text"
+                  onDoubleClick={(e)=>{ e.stopPropagation(); onStartRename?.(task.id); }}>
+              {task.title}
+            </span>
             {isNow && <span className="scard-now-tag">Now</span>}
           </div>
         )}

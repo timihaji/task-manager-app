@@ -2415,7 +2415,21 @@ function App() {
         if (targetDate == null) {
           reorderToInbox(activeId, targetIndex);
         } else {
+          // Detect drag-into-past BEFORE reorder so we read pre-move task state.
+          // Skip projects with open kids — completeTask would pop a confirm modal mid-drag.
+          const draggedTask = taskById(activeId);
+          const isProjectWithOpenKids =
+            draggedTask?.cardType === 'project' &&
+            tasks.some(t => t.parentId === activeId && !t.done);
+          const autoComplete =
+            D.isPast(targetDate) &&
+            draggedTask && !draggedTask.done &&
+            !isProjectWithOpenKids;
           reorderInDate(activeId, targetDate, targetIndex);
+          if (autoComplete) {
+            completeTask(activeId, targetDate);
+            setCompletedOpen(s => new Set([...s, targetDate]));
+          }
         }
         return;
       }

@@ -150,9 +150,11 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
             onBlur={()=>finishRename(true)}
             onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault();finishRename(true);} if(e.key==='Escape'){e.preventDefault();finishRename(false);} }}/>
         ) : (
-          <div className={`card-title${task.done?' done':''}`}
-            onDoubleClick={e=>{ e.stopPropagation(); onStartRename?.(task.id); }}
-            title="Double-click to rename">{task.title}</div>
+          <div className={`card-title${task.done?' done':''}`}>
+            <span className="card-title-text"
+              onDoubleClick={e=>{ e.stopPropagation(); onStartRename?.(task.id); }}
+              title="Double-click to rename">{task.title}</span>
+          </div>
         )}
         {renderAsProject && (
           <button className="card-proj-chv" title={open?'Collapse project':'Expand project'}
