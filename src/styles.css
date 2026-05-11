@@ -1588,26 +1588,10 @@ button:active:not(:disabled):not(.no-press),
    ──────────────────────────────────────────────────────────── */
 
 .cal-drawer{
-  /* prototype tokens — local to the drawer */
-  --bg:#071512;
-  --bg-side:#06110f;
-  --bg-top:#06110f;
-  --bg-dr:#0a1916;
-  --surface:#10201d;
-  --surface-2:#1d342f;
-  --surface-3:#294a44;
-  --border:#1d342f;
-  --border-s:#224039;
-  --t1:#e6fffb;
-  --t2:#c3ddd7;
-  --t3:#8eada6;
-  --t4:#66837c;
-  --accent:#14a89a;
-  --accent-dim:rgba(20,168,154,.14);
-  --accent-border:rgba(20,168,154,.36);
-  --shadow:0 1px 3px rgba(0,0,0,.4),0 4px 12px rgba(0,0,0,.3);
-  --shadow-lg:0 8px 32px rgba(0,0,0,.6);
-  --shadow-hover:0 2px 8px rgba(0,0,0,.5);
+  /* Inherits the global theme tokens (--bg, --surface, --t1, --accent, etc.)
+     so the drawer adapts to both dark and light themes. A prior version
+     hardcoded a dark-teal palette here, which made the drawer's interior
+     unreadable in light mode. */
 
   /* fixed-position overlay (override the prototype's flex-inline layout) */
   position:fixed;
@@ -1626,8 +1610,8 @@ button:active:not(:disabled):not(.no-press),
 .cal-drawer.is-open{transform:translateX(0);}
 
 .cal-drawer ::-webkit-scrollbar{width:6px;height:6px;}
-.cal-drawer ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.06);border-radius:99px;}
-.cal-drawer ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.12);}
+.cal-drawer ::-webkit-scrollbar-thumb{background:var(--scr);border-radius:99px;}
+.cal-drawer ::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--t1) 22%,transparent);}
 
 .cal-drawer kbd{
   font:10px var(--mono);
@@ -1663,7 +1647,7 @@ button:active:not(:disabled):not(.no-press),
   color:var(--accent);font:600 11.5px var(--font);letter-spacing:.02em;
   cursor:pointer;
 }
-.cal-drawer .cal-today:hover{background:rgba(20,168,154,.22);}
+.cal-drawer .cal-today:hover{background:color-mix(in srgb,var(--accent) 22%,transparent);}
 .cal-drawer .cal-date{display:flex;align-items:baseline;gap:6px;margin-left:8px;}
 .cal-drawer .cal-date-day{font:600 10px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--t4);}
 .cal-drawer .cal-date-num{font-size:14px;font-weight:600;color:var(--t1);letter-spacing:-.2px;}
@@ -1701,7 +1685,7 @@ button:active:not(:disabled):not(.no-press),
   color:var(--accent);font:600 11.5px var(--font);
   cursor:pointer;display:flex;align-items:center;gap:5px;
 }
-.cal-drawer .auto-plan-btn:hover:not(:disabled){background:rgba(20,168,154,.22);}
+.cal-drawer .auto-plan-btn:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 22%,transparent);}
 .cal-drawer .auto-plan-btn:disabled{opacity:.4;cursor:not-allowed;}
 .cal-drawer .auto-plan-btn svg{flex:none;}
 
@@ -1709,11 +1693,11 @@ button:active:not(:disabled):not(.no-press),
 .cal-drawer .capacity-row{display:flex;align-items:baseline;gap:6px;margin-bottom:6px;}
 .cal-drawer .capacity-label{font:600 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--t4);}
 .cal-drawer .capacity-val{font-size:13px;font-weight:600;color:var(--t1);margin-left:auto;font-feature-settings:"tnum";}
-.cal-drawer .capacity-val.over{color:#fca5a5;}
+.cal-drawer .capacity-val.over{color:var(--danger-fg);}
 .cal-drawer .capacity-of{font:11px var(--mono);color:var(--t4);}
 .cal-drawer .capacity-bar{height:5px;background:var(--surface);border-radius:99px;overflow:hidden;}
-.cal-drawer .capacity-fill{height:100%;background:linear-gradient(90deg,var(--accent),#1ec7b6);border-radius:99px;transition:width .42s cubic-bezier(.34,1.56,.64,1),background .25s;}
-.cal-drawer .capacity-fill.over{background:linear-gradient(90deg,#ef4444,#f59e0b);}
+.cal-drawer .capacity-fill{height:100%;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 60%,#fff));border-radius:99px;transition:width .42s cubic-bezier(.34,1.56,.64,1),background .25s;}
+.cal-drawer .capacity-fill.over{background:linear-gradient(90deg,var(--danger),var(--warning));}
 
 .cal-drawer .cal-scroll{flex:1;overflow-y:auto;overflow-x:hidden;}
 .cal-drawer .cal-grid-wrap{position:relative;display:grid;grid-template-columns:56px 1fr;}
@@ -1740,8 +1724,8 @@ button:active:not(:disabled):not(.no-press),
   animation:cal-now-breathe 2.4s ease-in-out infinite;
 }
 @keyframes cal-now-breathe{
-  0%,100%{box-shadow:0 0 0 2px #0a1916,0 0 8px rgba(239,68,68,.4);transform:scale(1);}
-  50%    {box-shadow:0 0 0 2px #0a1916,0 0 14px rgba(239,68,68,.75);transform:scale(1.12);}
+  0%,100%{box-shadow:0 0 0 2px var(--bg-dr),0 0 8px rgba(239,68,68,.4);transform:scale(1);}
+  50%    {box-shadow:0 0 0 2px var(--bg-dr),0 0 14px rgba(239,68,68,.75);transform:scale(1.12);}
 }
 .cal-drawer .now-time{
   position:absolute;right:0;top:-16px;
@@ -1836,15 +1820,15 @@ button:active:not(:disabled):not(.no-press),
 
 .cal-drawer .work-band{
   position:absolute;left:0;right:0;
-  background:linear-gradient(180deg,rgba(20,168,154,.045),rgba(20,168,154,.025));
-  border-top:1px dashed rgba(20,168,154,.18);
-  border-bottom:1px dashed rgba(20,168,154,.18);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 5%,transparent),color-mix(in srgb,var(--accent) 3%,transparent));
+  border-top:1px dashed color-mix(in srgb,var(--accent) 18%,transparent);
+  border-bottom:1px dashed color-mix(in srgb,var(--accent) 18%,transparent);
   pointer-events:none;
 }
 
 .cal-drawer .hover-line{
   position:absolute;left:0;right:8px;height:0;
-  border-top:1px dashed rgba(20,168,154,.45);
+  border-top:1px dashed color-mix(in srgb,var(--accent) 45%,transparent);
   pointer-events:none;z-index:3;
   animation:cal-hover-fade-in .14s ease-out;
 }
@@ -1863,7 +1847,7 @@ button:active:not(:disabled):not(.no-press),
   position:absolute;left:6px;right:8px;
   border:1.5px dashed var(--accent-border);
   border-radius:4px;
-  background:linear-gradient(180deg,rgba(20,168,154,.06),rgba(20,168,154,.02));
+  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,transparent),color-mix(in srgb,var(--accent) 2%,transparent));
   pointer-events:none;
   z-index:4;
   animation:cal-snap-guide-breathe 1.6s ease-in-out infinite;
@@ -1880,8 +1864,8 @@ button:active:not(:disabled):not(.no-press),
   animation:cal-snap-pulse-out .24s cubic-bezier(.2,.7,.2,1) forwards;
 }
 @keyframes cal-snap-pulse-out{
-  0%  {opacity:0;  transform:scaleX(.6);filter:drop-shadow(0 0 6px #14a89a);}
-  20% {opacity:.9; transform:scaleX(1); filter:drop-shadow(0 0 8px #14a89a);}
+  0%  {opacity:0;  transform:scaleX(.6);filter:drop-shadow(0 0 6px var(--accent));}
+  20% {opacity:.9; transform:scaleX(1); filter:drop-shadow(0 0 8px var(--accent));}
   100%{opacity:0;  transform:scaleX(1); filter:none;}
 }
 
@@ -1913,16 +1897,16 @@ button:active:not(:disabled):not(.no-press),
   position:fixed;z-index:1000;pointer-events:none;
   display:flex;align-items:center;gap:8px;
   padding:7px 10px;border-radius:4px;
-  background:#10201d;
-  border:1px solid rgba(20,168,154,.36);
-  box-shadow:0 8px 32px rgba(0,0,0,.6),0 0 0 4px rgba(20,168,154,.14);
+  background:var(--surface);
+  border:1px solid var(--accent-border);
+  box-shadow:var(--shadow-lg),0 0 0 4px var(--accent-dim);
   max-width:280px;
   transform:rotate(-1.5deg);
   font-family:'Geist',system-ui,sans-serif;
 }
 .drag-ghost-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
-.drag-ghost-title{font-size:12px;color:#e6fffb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.drag-ghost-est{font:10px 'Geist Mono',ui-monospace,monospace;color:#66837c;margin-left:auto;}
+.drag-ghost-title{font-size:12px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.drag-ghost-est{font:10px var(--mono);color:var(--t4);margin-left:auto;}
 
 /* topbar toggle button active state */
 .tb-btn.cal-toggle.active{background:var(--accent-dim);color:var(--accent);border-color:var(--accent-border);}
