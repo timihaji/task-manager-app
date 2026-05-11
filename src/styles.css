@@ -2266,17 +2266,27 @@ body .scard[data-drop-line="after"]{
   margin-bottom: calc(var(--drag-card-h, 40px) + 6px);
 }
 
-/* Siblings shift on `spring.snap` — 280 ms cubic-bezier(.2,.7,.2,1).
-   Inline transition is set by @dnd-kit's useSortable, so we override
-   with !important. Only applies to non-dragging cards. Includes
-   margin-top/-bottom so the cross-column drop gap (data-drop-line) opens
-   and closes smoothly. */
+/* Override for non-dragging cards: keep margin/shadow/opacity on a snap
+   curve, but DELIBERATELY don't override transform. @dnd-kit's useSortable
+   supplies its own per-card `transition` value that's correctly suppressed
+   the moment a card stops being the active drag source — leaving transform
+   to dnd-kit avoids a visible "card flies from above into position"
+   artifact on the just-dropped source. Mechanism: the source has a
+   drag-time transform (e.g. translate3d(0,-200px,0) to project onto the
+   drop slot). When .dragging clears, the inline transform updates to
+   identity. If our override forced a `transform 140ms` transition here,
+   the browser interpolated the transform change — animating the source
+   from its drag-projected position visually shifted by the OLD transform
+   value, which lands above the column and slides down. dnd-kit's own
+   transition is set to undefined for one render at this transition,
+   making the source snap instead. Margin-top/-bottom kept here because
+   the cross-column drop gap (data-drop-line) benefits from a smooth
+   open/close. */
 .col-body .card:not(.dragging),
 .stack-inner .scard:not(.dragging):not(.is-dragging){
   transition:
-    transform 280ms cubic-bezier(.2,.7,.2,1),
-    margin-top 280ms cubic-bezier(.2,.7,.2,1),
-    margin-bottom 280ms cubic-bezier(.2,.7,.2,1),
+    margin-top 240ms cubic-bezier(.2,.7,.2,1),
+    margin-bottom 240ms cubic-bezier(.2,.7,.2,1),
     box-shadow .14s var(--ease-out),
     opacity .12s var(--ease-out) !important;
 }

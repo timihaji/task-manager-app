@@ -59,9 +59,13 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
   const onGroupRenameDone = cardExtras?.onGroupRenameDone;
   const onRenameGroup = cardExtras?.onRenameGroup;
   const gbLabel = {none:'None',project:'Location',lifeArea:'Life Area',tag:'Tag',priority:'Priority'}[groupBy]||'Location';
-  // Sortable id list — flattened active task ids in render order.
-  const sortableIds = active.map(t => t.id);
-  const cardSortable = (task) => ({ kind: 'task', date: colKey, parentId: task.parentId || null });
+  // grpKey carried in sortable data so dndOnDragEnd's same-context check
+  // can distinguish cards in different groups of the same column. Without
+  // it, cross-group drops within one column wouldn't get the manual drop-
+  // line gap (because date+parent match), and the user would have no
+  // visual cue for the destination slot — dnd-kit's per-group
+  // SortableContext doesn't shift cards across context boundaries.
+  const cardSortable = (task, grpKey) => ({ kind: 'task', date: colKey, parentId: task.parentId || null, grpKey });
 
   return (
     <div className={`col${past?' is-past':''}${today?' is-today':''}${className?` ${className}`:''}`}
@@ -82,11 +86,17 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
       <div className="col-divider"/>
       <ColDroppable id={`col:${colKey}`} data={{ kind: 'column', date: colKey }} className="col-body"
         onDoubleClick={e=>{ if(!e.target.closest('.card,.grp-hdr,.done-grp-hdr,.card-add-zone')) onAdd(colKey,date); }}>
-        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+        {/* Per-group SortableContext (was a single context wrapping every group).
+            With one flat context, dnd-kit's verticalListSortingStrategy treated
+            the whole column as a flat list and visibly pushed cards across
+            group boundaries during a drag. Each group now has its own context,
+            so transforms stay within the group. Cross-group reorders still
+            work via the existing group-target droppable. */}
         {groups.map(grp=>{
           const gKey=`${colKey}:${grp.key}`;
           const open=!collapsedGrps.has(gKey);
           const isCustom = !!grp.custom;
+          const grpSortableIds = open ? grp.tasks.map(t => t.id) : [];
           return (
             <GrpDroppable
               key={grp.key}
@@ -126,6 +136,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                   )}
                 </div>
               )}
+              <SortableContext items={grpSortableIds} strategy={verticalListSortingStrategy}>
               {open && grp.tasks.map((task,i)=>(
                 <React.Fragment key={task.id}>
                   <div className="card-add-zone" title="Add above" onClick={e=>{e.stopPropagation();onAdd(colKey,date,{beforeId:task.id, ...(grp.custom?{groupId:grp.groupId}:{})});}}>
@@ -135,7 +146,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                     selected={selectedIds?.has(task.id)}
                     renaming={renamingId===task.id} spawning={spawning?.has(task.id)} onOpen={onOpen} onToggle={onToggle} onDelete={onDelete}
                     onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
-                    sortableData={cardSortable(task)}
+                    sortableData={cardSortable(task, grp.key)}
                     childrenOf={childrenOf} projectStats={projectStats}
                     collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
                     forceOpenProjects={forceOpenProjects}
@@ -151,6 +162,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
                   )}
                 </React.Fragment>
               ))}
+              </SortableContext>
             </GrpDroppable>
           );
         })}
@@ -212,7 +224,6 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
             ))}
           </>
         )}
-        </SortableContext>
       </ColDroppable>
       <div className="col-add-magnet-zone"
            onPointerMove={addMagnet.onPointerMove}
@@ -273,8 +284,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
   const visibleInboxTasks = inboxTasks.slice(0, panelLimit);
   const remainingSlots = Math.max(0, panelLimit - visibleInboxTasks.length);
   const visibleDoneTasks = doneTasks.slice(0, remainingSlots);
-  const inboxSortableIds = visibleInboxTasks.map(t => t.id);
-  const cardSortable = (task) => ({ kind: 'task', date: null, parentId: task.parentId || null });
+  const cardSortable = (task, grpKey) => ({ kind: 'task', date: null, parentId: task.parentId || null, grpKey });
   const views = [
     ['timeline','Timeline'],['inbox','Inbox'],['upcoming','Upcoming'],['backlog','Backlog'],
     ['snoozed','Snoozed'],['someday','Someday'],['blocked','Blocked'],['completed','Completed'],['archived','Archived'],
@@ -364,7 +374,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
         style={{flex:1}}
         onDoubleClick={e=>{ if(insertable && !e.target.closest('.card,.card-add-zone,.grp-hdr')) onAdd(null,null,'Untitled'); }}>
         {tasks.length===0 && <EmptyState kind="inbox" title="Inbox is clear" hint={<>Capture anything — type above, or press <kbd>Ctrl</kbd>+<kbd>Space</kbd> from anywhere.</>}/>}
-        <SortableContext items={inboxSortableIds} strategy={verticalListSortingStrategy}>
+        {/* Per-group SortableContext (was a single context wrapping every group). */}
         {(()=>{
           const customGroups = cardExtras?.customGroups || [];
           const renamingGroupId = cardExtras?.renamingGroupId;
@@ -379,6 +389,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
             const gKey = `inbox:${grp.key}`;
             const open = !collapsedGrps?.has(gKey);
             const isCustom = !!grp.custom;
+            const grpSortableIds = open ? grp.tasks.map(t => t.id) : [];
             return (
               <GrpDroppable
                 key={grp.key}
@@ -411,6 +422,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
                     )}
                   </div>
                 )}
+                <SortableContext items={grpSortableIds} strategy={verticalListSortingStrategy}>
                 {open && grp.tasks.map((task,i)=>(
                   <React.Fragment key={task.id}>
                     {insertable && <div className="card-add-zone" title="Add above" onClick={e=>{e.stopPropagation();onAdd(null,null,'Untitled',{beforeId:task.id, ...(grp.custom?{groupId:grp.groupId}:{})});}}>
@@ -420,7 +432,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
                       selected={selectedIds?.has(task.id)}
                       renaming={renamingId===task.id} spawning={spawning?.has(task.id)} onOpen={onOpen} onToggle={onToggle}
                       onDelete={onDelete} onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
-                      sortableData={cardSortable(task)}
+                      sortableData={cardSortable(task, grp.key)}
                       childrenOf={childrenOf} projectStats={projectStats}
                       collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
                       forceOpenProjects={forceOpenProjects}
@@ -433,11 +445,11 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
                     </div>}
                   </React.Fragment>
                 ))}
+                </SortableContext>
               </GrpDroppable>
             );
           });
         })()}
-        </SortableContext>
         {doneTasks.length>0 && (
           <div style={{marginTop:6,paddingTop:6,borderTop:'1px solid var(--border)'}}>
             {visibleDoneTasks.map(task=>(

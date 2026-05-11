@@ -785,9 +785,17 @@ function App() {
     });
   }, [tasksReady, settingsReady, tweaks.customGroups]);
 
-  // Debounced diff-sync of local mutations to Supabase.
+  // localStorage shadow + debounced diff-sync of local mutations to Supabase.
+  // Shadow runs in both dev-bypass and cloud modes so a refresh restores the
+  // last task state (matches the events effect a few lines up). Cloud sync is
+  // gated on userId/workspaceId — dev-bypass stops at the shadow.
   useEffect(() => {
-    if (!tasksReady || !userId || !workspaceId) return;
+    if (!tasksReady) return;
+    try { localStorage.setItem('tm_tasks_v2', JSON.stringify(tasks)); } catch {}
+    if (!userId || !workspaceId) {
+      lastSyncedTasksRef.current = tasks;
+      return;
+    }
     const handle = setTimeout(() => {
       const prev = lastSyncedTasksRef.current;
       if (prev === tasks) return;
@@ -2280,11 +2288,18 @@ function App() {
     if (aData.kind === 'stack-task' && oData.kind === 'stack-task') {
       sameContext = true; // single SortableContext for the entire Stack
     } else if (aData.kind === 'task' && oData.kind === 'task') {
+      // Task SortableContext is now per-group within a column (Column.jsx /
+      // InboxCol). Same-context drops are only those in the same date+parent
+      // AND same group; cross-group drops within the same column need the
+      // manual drop-line gap because dnd-kit doesn't shift cards across
+      // separate SortableContexts.
       const aDate = aData.date == null ? null : aData.date;
       const oDate = oData.date == null ? null : oData.date;
       const aParent = aData.parentId || null;
       const oParent = oData.parentId || null;
-      sameContext = aDate === oDate && aParent === oParent;
+      const aGrp = aData.grpKey || null;
+      const oGrp = oData.grpKey || null;
+      sameContext = aDate === oDate && aParent === oParent && aGrp === oGrp;
     }
     if (sameContext) return;
 
@@ -2376,9 +2391,21 @@ function App() {
             targetDate = oData.date === undefined ? overTask.date || null : oData.date;
             targetParent = oData.parentId || null;
           }
-          // Use sortable index (live) — dnd-kit gives us over.data.current.sortable.index
-          const sIdx = over.data?.current?.sortable?.index;
-          if (typeof sIdx === 'number') targetIndex = sIdx;
+          // Convert over-card to a column-level index. over.sortable.index is now
+          // per-group (post per-group SortableContext refactor in Column.jsx /
+          // InboxCol), so it can't be passed straight to reorderInDate /
+          // reorderToInbox which both expect a within-column index. Look up
+          // over.id's position in the destination column's flat active-task list,
+          // matching reorderInDate / reorderToInbox's own filter exactly.
+          const overId = String(over.id);
+          let inCol;
+          if (targetDate == null) {
+            inCol = tasks.filter(t => !t.date && !t.done && !t.parentId && !t.archived);
+          } else {
+            inCol = tasks.filter(t => t.date === targetDate && !t.done && !t.parentId && !t.archived && !t.snoozedUntil && !t.someday);
+          }
+          const colIdx = inCol.findIndex(t => t.id === overId);
+          if (colIdx >= 0) targetIndex = colIdx;
         } else if (oData.kind === 'column') {
           targetDate = oData.date === undefined ? null : oData.date;
           targetParent = null;
@@ -3560,7 +3587,14 @@ function App() {
         cursor (Trello-style smooth FLIP) is not what dnd-kit's strategies do;
         the standard pattern across Linear / Notion / etc is faded source +
         floating ghost, and that's what we ship here. */}
-    <DragOverlay zIndex={9999} dropAnimation={{ duration: 280, easing: 'cubic-bezier(.2,.7,.2,1)' }}>
+    {/* dropAnimation={null}: the source card's own FLIP transition (styles.css
+        :2275, transform 280ms cubic-bezier) already animates the card sliding
+        into its new slot on drop. Letting the DragOverlay also animate the
+        ghost from cursor back to that slot in parallel produces a visible
+        double-flight (ghost + real card moving at once) that reads as "the
+        card flies from somewhere above into position". Killing the overlay
+        animation leaves only the source's slide, which is the polished part. */}
+    <DragOverlay zIndex={9999} dropAnimation={null}>
       {activeDrag?.srcHTML ? (
         <div className="dnd-overlay-ghost" dangerouslySetInnerHTML={{ __html: activeDrag.srcHTML }} />
       ) : null}
