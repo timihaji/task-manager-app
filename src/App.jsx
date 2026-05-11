@@ -388,13 +388,14 @@ function App() {
   }, [workspaceId, userId, supabaseDisabled]);
 
   // localStorage shadow + debounced cloud save of the settings blob.
-  // Shadow runs in dev-bypass too so UI prefs (filters, folds, view, etc.)
-  // survive refresh without a real Supabase session. Cloud save is gated
-  // on userId so it doesn't fire in dev mode.
+  // Shadow runs unconditionally so UI prefs (filters, folds, view, etc.)
+  // survive refresh in dev-bypass too — where settingsReady never flips
+  // because there's no userId for the cloud fetch to gate on. Cloud save
+  // stays gated on settingsReady AND userId so it doesn't fire pre-hydration
+  // (would clobber cloud state) or in dev mode.
   useEffect(() => {
-    if (!settingsReady) return;
     try { localStorage.setItem('tm_settings', JSON.stringify(tweaks)); } catch {}
-    if (!userId) return;
+    if (!settingsReady || !userId) return;
     const handle = setTimeout(() => {
       saveSettings(userId, tweaks).catch(e => {
         console.error('[settings] save failed', e);
