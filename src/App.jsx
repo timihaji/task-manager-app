@@ -944,6 +944,22 @@ function App() {
     resetTimelineToToday();
   }, [todayKey]);
 
+  // Re-anchor today at the left edge whenever the user enters Timeline from
+  // another view. Skips the initial mount (the first-mount layout effect
+  // already handles it).
+  const prevViewForTimelineRef = useRef(view);
+  useEffect(() => {
+    const prev = prevViewForTimelineRef.current;
+    prevViewForTimelineRef.current = view;
+    if (view === 'week' && prev !== 'week') {
+      resetTimelineToToday();
+      // Skip smooth scroll on view switch — the freshly-mounted scroller
+      // doesn't animate reliably (Chrome appears to ignore a smooth scrollTo
+      // issued during the mount commit), so anchor instantly instead.
+      pendingTodayJumpBehavior.current = 'auto';
+    }
+  }, [view]);
+
   // Belt-and-braces: on first mount, the board's measured width can settle in
   // stages (initial paint → font load → sidebar/inbox width applied), and a
   // single layout-effect pass anchors against a stale COL_W. Re-anchor today
