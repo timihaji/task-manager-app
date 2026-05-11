@@ -123,12 +123,20 @@ function DelegationsView({ tasks, onJumpTo, onUpdate, onDelete, onCheckIn,
                     const stale = isStale(t);
                     const status = t.delegationStatus || 'waiting';
                     const statusColor = status === 'heard-back' ? '#22c55e' : status === 'sent' ? '#f59e0b' : '#71717a';
+                    const isProject = t.cardType === 'project';
+                    const kids = isProject ? (tasks||[]).filter(c => c.parentId === t.id) : [];
+                    const kidsDone = kids.filter(c => c.done).length;
                     return (
                       <div key={t.id} className={`del-task${stale?' stale':''}`}>
-                        <button className="del-task-title" onClick={()=>onJumpTo?.(t.id)}>{t.title}</button>
+                        <button className="del-task-title" onClick={()=>onJumpTo?.(t.id)}>
+                          {isProject && <span style={{opacity:.7,marginRight:4}}>▣</span>}{t.title}
+                        </button>
                         <span className="dr-pick" style={{cursor:'default',color:statusColor,borderColor:statusColor+'66',background:statusColor+'18'}}>
                           {status}
                         </span>
+                        {isProject && kids.length > 0 && (
+                          <span className="del-meta" title="Project progress">{kidsDone}/{kids.length} done</span>
+                        )}
                         {next ? (
                           <span className="del-meta">next: d{next.checkInDayOffset} · {next.date}</span>
                         ) : <span className="del-meta">no pending check-in</span>}
@@ -143,7 +151,7 @@ function DelegationsView({ tasks, onJumpTo, onUpdate, onDelete, onCheckIn,
                             <button className="dr-time-clear" onClick={()=>onDelete?.(next.id)} title="Skip this check-in">Skip</button>
                           </>
                         )}
-                        <button className="dr-time-clear" onClick={()=>{ if(confirm(`Take back from ${t.delegatedTo}?`)) onUpdate?.(t.id, {delegatedTo:null}); }} title="Reclaim this task">↶</button>
+                        <button className="dr-time-clear" onClick={()=>{ if(confirm(`Take back ${isProject?'project':'task'} from ${t.delegatedTo}?`)) onUpdate?.(t.id, {delegatedTo:null}); }} title={isProject?"Reclaim this project":"Reclaim this task"}>↶</button>
                       </div>
                     );
                   })}

@@ -372,6 +372,9 @@ body.marquee-active *{user-select:none !important}
 /* project cards */
 .card.card-project{border-color:color-mix(in srgb,var(--accent) 38%,var(--border-s));box-shadow:var(--shadow)}
 .card.card-project:hover{box-shadow:var(--shadow-hover)}
+/* stale delegated project — keep the red border that .card-project would otherwise mask */
+.card.card-project.card-stale{box-shadow:0 0 0 1px #ef4444aa,var(--shadow)}
+.card.card-project.card-stale:hover{box-shadow:0 0 0 1px #ef4444cc,var(--shadow-hover)}
 .card.card-drop-target{outline:2px dashed var(--accent);outline-offset:-2px;background:color-mix(in srgb,var(--accent) 6%,var(--surface))}
 .card-proj-chv{border:none;background:transparent;color:var(--t3);cursor:pointer;width:18px;height:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;margin-top:-2px;border-radius:2px}
 .card-proj-chv:hover{background:var(--surface-2);color:var(--t1)}

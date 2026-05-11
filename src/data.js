@@ -366,11 +366,14 @@ const recordContact = (name, atIso) => {
 // Derive a per-person rollup from the current task list. Used by the dashboard
 // and the per-person counts. Returns [{name, displayName, openCount,
 // overdueCount, oldestDays, lastContactAt}] sorted by oldest-first.
+// Archived tasks are skipped — once a delegation is archived, its parent
+// disappears from the dashboard. Check-in lookups also skip archived followers
+// so the overdue count doesn't trip on followers that were archived alongside.
 const peopleRollup = (tasks=[]) => {
   const todayStr = D.str(D.today());
   const byName = new Map();
   for (const t of tasks) {
-    if (!t || !t.delegatedTo || t.done) continue;
+    if (!t || !t.delegatedTo || t.done || t.archived) continue;
     const k = personKey(t.delegatedTo);
     if (!k) continue;
     let entry = byName.get(k);
@@ -387,7 +390,7 @@ const peopleRollup = (tasks=[]) => {
     const pendingIds = Array.isArray(t.checkInTaskIds) ? t.checkInTaskIds : [];
     for (const cid of pendingIds) {
       const ct = tasks.find(x => x.id === cid);
-      if (ct && !ct.done && ct.date && ct.date < todayStr) { entry.overdueCount += 1; break; }
+      if (ct && !ct.done && !ct.archived && ct.date && ct.date < todayStr) { entry.overdueCount += 1; break; }
     }
     if (t.lastContactAt && (!entry.lastContactAt || t.lastContactAt > entry.lastContactAt)) {
       entry.lastContactAt = t.lastContactAt;
