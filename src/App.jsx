@@ -926,13 +926,22 @@ function App() {
   const todayPin = todayIdx >= 0
     ? (todayLeft < colScrollLeft ? 'left' : todayLeft > viewportRight - COL_W ? 'right' : null)
     : (weekDates.length && D.parse(todayStr) < weekDates[0] ? 'left' : 'right');
-  const renderTodaySeparately = !!todayPin && todayIdx >= 0 && (todayIdx < firstRenderCol || todayIdx >= lastRenderCol);
-  const renderTodayBefore = renderTodaySeparately && todayIdx < firstRenderCol;
-  const renderTodayAfter = renderTodaySeparately && todayIdx >= lastRenderCol;
-  const beforeTimelineSpacerWidth = renderTodayBefore ? todayIdx * COL_W : beforeColsWidth;
-  const betweenTodayAndRenderWidth = renderTodayBefore ? Math.max(0, (firstRenderCol - todayIdx - 1) * COL_W) : 0;
-  const betweenRenderAndTodayWidth = renderTodayAfter ? Math.max(0, (todayIdx - lastRenderCol) * COL_W) : 0;
-  const afterTimelineSpacerWidth = renderTodayAfter ? Math.max(0, (visibleDates.length - todayIdx - 1) * COL_W) : afterColsWidth;
+  // When today is OUT of the timeline range (e.g. the user clicked the
+  // ◂/▸ arrows enough times to push weekOff past today), todayIdx is -1
+  // and the natural-position trick can't be used. Still render today as a
+  // sticky column at the edge so it stays pinned regardless of how far the
+  // window has been shifted.
+  const todayOutOfRange = todayIdx < 0;
+  // Decoupled from todayPin so virtualization doesn't drop the today column
+  // from the DOM while React state catches up — sticky resolution is CSS-only
+  // now (both left:0 and right:0 set on .today-pinned).
+  const renderTodaySeparately = todayOutOfRange || (todayIdx >= 0 && (todayIdx < firstRenderCol || todayIdx >= lastRenderCol));
+  const renderTodayBefore = renderTodaySeparately && (todayOutOfRange ? todayPin === 'left' : todayIdx < firstRenderCol);
+  const renderTodayAfter = renderTodaySeparately && (todayOutOfRange ? todayPin === 'right' : todayIdx >= lastRenderCol);
+  const beforeTimelineSpacerWidth = renderTodayBefore && !todayOutOfRange ? todayIdx * COL_W : beforeColsWidth;
+  const betweenTodayAndRenderWidth = renderTodayBefore && !todayOutOfRange ? Math.max(0, (firstRenderCol - todayIdx - 1) * COL_W) : 0;
+  const betweenRenderAndTodayWidth = renderTodayAfter && !todayOutOfRange ? Math.max(0, (todayIdx - lastRenderCol) * COL_W) : 0;
+  const afterTimelineSpacerWidth = renderTodayAfter && !todayOutOfRange ? Math.max(0, (visibleDates.length - todayIdx - 1) * COL_W) : afterColsWidth;
 
   const jumpToTodayAnchor = (behavior='auto') => {
     const el = boardRef.current;
@@ -1010,15 +1019,19 @@ function App() {
       setBoardMetrics({scrollLeft:el.scrollLeft,width:el.clientWidth,boardWidth:measuredBoardWidth});
       return;
     }
-    jumpToTodayAnchor(pendingTodayJumpBehavior.current);
+    const requestedBehavior = pendingTodayJumpBehavior.current;
+    jumpToTodayAnchor(requestedBehavior);
     pendingTodayJump.current = false;
     pendingTodayJumpBehavior.current = 'auto';
     // Belt-and-suspenders: COL_W can shift on a follow-up render once the
     // board's width finishes settling, leaving scrollLeft pointing at the
     // wrong pixel offset (e.g. the user's "today" column ends up off-screen
     // on the right). Re-anchor on the next two animation frames using the
-    // freshest COL_W via refs that update each render.
-    const behavior = pendingTodayJumpBehavior.current === 'smooth' ? 'auto' : 'auto';
+    // freshest COL_W via refs that update each render. Use the same behavior
+    // the caller requested — a 'smooth' re-anchor to the same target lets
+    // the browser keep interpolating, while 'auto' (the default) would snap
+    // and kill the in-progress smooth scroll triggered by the Today button.
+    const behavior = requestedBehavior;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const el2 = boardRef.current;
@@ -3177,11 +3190,26 @@ function App() {
       // change unless we cross a column boundary.
       const newWidth = el.clientWidth;
       const newBoardWidth = shell?.clientWidth||el.clientWidth;
-      const dx = Math.abs(el.scrollLeft - boardMetrics.scrollLeft);
+      const oldSL = boardMetrics.scrollLeft;
+      const newSL = el.scrollLeft;
+      const dx = Math.abs(newSL - oldSL);
       const layoutChanged = newWidth !== boardMetrics.width || newBoardWidth !== boardMetrics.boardWidth;
       const COL_HALF = (typeof COL_W === 'number' ? COL_W : 240) / 2;
-      if (!layoutChanged && dx < COL_HALF) return;
-      setBoardMetrics({scrollLeft:el.scrollLeft, width:newWidth, boardWidth:newBoardWidth});
+      // Force an update if the scroll crossed today's natural position — the
+      // pinClass on the today column depends on boardMetrics.scrollLeft, so
+      // letting state lag would leave today un-pinned across the boundary,
+      // briefly scrolling it out of view instead of sticking it.
+      const todayPosLocal = todayIdxRef.current >= 0 ? todayIdxRef.current * (colWRef.current || COL_W) : null;
+      const viewportW = newWidth;
+      const crossedToday = todayPosLocal !== null && (
+        (oldSL < todayPosLocal && newSL >= todayPosLocal) ||
+        (oldSL >= todayPosLocal && newSL < todayPosLocal) ||
+        // also catch the off-screen-right boundary
+        (oldSL + viewportW - (colWRef.current || COL_W) < todayPosLocal) !==
+        (newSL + viewportW - (colWRef.current || COL_W) < todayPosLocal)
+      );
+      if (!layoutChanged && dx < COL_HALF && !crossedToday) return;
+      setBoardMetrics({scrollLeft:newSL, width:newWidth, boardWidth:newBoardWidth});
     });
     if (el.scrollLeft < COL_W * 4 && weekOff > -TIMELINE_MAX_DAYS) {
       const add = Math.min(TIMELINE_EXTEND_DAYS, weekOff + TIMELINE_MAX_DAYS);
@@ -3224,7 +3252,10 @@ function App() {
   const renderTimelineColumn = (date, keyPrefix='') => {
     const colKey=D.str(date);
     const colTasks=tasksForCol(colKey);
-    const pinClass = colKey===todayStr && todayPin ? `today-pinned pin-${todayPin}` : '';
+    // Always apply today-pinned so sticky is CSS-resolved (no React state
+    // race when crossing today's natural position). pin-${dir} is only for
+    // the directional shadow + border — lagging that a frame is fine.
+    const pinClass = colKey===todayStr ? `today-pinned${todayPin ? ` pin-${todayPin}` : ''}` : '';
     return <Column key={`${keyPrefix}${colKey}`} className={pinClass} date={date} tasks={colTasks}
       focusedCardId={focusedId} selectedIds={selectedIds} spawning={spawning} theme={theme} tweaks={tweaks}
       renamingId={renamingId}

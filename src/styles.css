@@ -180,9 +180,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);display:flex;f
 /* week columns */
 .col{flex:0 0 var(--col-w,240px);width:var(--col-w,240px);border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--bg);transition:background .12s}
 .col:last-child{border-right:none}
-.col.today-pinned{position:sticky;flex:0 0 var(--col-w,240px);width:var(--col-w,240px);z-index:23;background:var(--bg)}
-.col.today-pinned.pin-right{right:0;border-left:1px solid var(--border);border-right:none;box-shadow:-10px 0 18px rgba(0,0,0,.06)}
-.col.today-pinned.pin-left{left:0;border-right:1px solid var(--border);border-left:none;box-shadow:10px 0 18px rgba(0,0,0,.06)}
+/* Set BOTH left:0 and right:0 on the base so sticky behaviour is purely
+   CSS-driven — the column sticks to whichever edge its natural position
+   would scroll past, with no dependency on React state. pin-left /
+   pin-right are kept for the directional border + shadow only (those can
+   lag a frame without causing clipping). */
+.col.today-pinned{position:sticky;left:0;right:0;flex:0 0 var(--col-w,240px);width:var(--col-w,240px);z-index:26;background:var(--bg)}
+.col.today-pinned.pin-right{border-left:1px solid var(--border);border-right:none;box-shadow:-10px 0 18px rgba(0,0,0,.06)}
+.col.today-pinned.pin-left{border-right:1px solid var(--border);border-left:none;box-shadow:10px 0 18px rgba(0,0,0,.06)}
 .col.today-pinned .col-hdr{background:var(--bg)}
 .col{transition:background .15s ease}
 .col.drag-over{background:var(--accent-dim)}
@@ -1954,6 +1959,21 @@ button:active:not(:disabled):not(.no-press),
 .grp-dd-item:active,.confirm-acts button:active,
 .del-card-hdr:active,.del-task-title:active{
   transform: scale(.97);
+}
+/* Toolbar buttons are small (~32px) — the universal scale(.96) on
+   button:active reads as nothing on a ~58px pill, and --shadow-press
+   (8% white inset, 1px) is invisible on a dark surface. Bump the press
+   to scale(.93) + a theme-neutral bg shift (color-mix toward --t1 so
+   dark themes lighten, light themes darken — --surface-3 can't be used
+   because it equals --surface-2 in the default dark theme) + a clear
+   inset shadow. Specificity (0,3,1) matches button:active:not(...)
+   above and wins by source order. Covers .tb-btn (Today, week arrows,
+   day-window) and .tb-icon-btn (toolbar icons). */
+.tb-btn:active:not(:disabled):not(.no-press),
+.tb-icon-btn:active:not(:disabled):not(.no-press){
+  transform: scale(.93);
+  background: color-mix(in srgb, var(--surface) 70%, var(--t1) 30%);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.22);
 }
 
 /* ── 2 · easing & motion polish (re-declare existing keyframes) ─────── */
