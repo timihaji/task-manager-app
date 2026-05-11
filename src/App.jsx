@@ -172,8 +172,6 @@ function App() {
   const [eventsReady, setEventsReady] = useState(false);
   const lastSyncedEventsRef = useRef([]);
   const [calendarDateStr, setCalendarDateStr] = useState(() => D.str(D.today()));
-  const [pxh, setPxh] = useState(80);
-  const [snapOn, setSnapOn] = useState(true);
   // Inbox→calendar drag state. Mirrors the prototype's external-drag
   // mechanism: extDrag tracks live cursor position; extDragRef holds the
   // task metadata for the floating ghost.
@@ -229,6 +227,7 @@ function App() {
     dark_bg:'#071512', dark_surface:'#10201d', dark_sidebar:'#06110f', dark_border:'#1d342f', dark_text:'#e6fffb',
     light_bg:'#f3f7f4', light_surface:'#fffdfa', light_sidebar:'#e7efe9', light_border:'#d5ded7', light_text:'#17211d',
   stackSort:'smart', stackShowCompleted:true, stackGroupByDate:false, stackCompactBelowDeck:true, stackShowSpine:true, stackOrder:[], stackFilterOpen:false, stackFilters:{},
+    calendarPxh:80, calendarSnap:true,
     newTaskPosition:'top',
     // Per-card colour wash (right-click → Card colour…). Sat / lightShift / pct
     // are tuned per-theme since the same hex needs different treatment on dark vs light surfaces.
@@ -270,7 +269,14 @@ function App() {
       lifeAreas: normalizedLifeAreas,
     };
   };
-  const [tweaks, setTweakState] = useState(() => ({...TM_DEFAULTS}));
+  const [tweaks, setTweakState] = useState(() => {
+    let saved = null;
+    try {
+      const raw = localStorage.getItem('tm_tweaks_v1');
+      if (raw) saved = JSON.parse(raw);
+    } catch {}
+    return { ...TM_DEFAULTS, ...(saved && typeof saved === 'object' ? saved : {}) };
+  });
   const [taxonomy, setTaxonomyState] = useState(() => normalizeTaxonomy(null));
   const [settingsReady, setSettingsReady] = useState(false);
   const [taxonomyReady, setTaxonomyReady] = useState(false);
@@ -349,6 +355,13 @@ function App() {
       setPeoplePersister(null);
     };
   }, [workspaceId, userId]);
+
+  // localStorage shadow of tweaks — mirrors the tasks/events pattern so a
+  // refresh restores UI prefs (zoom, snap, drawer open state, etc.) even in
+  // dev-bypass mode where there's no Supabase write.
+  useEffect(() => {
+    try { localStorage.setItem('tm_tweaks_v1', JSON.stringify(tweaks)); } catch {}
+  }, [tweaks]);
 
   // Debounced cloud save of the settings blob.
   useEffect(() => {
@@ -3583,8 +3596,10 @@ function App() {
         setEvents={setVisibleEvents}
         tasks={tasks}
         projectColor={calProjectColor}
-        pxh={pxh} setPxh={setPxh}
-        snapOn={snapOn} setSnapOn={setSnapOn}
+        pxh={tweaks.calendarPxh}
+        setPxh={(v) => setTweakState(prev => ({ ...prev, calendarPxh: typeof v === 'function' ? v(prev.calendarPxh) : v }))}
+        snapOn={tweaks.calendarSnap}
+        setSnapOn={(v) => setTweakState(prev => ({ ...prev, calendarSnap: typeof v === 'function' ? v(prev.calendarSnap) : v }))}
         externalDrag={extDrag}
         onConsumeExternal={()=>{ extDragRef.current = null; }}
         onCancelExternal={()=>{ extDragRef.current = null; }}
