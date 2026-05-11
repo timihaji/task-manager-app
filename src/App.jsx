@@ -1009,7 +1009,9 @@ function App() {
   const dayAreaWidth = Math.max(360, (boardMetrics.boardWidth||boardMetrics.width||1200) - stickyW);
   const autoDayWindow = dayAreaWidth < 980 ? 3 : dayAreaWidth < 1540 ? 5 : 7;
   const dayWindowCount = dayWindowSetting === 'auto' ? autoDayWindow : dayWindowSetting;
-  const COL_W = Math.round(Math.max(220, Math.min(340, dayAreaWidth / dayWindowCount)));
+  const COL_W = dayWindowSetting === 'auto'
+    ? Math.round(Math.max(220, Math.min(340, dayAreaWidth / dayWindowCount)))
+    : Math.round(Math.max(220, dayAreaWidth / dayWindowCount));
   const todayStr = D.str(D.today());
   const weekDates  = getWeekDays(weekOff, timelineDays);
   const visibleDates = weekDates.filter(d=>showWknd || [1,2,3,4,5].includes(d.getDay()) || D.str(d)===todayStr);
