@@ -2457,13 +2457,22 @@ function App() {
     const B = below && Number.isFinite(below.position) ? below.position : null;
     const out = [];
     if (A != null && B != null) {
-      const step = (B - A) / (count + 1);
-      for (let i = 0; i < count; i++) out.push(A + step * (i + 1));
+      if (Math.abs(B - A) < 1e-9) {
+        // Collapsed gap (neighbours share a position). Mirror computePosition's
+        // single-card fallback: nudge above A by 0.5 + small per-item delta so
+        // the drag at least produces a distinct, ordered position.
+        for (let i = 0; i < count; i++) out.push(A + 0.5 + i * 1e-6);
+      } else {
+        const step = (B - A) / (count + 1);
+        for (let i = 0; i < count; i++) out.push(A + step * (i + 1));
+      }
     } else if (A != null) {
       for (let i = 0; i < count; i++) out.push(A + i + 1);
     } else if (B != null) {
-      const start = B - count;
-      for (let i = 0; i < count; i++) out.push(start + i + 1);
+      // Drop above B: every new position must be strictly < B. Place in
+      // [B-count, B-1]. Previous formula `B - count + i + 1` produced B for the
+      // last item, colliding with the card below.
+      for (let i = 0; i < count; i++) out.push(B - count + i);
     } else {
       for (let i = 0; i < count; i++) out.push(i + 1);
     }
