@@ -911,8 +911,15 @@ body[data-dnd-active="true"]{cursor:grabbing;user-select:none}
 }
 .scard.is-dragging > *{visibility:hidden}
 .scard.is-dragging:hover{transform:none;box-shadow:none;border-color:var(--border-s)}
-.stack-body.is-dragging .scard-subs{pointer-events:none}
-.stack-body.is-dragging .scard:hover{transform:none;box-shadow:var(--shadow);border-color:var(--border-s)}
+/* Suppress per-card hover effects during ANY drag. body[data-dnd-active] is
+   set in dndOnDragStart and cleared by the unified cleanup helper, so this
+   gate fires whenever a drag is in flight regardless of source view.
+   Without this, .scard:hover (line ~720) and .card:hover override dnd-kit's
+   inline transform on whichever card the cursor passes over, snapping the
+   card back to its un-shifted position and producing the flicker. */
+body[data-dnd-active="true"] .scard-subs{pointer-events:none}
+body[data-dnd-active="true"] .scard:hover{transform:none;box-shadow:var(--shadow);border-color:var(--border-s)}
+body[data-dnd-active="true"] .card:hover{transform:none;box-shadow:var(--shadow);border-color:var(--border-s)}
 
 /* density variants */
 body[data-density="compact"] .scard{padding:10px 12px 10px 54px}

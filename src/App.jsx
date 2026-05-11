@@ -2246,11 +2246,12 @@ function App() {
   // per-column SortableContext doesn't auto-render a placeholder in the
   // destination during cross-column drags; this fills that gap.
   const dndOnDragOver = (event) => {
-    const data = event.over?.data?.current;
+    const aData = event.active?.data?.current || {};
+    const oData = event.over?.data?.current;
     let overCol = null;
-    if (data) {
-      if (data.kind === 'task' || data.kind === 'stack-task') overCol = data.date != null ? data.date : 'inbox';
-      else if (data.kind === 'column') overCol = data.date != null ? data.date : 'inbox';
+    if (oData) {
+      if (oData.kind === 'task' || oData.kind === 'stack-task') overCol = oData.date != null ? oData.date : 'inbox';
+      else if (oData.kind === 'column') overCol = oData.date != null ? oData.date : 'inbox';
     }
     const fromCol = document.body.dataset.fromCol;
     // Clear all current armed wrappers first
@@ -2264,17 +2265,35 @@ function App() {
     } else {
       delete document.body.dataset.armedCol;
     }
-    // Drop-line on the over-card. The pointer-Y tracker (installed in
-    // dndOnDragStart) keeps `dragPointerY.current` fresh between fires.
+    // Drop-line on the over-card. Stamp ONLY for cross-context drops — when
+    // source and target sit in the same SortableContext, dnd-kit's
+    // verticalListSortingStrategy already shifts siblings via transform to
+    // open a slot. Adding the manual margin-based gap on top of that
+    // double-shifts the over-card's bounding box mid-animation, which makes
+    // the cursor's collision target oscillate to a neighbour and back at
+    // 60Hz (the Stack flicker reported by the user).
     document.querySelectorAll('[data-drop-line]').forEach(el => el.removeAttribute('data-drop-line'));
-    if (data && (data.kind === 'task' || data.kind === 'stack-task')) {
-      const overEl = document.querySelector(`[data-card-id="${CSS.escape(String(event.over.id))}"]`);
-      const y = dragPointerY.current;
-      if (overEl && y != null) {
-        const r = overEl.getBoundingClientRect();
-        const dir = y < r.top + r.height / 2 ? 'before' : 'after';
-        overEl.setAttribute('data-drop-line', dir);
-      }
+    if (!oData) return;
+    if (oData.kind !== 'task' && oData.kind !== 'stack-task') return;
+
+    let sameContext = false;
+    if (aData.kind === 'stack-task' && oData.kind === 'stack-task') {
+      sameContext = true; // single SortableContext for the entire Stack
+    } else if (aData.kind === 'task' && oData.kind === 'task') {
+      const aDate = aData.date == null ? null : aData.date;
+      const oDate = oData.date == null ? null : oData.date;
+      const aParent = aData.parentId || null;
+      const oParent = oData.parentId || null;
+      sameContext = aDate === oDate && aParent === oParent;
+    }
+    if (sameContext) return;
+
+    const overEl = document.querySelector(`[data-card-id="${CSS.escape(String(event.over.id))}"]`);
+    const y = dragPointerY.current;
+    if (overEl && y != null) {
+      const r = overEl.getBoundingClientRect();
+      const dir = y < r.top + r.height / 2 ? 'before' : 'after';
+      overEl.setAttribute('data-drop-line', dir);
     }
   };
   const dndOnDragEnd = (event) => {
@@ -2374,19 +2393,25 @@ function App() {
         return;
       }
     } finally {
-      setActiveDrag(null);
-      delete document.body.dataset.dndActive;
-      delete document.body.dataset.armedCol;
-      delete document.body.dataset.fromCol;
-      document.body.style.removeProperty('--drag-card-h');
-      document.querySelectorAll('.col-armed').forEach(el => el.classList.remove('col-armed'));
-      document.querySelectorAll('[data-drop-line]').forEach(el => el.removeAttribute('data-drop-line'));
-      dragPointerY._cleanup?.(); dragPointerY._cleanup = null; dragPointerY.current = null;
+      dndCleanupAfterDrag();
     }
   };
-  const dndOnDragCancel = () => {
+  const dndOnDragCancel = () => { dndCleanupAfterDrag(); };
+  // Shared post-drag cleanup. Used by both the success path (finally block in
+  // dndOnDragEnd) and the cancel path. The cancel branch previously cleared
+  // only activeDrag and dndActive, which leaked the pointermove listener and
+  // left stale .col-armed / [data-drop-line] / --drag-card-h after every Esc.
+  const dndCleanupAfterDrag = () => {
     setActiveDrag(null);
     delete document.body.dataset.dndActive;
+    delete document.body.dataset.armedCol;
+    delete document.body.dataset.fromCol;
+    document.body.style.removeProperty('--drag-card-h');
+    document.querySelectorAll('.col-armed').forEach(el => el.classList.remove('col-armed'));
+    document.querySelectorAll('[data-drop-line]').forEach(el => el.removeAttribute('data-drop-line'));
+    dragPointerY._cleanup?.();
+    dragPointerY._cleanup = null;
+    dragPointerY.current = null;
   };
 
   // The big one: drop a set of source cards onto a target card.
