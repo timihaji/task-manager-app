@@ -977,15 +977,19 @@ function App() {
       setBoardMetrics({scrollLeft:el.scrollLeft,width:el.clientWidth,boardWidth:measuredBoardWidth});
       return;
     }
-    jumpToTodayAnchor(pendingTodayJumpBehavior.current);
+    const requestedBehavior = pendingTodayJumpBehavior.current;
+    jumpToTodayAnchor(requestedBehavior);
     pendingTodayJump.current = false;
     pendingTodayJumpBehavior.current = 'auto';
     // Belt-and-suspenders: COL_W can shift on a follow-up render once the
     // board's width finishes settling, leaving scrollLeft pointing at the
     // wrong pixel offset (e.g. the user's "today" column ends up off-screen
     // on the right). Re-anchor on the next two animation frames using the
-    // freshest COL_W via refs that update each render.
-    const behavior = pendingTodayJumpBehavior.current === 'smooth' ? 'auto' : 'auto';
+    // freshest COL_W via refs that update each render. Use the same behavior
+    // the caller requested — a 'smooth' re-anchor to the same target lets
+    // the browser keep interpolating, while 'auto' (the default) would snap
+    // and kill the in-progress smooth scroll triggered by the Today button.
+    const behavior = requestedBehavior;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const el2 = boardRef.current;
