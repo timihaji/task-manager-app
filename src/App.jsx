@@ -172,6 +172,7 @@ function App() {
   const [eventsReady, setEventsReady] = useState(false);
   const lastSyncedEventsRef = useRef([]);
   const [calendarDateStr, setCalendarDateStr] = useState(() => D.str(D.today()));
+  // pxh/snapOn: tweak-backed accessors are declared after `tweaks` further down.
   // Inbox→calendar drag state. Mirrors the prototype's external-drag
   // mechanism: extDrag tracks live cursor position; extDragRef holds the
   // task metadata for the floating ghost.
@@ -227,7 +228,6 @@ function App() {
     dark_bg:'#071512', dark_surface:'#10201d', dark_sidebar:'#06110f', dark_border:'#1d342f', dark_text:'#e6fffb',
     light_bg:'#f3f7f4', light_surface:'#fffdfa', light_sidebar:'#e7efe9', light_border:'#d5ded7', light_text:'#17211d',
   stackSort:'smart', stackShowCompleted:true, stackGroupByDate:false, stackCompactBelowDeck:true, stackShowSpine:true, stackOrder:[], stackFilterOpen:false, stackFilters:{},
-    calendarPxh:80, calendarSnap:true,
     newTaskPosition:'top',
     // Per-card colour wash (right-click → Card colour…). Sat / lightShift / pct
     // are tuned per-theme since the same hex needs different treatment on dark vs light surfaces.
@@ -239,6 +239,27 @@ function App() {
     groupPrefs: { global: 'project', inbox: 'none' },
     recentBlockReasons: [],
     customGroups: [],
+    // Persisted UI state (cross-device via user_settings.settings):
+    lastView: null,                 // last-active main view (string or {type,id|name})
+    sidePanelView: 'inbox',         // panel view inside the timeline's sticky inbox column
+    filters: { projects:[], tags:[], lifeAreas:[], priorities:[] }, // topbar pill filters
+    showWaitingOn: false,           // topbar toggle: only show delegated/waiting cards
+    showStaleOnly: false,           // topbar toggle: only show stale cards
+    inboxFilters: { projects:{}, tags:{}, lifeAreas:{}, priorities:{} }, // inbox panel include/exclude
+    collapsedGroups: [],            // array form of collapsedGrps Set
+    completedOpenCols: [],          // colKeys with completed section expanded
+    blockedOpenCols: [],            // colKeys with blocked section expanded
+    collapsedProjects: [],          // project IDs folded in week/inbox/list views
+    stackExpandedProjects: [],      // project IDs expanded in Stack view
+    drawerSecs: { props:true, sched:true, dele:true, notes:true, subs:true, log:false, block:true },
+    recentMRU: { tags: [], projects: [] },  // recent-use MRU for pickers
+    calendarPxh: 80,                // calendar drawer pixels-per-hour
+    calendarSnapOn: true,           // calendar drawer snap-to-grid
+    navUserCollapsed: null,         // null = follow window-width default; true/false = explicit override
+    settingsTab: 'appearance',      // last tab visited in Settings drawer
+    delegationsFilter: 'all',       // Delegations view: all|stale|overdue|quiet
+    delegationsSort: 'oldest',      // Delegations view: oldest|overdue|name
+    delegationsExpanded: [],        // Delegations view: array of expanded person names
   };
   const defaultTaxonomy = () => ({
     contexts: PROJ.map(p=>({...p})),
@@ -270,12 +291,15 @@ function App() {
     };
   };
   const [tweaks, setTweakState] = useState(() => {
+    // Hydrate from localStorage shadow on first render so UI prefs are
+    // immediately correct in dev-bypass mode and during the cloud-fetch
+    // gap on real sessions. Cloud fetch (below) still wins once it arrives.
     let saved = null;
     try {
-      const raw = localStorage.getItem('tm_tweaks_v1');
+      const raw = localStorage.getItem('tm_settings');
       if (raw) saved = JSON.parse(raw);
     } catch {}
-    return { ...TM_DEFAULTS, ...(saved && typeof saved === 'object' ? saved : {}) };
+    return saved && typeof saved === 'object' ? { ...TM_DEFAULTS, ...saved } : { ...TM_DEFAULTS };
   });
   const [taxonomy, setTaxonomyState] = useState(() => normalizeTaxonomy(null));
   const [settingsReady, setSettingsReady] = useState(false);
@@ -298,6 +322,13 @@ function App() {
   // workspace is ready. Local state is merged with the cloud values (cloud
   // wins) so any transient defaults the user already saw stay consistent.
   useEffect(() => {
+    if (supabaseDisabled) {
+      // Dev-bypass: localStorage shadow already hydrated `tweaks`; just mark
+      // ready so write-side effects (which gate on settingsReady) can fire.
+      setSettingsReady(true);
+      setTaxonomyReady(true);
+      return;
+    }
     if (!workspaceId || !userId) return;
     let cancelled = false;
     setSettingsReady(false);
@@ -354,18 +385,16 @@ function App() {
       cancelled = true;
       setPeoplePersister(null);
     };
-  }, [workspaceId, userId]);
+  }, [workspaceId, userId, supabaseDisabled]);
 
-  // localStorage shadow of tweaks — mirrors the tasks/events pattern so a
-  // refresh restores UI prefs (zoom, snap, drawer open state, etc.) even in
-  // dev-bypass mode where there's no Supabase write.
+  // localStorage shadow + debounced cloud save of the settings blob.
+  // Shadow runs in dev-bypass too so UI prefs (filters, folds, view, etc.)
+  // survive refresh without a real Supabase session. Cloud save is gated
+  // on userId so it doesn't fire in dev mode.
   useEffect(() => {
-    try { localStorage.setItem('tm_tweaks_v1', JSON.stringify(tweaks)); } catch {}
-  }, [tweaks]);
-
-  // Debounced cloud save of the settings blob.
-  useEffect(() => {
-    if (!settingsReady || !userId) return;
+    if (!settingsReady) return;
+    try { localStorage.setItem('tm_settings', JSON.stringify(tweaks)); } catch {}
+    if (!userId) return;
     const handle = setTimeout(() => {
       saveSettings(userId, tweaks).catch(e => {
         console.error('[settings] save failed', e);
@@ -477,22 +506,43 @@ function App() {
   const setTheme = (fn) => setTweak('theme', typeof fn === 'function' ? fn(tweaks.theme) : fn);
   const showWknd = tweaks.showWeekend;
   const setShowWknd = (fn) => setTweak('showWeekend', typeof fn === 'function' ? fn(tweaks.showWeekend) : fn);
+  // Calendar drawer prefs — declared here (after `tweaks` is in scope) and
+  // read via the tweak store so they survive refresh.
+  const pxh = Number(tweaks.calendarPxh) || 80;
+  const setPxh = (v) => setTweak('calendarPxh', typeof v === 'function' ? v(pxh) : v);
+  const snapOn = tweaks.calendarSnapOn !== false;
+  const setSnapOn = (v) => setTweak('calendarSnapOn', typeof v === 'function' ? v(snapOn) : !!v);
+
   const [view,setView]       = useState(() => readSavedView() || 'week');
-  const [sidePanelView,setSidePanelView] = useState('inbox');
+  const sidePanelView = tweaks.sidePanelView || 'inbox';
+  const setSidePanelView = (v) => setTweak('sidePanelView', v);
   const [drawerId,setDrawerId]= useState(null);
   const [settingsOpen,setSettingsOpen]= useState(false);
   const [addModal,setAddModal]= useState(null); // {date,label}
   const [palette,setPalette] = useState(false);
   const [shortcuts,setShortcuts]=useState(false);
   const [quickEntry,setQuickEntry]=useState(false);
-  const [filters,setFilters] = useState({projects:[],tags:[],lifeAreas:[],priorities:[]});
+  // Topbar pill filters live in tweaks so they ride cloud sync.
+  const filters = tweaks.filters || { projects:[], tags:[], lifeAreas:[], priorities:[] };
+  const setFilters = (updater) => setTweakState(prev => {
+    const cur = prev.filters || { projects:[], tags:[], lifeAreas:[], priorities:[] };
+    const next = typeof updater === 'function' ? updater(cur) : updater;
+    return { ...prev, filters: next };
+  });
   // filterMode / globalGroupBy / inboxGroupBy live inside `tweaks` so they
   // ride the same cloud sync as the rest of the settings blob.
   const filterMode = tweaks.filterPrefs?.mode === 'or' ? 'or' : 'and';
   const setFilterMode = (m) => setTweak({ filterPrefs: { ...(tweaks.filterPrefs||{}), mode: m }});
-  const [showWaitingOn,setShowWaitingOn] = useState(false);
-  const [showStaleOnly,setShowStaleOnly] = useState(false);
-  const [inboxFilters,setInboxFilters] = useState({projects:{},tags:{},lifeAreas:{},priorities:{}}); // val: 'inc' | 'exc'
+  const showWaitingOn = !!tweaks.showWaitingOn;
+  const setShowWaitingOn = (v) => setTweak('showWaitingOn', typeof v === 'function' ? v(!!tweaks.showWaitingOn) : !!v);
+  const showStaleOnly = !!tweaks.showStaleOnly;
+  const setShowStaleOnly = (v) => setTweak('showStaleOnly', typeof v === 'function' ? v(!!tweaks.showStaleOnly) : !!v);
+  const inboxFilters = tweaks.inboxFilters || { projects:{}, tags:{}, lifeAreas:{}, priorities:{} };
+  const setInboxFilters = (updater) => setTweakState(prev => {
+    const cur = prev.inboxFilters || { projects:{}, tags:{}, lifeAreas:{}, priorities:{} };
+    const next = typeof updater === 'function' ? updater(cur) : updater;
+    return { ...prev, inboxFilters: next };
+  });
   const [searchQuery,setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [filterOpen,setFilterOpen]=useState(false);
@@ -501,16 +551,39 @@ function App() {
   const [groupOpen,setGroupOpen] = useState(false);
   const inboxGroupBy = tweaks.groupPrefs?.inbox || 'none';
   const setInboxGroupBy = (g) => setTweak({ groupPrefs: { ...(tweaks.groupPrefs||{}), inbox: g }});
-  const [collapsedGrps,setCollapsedGrps]=useState(new Set());
-  const [completedOpen,setCompletedOpen]=useState(new Set()); // colKeys expanded
-  const [blockedOpen,setBlockedOpen]=useState(()=>new Set()); // colKeys expanded for Blocked group
+  // Collapsed/expanded section state, persisted via tweak arrays so it
+  // survives refresh and roams across devices. Sets are derived once per
+  // change for the cheap O(1) lookups consumers expect.
+  const collapsedGrps = useMemo(() => new Set(Array.isArray(tweaks.collapsedGroups) ? tweaks.collapsedGroups : []), [tweaks.collapsedGroups]);
+  const setCollapsedGrps = (updater) => setTweakState(prev => {
+    const cur = new Set(Array.isArray(prev.collapsedGroups) ? prev.collapsedGroups : []);
+    const next = typeof updater === 'function' ? updater(cur) : updater;
+    return { ...prev, collapsedGroups: Array.from(next) };
+  });
+  const completedOpen = useMemo(() => new Set(Array.isArray(tweaks.completedOpenCols) ? tweaks.completedOpenCols : []), [tweaks.completedOpenCols]);
+  const setCompletedOpen = (updater) => setTweakState(prev => {
+    const cur = new Set(Array.isArray(prev.completedOpenCols) ? prev.completedOpenCols : []);
+    const next = typeof updater === 'function' ? updater(cur) : updater;
+    return { ...prev, completedOpenCols: Array.from(next) };
+  });
+  const blockedOpen = useMemo(() => new Set(Array.isArray(tweaks.blockedOpenCols) ? tweaks.blockedOpenCols : []), [tweaks.blockedOpenCols]);
+  const setBlockedOpen = (updater) => setTweakState(prev => {
+    const cur = new Set(Array.isArray(prev.blockedOpenCols) ? prev.blockedOpenCols : []);
+    const next = typeof updater === 'function' ? updater(cur) : updater;
+    return { ...prev, blockedOpenCols: Array.from(next) };
+  });
   const recentBlockReasons = Array.isArray(tweaks.recentBlockReasons) ? tweaks.recentBlockReasons : [];
   const setRecentBlockReasons = (updater) => {
     const prev = Array.isArray(tweaks.recentBlockReasons) ? tweaks.recentBlockReasons : [];
     const next = typeof updater === 'function' ? updater(prev) : updater;
     setTweak({ recentBlockReasons: next });
   };
-  const [collapsedProjects,setCollapsedProjects]=useState(new Set());
+  const collapsedProjects = useMemo(() => new Set(Array.isArray(tweaks.collapsedProjects) ? tweaks.collapsedProjects : []), [tweaks.collapsedProjects]);
+  const setCollapsedProjects = (updater) => setTweakState(prev => {
+    const cur = new Set(Array.isArray(prev.collapsedProjects) ? prev.collapsedProjects : []);
+    const next = typeof updater === 'function' ? updater(cur) : updater;
+    return { ...prev, collapsedProjects: Array.from(next) };
+  });
   // dnd-kit drag state — single slot, replaces the five legacy HTML5 slots.
   const [activeDrag,setActiveDrag]=useState(null); // {id, kind, fromCol?}
   const [confirmDialog,setConfirmDialog]=useState(null); // {message, onConfirm}
@@ -521,10 +594,25 @@ function App() {
   const [toast,setToast]     = useState(null);
   const [toastUndoable,setToastUndoable]=useState(false);
   const [undoStack,setUndoStack]=useState([]);
-  const [navCollapsed,setNavCollapsed]=useState(() => window.innerWidth <= 640);
+  // Nav collapse: if the user has set an explicit override (tweaks.navUserCollapsed
+  // is true/false), honour it; otherwise fall back to "collapsed on narrow screens".
+  const widthCollapseDefault = window.innerWidth <= 640;
+  const navCollapsedOverride = tweaks.navUserCollapsed;
+  const navCollapsed = navCollapsedOverride === true || navCollapsedOverride === false
+    ? navCollapsedOverride
+    : widthCollapseDefault;
+  const setNavCollapsed = (updater) => {
+    const next = typeof updater === 'function' ? updater(navCollapsed) : !!updater;
+    setTweak('navUserCollapsed', next);
+  };
   const [isNarrowScreen,setIsNarrowScreen]=useState(() => window.innerWidth <= 640);
   const [tbOverflowOpen,setTbOverflowOpen]=useState(false);
-  const [recents,setRecents] = useState({tags:[], projects:[]});
+  const recents = tweaks.recentMRU || { tags: [], projects: [] };
+  const setRecents = (updater) => setTweakState(prev => {
+    const cur = prev.recentMRU || { tags: [], projects: [] };
+    const next = typeof updater === 'function' ? updater(cur) : updater;
+    return { ...prev, recentMRU: next };
+  });
   const [contextMenu,setContextMenu] = useState(null); // {task, x, y}
   const [cardColorPickerFor,setCardColorPickerFor] = useState(null); // {id, x, y}
   const [popRequest,setPopRequest] = useState(null); // {id, field}
@@ -538,13 +626,29 @@ function App() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  // Persist view: localStorage shadow for first-paint, tweaks for cross-device.
   useEffect(() => {
     const savedView = normalizeSavedView(view);
     if (!savedView) return;
     try {
       localStorage.setItem(LAST_VIEW_STORAGE_KEY, JSON.stringify(savedView));
     } catch {}
-  }, [view]);
+    if (!settingsReady) return;
+    if (!sameSavedView(tweaks.lastView, savedView)) {
+      setTweak('lastView', savedView);
+    }
+  }, [view, settingsReady]);
+
+  // On first settings load, adopt cloud lastView if it differs from the
+  // localStorage-derived initial view. Guarded by a one-shot ref so this only
+  // fires when settings flip from not-ready to ready.
+  const viewHydratedRef = useRef(false);
+  useEffect(() => {
+    if (!settingsReady || viewHydratedRef.current) return;
+    viewHydratedRef.current = true;
+    const cloudView = normalizeSavedView(tweaks.lastView);
+    if (cloudView && !sameSavedView(view, cloudView)) setView(cloudView);
+  }, [settingsReady]);
 
   const showToast = (msg, opts={}) => {
     setToast(msg);
@@ -3573,7 +3677,17 @@ function App() {
             onJumpTo={(id)=>{ setView('week'); setDrawerId(id); setFocusedId(id); }}
             onUpdate={updateTask}
             onDelete={deleteTask}
-            onCheckIn={(id, mode)=>{ const t=taskById(id); if(t && !t.done) completeTask(id, t.date||'inbox', mode); }}/>
+            onCheckIn={(id, mode)=>{ const t=taskById(id); if(t && !t.done) completeTask(id, t.date||'inbox', mode); }}
+            filter={tweaks.delegationsFilter}
+            onFilterChange={(v)=>setTweak('delegationsFilter', v)}
+            sort={tweaks.delegationsSort}
+            onSortChange={(v)=>setTweak('delegationsSort', v)}
+            expandedNames={tweaks.delegationsExpanded}
+            onToggleExpanded={(name)=>setTweakState(prev=>{
+              const cur = Array.isArray(prev.delegationsExpanded) ? prev.delegationsExpanded : [];
+              const next = cur.includes(name) ? cur.filter(n=>n!==name) : [...cur, name];
+              return { ...prev, delegationsExpanded: next };
+            })}/>
         </div>
       ) : view==='stack' ? (
         <StackView
@@ -3700,6 +3814,12 @@ function App() {
 
     {/* DRAWER */}
     {drawerTask && <TaskDrawer task={drawerTask} theme={theme} tasks={tasks}
+      secs={tweaks.drawerSecs || TM_DEFAULTS.drawerSecs}
+      onSecsChange={(updater)=>setTweakState(prev=>{
+        const cur = prev.drawerSecs || TM_DEFAULTS.drawerSecs;
+        const next = typeof updater === 'function' ? updater(cur) : updater;
+        return { ...prev, drawerSecs: next };
+      })}
       onUpdate={updateTask}
       onAddTaxonomy={(kind,label)=>taxonomyActions.add(kind,label)}
       onClose={()=>setDrawerId(null)}
@@ -3761,10 +3881,8 @@ function App() {
         setEvents={setVisibleEvents}
         tasks={tasks}
         projectColor={calProjectColor}
-        pxh={tweaks.calendarPxh}
-        setPxh={(v) => setTweakState(prev => ({ ...prev, calendarPxh: typeof v === 'function' ? v(prev.calendarPxh) : v }))}
-        snapOn={tweaks.calendarSnap}
-        setSnapOn={(v) => setTweakState(prev => ({ ...prev, calendarSnap: typeof v === 'function' ? v(prev.calendarSnap) : v }))}
+        pxh={pxh} setPxh={setPxh}
+        snapOn={snapOn} setSnapOn={setSnapOn}
         externalDrag={extDrag}
         onConsumeExternal={()=>{ extDragRef.current = null; }}
         onCancelExternal={()=>{ extDragRef.current = null; }}

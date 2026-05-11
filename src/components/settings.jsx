@@ -284,7 +284,12 @@ const PRESETS_DATA = [
   {n:'Mono',    a:'#737373', db:'#0a0a0a',ds:'#171717',dn:'#000000',dbr:'#262626',dt:'#fafafa', lb:'#fafafa',ls:'#ffffff',ln:'#f5f5f5',lbr:'#e5e5e5',lt:'#0a0a0a'},
 ];
 function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
-  const [tab, setTab] = useState('appearance');
+  // Tab choice is persisted in the settings blob so reopening the drawer
+  // returns the user to where they left off. Same pattern as the other UI
+  // prefs (filters, view, drawer folds, etc.) that live in `tweaks`.
+  const TAB_IDS = new Set(['appearance','colors','layout','taxonomy','data']);
+  const tab = TAB_IDS.has(tweaks.settingsTab) ? tweaks.settingsTab : 'appearance';
+  const setTab = (id) => setTweak('settingsTab', id);
   const { user, signOut, supabaseDisabled } = useAuth();
   const SRow = ({label,desc,children}) => (
     <div style={{display:'flex',alignItems:'center',gap:16,padding:'12px 16px',borderBottom:'1px solid var(--border)'}}>

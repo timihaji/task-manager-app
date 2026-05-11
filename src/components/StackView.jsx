@@ -486,17 +486,23 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
     [tasks, allTasks, sortMode, manualOrder]
   );
 
-  const [expanded, setExpanded] = useState(() => {
+  // Persisted via tweaks.stackExpandedProjects so the user's open subtrees
+  // survive refresh. If the tweak is empty (first time / fresh user), default
+  // to expanding the first project found so the view isn't all-collapsed.
+  const stackExpandedTweak = Array.isArray(tweaks.stackExpandedProjects) ? tweaks.stackExpandedProjects : null;
+  const expanded = useMemo(() => {
+    if (stackExpandedTweak && stackExpandedTweak.length) return new Set(stackExpandedTweak);
+    if (stackExpandedTweak) return new Set();
     const s = new Set();
     const proj = tasks.find(t => t.cardType === 'project');
     if (proj) s.add(proj.id);
     return s;
-  });
-  const toggleExpand = (id) => setExpanded(s => {
-    const n = new Set(s);
-    if (n.has(id)) n.delete(id); else n.add(id);
-    return n;
-  });
+  }, [stackExpandedTweak, tasks]);
+  const toggleExpand = (id) => {
+    const cur = new Set(expanded);
+    if (cur.has(id)) cur.delete(id); else cur.add(id);
+    setTweak('stackExpandedProjects', Array.from(cur));
+  };
 
   const [completing, setCompleting] = useState(() => new Set());
 

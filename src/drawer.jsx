@@ -66,7 +66,7 @@ function AddTaxonomyChip({ kind, onAdd }) {
   );
 }
 
-function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDelete, onDuplicate, onMoveToInbox, fromLeft, onSetBlocked, onClearBlocked, recentBlockReasons, blockingCountFor, onJumpTo, onCheckIn, onGoToCard }) {
+function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDelete, onDuplicate, onMoveToInbox, fromLeft, onSetBlocked, onClearBlocked, recentBlockReasons, blockingCountFor, onJumpTo, onCheckIn, onGoToCard, secs: secsProp, onSecsChange }) {
   const [localTitle, setLocalTitle] = useState('');
   const [localDesc,  setLocalDesc]  = useState('');
   const [localReason,setLocalReason]= useState('');
@@ -94,7 +94,14 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
   const [menuOpen,   setMenuOpen]   = useState(false);
   const [timeMoreOpen, setTimeMoreOpen] = useState(false);
   const [blockerQuery,setBlockerQuery] = useState('');
-  const [secs, setSecs] = useState({ props:true, sched:true, dele:true, notes:true, subs:true, log:false, block:true });
+  // Section fold state — persisted by App via `secsProp`/`onSecsChange` so it
+  // survives refresh and roams across devices. Falls back to a sensible
+  // expand-most default if the host hasn't wired the prop in.
+  const DEFAULT_SECS = { props:true, sched:true, dele:true, notes:true, subs:true, log:false, block:true };
+  const secs = secsProp || DEFAULT_SECS;
+  const setSecs = (updater) => {
+    if (onSecsChange) onSecsChange(updater);
+  };
   const [cadenceCustom, setCadenceCustom] = useState('');
   const [delegateName, setDelegateName] = useState('');
   const titleRef = useRef(null);
