@@ -333,7 +333,8 @@ body.marquee-active *{user-select:none !important}
 .bulk-check:hover{border-color:var(--accent)}
 .bulk-check.on{background:var(--accent);border-color:var(--accent)}
 .card-title{font-size:12px;font-weight:400;line-height:1.4;color:var(--t1);flex:1}
-.card-title.done{text-decoration:line-through;color:var(--t4)}
+.card-title.done{color:var(--t4)}
+.card-title-text{cursor:text}
 .card-title-input{flex:1;min-width:0;border:1px solid var(--accent);border-radius:2px;background:var(--surface-2);color:var(--t1);font:12px/1.4 var(--font);padding:2px 4px;outline:none}
 .pri-bars{display:flex;align-items:flex-end;gap:1.5px;height:10px;flex-shrink:0;margin-top:2px}
 .pri-bar{width:2.5px;border-radius:1px}
@@ -458,7 +459,7 @@ body.marquee-active *{user-select:none !important}
 .dr-sub-chk.done{background:var(--accent);border-color:var(--accent)}
 .dr-sub-chk.done::after{content:'';width:4px;height:2.5px;border-left:1.5px solid #fff;border-bottom:1.5px solid #fff;transform:rotate(-45deg) translateY(-.5px);display:block}
 .dr-sub-ttl{flex:1;font-size:12.5px;color:var(--t1)}
-.dr-sub-ttl.done{text-decoration:line-through;color:var(--t4)}
+.dr-sub-ttl.done{color:var(--t4)}
 .dr-sub-del{color:var(--t4);cursor:pointer;font-size:14px;opacity:0;transition:opacity .1s}
 .dr-sub:hover .dr-sub-del{opacity:1}
 .dr-sub-add{margin-top:4px}
@@ -517,7 +518,7 @@ body.marquee-active *{user-select:none !important}
 .list-item.focused{outline:1px solid var(--accent);outline-offset:-1px}
 .list-item.selected{background:var(--accent-dim);outline:1px solid var(--accent-border);outline-offset:-1px}
 .list-item-title{flex:1;font-size:13px;color:var(--t1)}
-.list-item-title.done{text-decoration:line-through;color:var(--t4)}
+.list-item-title.done{color:var(--t4)}
 .list-item-date{font:11px var(--mono);color:var(--t4)}
 .list-empty{font-size:13px;color:var(--t4);padding:20px 0;text-align:center}
 .list-note{font-size:11px;color:var(--t4);padding:8px 2px 14px;text-align:center}
@@ -553,7 +554,7 @@ body.marquee-active *{user-select:none !important}
 /* waiting-on picker */
 .dr-blockers-list{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
 .dr-blocker-chip{font:11px var(--font);padding:2px 6px 2px 8px;border-radius:3px;background:var(--surface-2);color:var(--t1);border:1px solid var(--border-s);display:inline-flex;align-items:center;gap:4px}
-.dr-blocker-chip.done{opacity:.55;text-decoration:line-through}
+.dr-blocker-chip.done{opacity:.55}
 .dr-blocker-chip-x{cursor:pointer;color:var(--t4);padding:0 2px}
 .dr-blocker-chip-x:hover{color:#fca5a5}
 .dr-blocker-search{position:relative}
@@ -569,7 +570,7 @@ body.marquee-active *{user-select:none !important}
 .dr-graph-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:2px;background:var(--surface-1);border:1px solid var(--border-s);color:var(--t1);cursor:pointer;font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dr-graph-chip:hover{background:rgba(99,102,241,.12);border-color:rgba(99,102,241,.4)}
 .dr-graph-chip.self{background:rgba(245,158,11,.15);color:#fcd34d;border-color:rgba(245,158,11,.4);cursor:default}
-.dr-graph-chip.done{opacity:.55;text-decoration:line-through}
+.dr-graph-chip.done{opacity:.55}
 .dr-graph-chip-dot{width:6px;height:6px;border-radius:50%;background:var(--t4)}
 .dr-graph-chip.blocked .dr-graph-chip-dot{background:#f59e0b}
 .dr-graph-chip.done .dr-graph-chip-dot{background:#86efac}
@@ -811,6 +812,7 @@ body.marquee-active *{user-select:none !important}
 .scard-chk:hover{border-color:var(--accent);background:var(--accent-dim)}
 
 .scard-title{flex:1;font-size:14px;font-weight:500;line-height:1.4;color:var(--t1)}
+.scard-title-text{cursor:text}
 .scard.focused{outline:1px solid var(--accent);outline-offset:-1px}
 .scard.renaming{outline:1px solid var(--accent);outline-offset:-1px}
 .scard-title-input{flex:1;min-width:0;border:1px solid var(--accent);border-radius:2px;background:var(--surface-2);color:var(--t1);font:14px/1.4 var(--font);font-weight:500;padding:2px 6px;outline:none}
@@ -871,7 +873,7 @@ body.marquee-active *{user-select:none !important}
 .scard-sub-chk.done{background:var(--accent);border-color:var(--accent)}
 .scard-sub-chk.done::after{content:'';width:4px;height:2px;border-left:1.5px solid #fff;border-bottom:1.5px solid #fff;transform:rotate(-45deg) translateY(-.5px)}
 .scard-sub-title{flex:1;font-size:12.5px;color:var(--t1)}
-.scard-sub-title.done{text-decoration:line-through;color:var(--t4)}
+.scard-sub-title.done{color:var(--t4)}
 .scard-sub-meta{font:10px var(--mono);color:var(--t4)}
 
 /* empty state */
@@ -1017,7 +1019,7 @@ body[data-density="airy"] .scard-idx{left:26px;top:18px;width:32px;height:32px}
   box-shadow:none;
 }
 .scard.completed:hover{transform:none;opacity:.85;box-shadow:none;border-color:var(--border-s)}
-.scard.completed .scard-title{font-size:12.5px;font-weight:500;color:var(--t3);text-decoration:line-through}
+.scard.completed .scard-title{font-size:12.5px;font-weight:500;color:var(--t3)}
 .scard.completed .scard-chk.done{
   background:var(--accent);border-color:var(--accent);
   display:flex;align-items:center;justify-content:center;
@@ -1541,6 +1543,22 @@ button:active:not(:disabled):not(.no-press),
 /* Checkmark stroke morph — used by CheckGlyph. */
 .cg-circle{transition:fill .2s, stroke .2s}
 .cg-tick{transition:stroke-dashoffset .26s var(--ease-snap) .04s}
+/* Celebratory ring burst on done false→true. Re-keyed each completion so
+   the animation restarts; pointer-events off so it never blocks clicks. */
+.cg-burst{
+  transform-box:fill-box;
+  transform-origin:center;
+  pointer-events:none;
+  animation:cg-burst-out .55s cubic-bezier(.2,.7,.2,1) forwards;
+}
+@keyframes cg-burst-out{
+  0%   {transform:scale(.55); opacity:.9;  stroke-width:3}
+  60%  {opacity:.35}
+  100% {transform:scale(2.4); opacity:0;   stroke-width:.5}
+}
+@media (prefers-reduced-motion: reduce){
+  .cg-burst{animation:none; opacity:0}
+}
 /* Wrapper that opts a button/div out of legacy chk visuals (border, ::after
    checkmark) so the embedded CheckGlyph SVG renders cleanly. */
 .scard-chk.cg-host,.card-chk.cg-host,.scard-sub-chk.cg-host,.dr-sub-chk.cg-host,.bulk-check.cg-host{
@@ -1552,30 +1570,14 @@ button:active:not(:disabled):not(.no-press),
 .scard-chk.cg-host::after,.card-chk.cg-host::after,.scard-sub-chk.cg-host::after,
 .dr-sub-chk.cg-host::after{content:none !important}
 .scard-chk.cg-host:hover,.scard-sub-chk.cg-host:hover{background:transparent !important}
-/* Strikethrough that grows from the left — applied to titles when done.
-   Override the static text-decoration:line-through so we draw our own line
-   that animates in. */
+/* Done titles: color shift only — no strikethrough (the satisfying tick
+   does the celebrating). */
 .card-title.done,
 .dr-sub-ttl.done,
 .list-item-title.done,
 .scard-sub-title.done{
-  position:relative;
   text-decoration:none !important;
 }
-.card-title.done::after,
-.dr-sub-ttl.done::after,
-.list-item-title.done::after,
-.scard-sub-title.done::after{
-  content:'';
-  position:absolute;
-  left:0; right:0; top:50%;
-  height:1px;
-  background:currentColor;
-  opacity:.65;
-  transform-origin:left center;
-  animation:strike-grow .32s var(--ease-snap) forwards;
-}
-@keyframes strike-grow{from{transform:scaleX(0)} to{transform:scaleX(1)}}
 
 /* ────────────────────────────────────────────────────────────
    Calendar Drawer — Sunsama-style day calendar overlay.
@@ -1997,27 +1999,15 @@ button:active:not(:disabled):not(.no-press),
 /* Drop preview pinned to house easing. */
 .drop-ph,.drop-ph-sm,.drop-ph-preview{animation-timing-function: var(--ease-out)}
 
-/* Strike-through that DRAWS rather than appears (1q). */
+/* Done titles soften their colour only — strikethrough removed in favour of
+   the morphing CheckGlyph celebration. */
 .card-title.done,
 .scard-title.done,
 .scard-sub-title.done{
   text-decoration: none !important;
-  position: relative;
   color: var(--t4);
   transition: color .25s var(--ease-out);
 }
-.card-title.done::after,
-.scard-title.done::after,
-.scard-sub-title.done::after{
-  content: '';
-  position: absolute;
-  left: 0; top: 50%;
-  height: 1px; background: currentColor;
-  transform-origin: left center;
-  animation: strike-draw .22s var(--ease-out) both;
-  pointer-events: none;
-}
-@keyframes strike-draw{from{width:0} to{width:100%}}
 
 /* ── 3 · scroll containment (no chained scroll-bubbling, calmer edges) ─ */
 .col-body,.stack-inner,.lnav,.settings-scroll,.dr-body,.timeline-scroll,
