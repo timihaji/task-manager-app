@@ -1616,15 +1616,34 @@ function App() {
     if (changes.project) pushRecent('projects', changes.project);
     showToast(`Updated ${ids.length} task${ids.length===1?'':'s'}`, {undoable:true});
   };
+  // Collect the pending check-in + expiry follower IDs for a delegated parent.
+  // Returns null if the parent isn't delegated or has no pending followers, so
+  // callers can short-circuit without paying the people-store adjustment.
+  const delegationFollowersOf = (task, taskList) => {
+    if (!task || !task.delegatedTo) return null;
+    const ids = new Set();
+    (task.checkInTaskIds || []).forEach(cid => {
+      const ct = taskList.find(x => x.id === cid);
+      if (ct && !ct.done) ids.add(cid);
+    });
+    if (task.expiryTaskId) {
+      const exp = taskList.find(x => x.id === task.expiryTaskId);
+      if (exp && !exp.done) ids.add(task.expiryTaskId);
+    }
+    return ids.size ? { followerIds: ids, openCountName: task.delegatedTo } : null;
+  };
+
   const deleteTask = (id) => {
     const task = taskById(id); if(!task) return;
     // Project: promote children to the column instead of cascading delete.
     if(task.cardType === 'project') {
       const kids = tasks.filter(t=>t.parentId===id);
+      const followers = delegationFollowersOf(task, tasks);
       pushSnapshotUndo();
       setTasks(prev => prev
-        .filter(t=>t.id!==id)
+        .filter(t => t.id!==id && !(followers && followers.followerIds.has(t.id)))
         .map(t => t.parentId===id ? applyTaskPatch(t, { parentId:null, date: task.date || null }) : t));
+      if (followers) adjustOpenCount(followers.openCountName, -1);
       setSelectedIds(prev=>{const next=new Set(prev);next.delete(id);return next;});
       if(drawerId===id) setDrawerId(null);
       if(focusedId===id) setFocusedId(null);
@@ -1635,15 +1654,17 @@ function App() {
       return;
     }
     // Child of a project: also remove from parent's childOrder.
+    const followers = delegationFollowersOf(task, tasks);
     if(task.parentId) {
       pushSnapshotUndo();
       setTasks(prev => prev
-        .filter(t=>t.id!==id)
+        .filter(t => t.id!==id && !(followers && followers.followerIds.has(t.id)))
         .map(t => t.id===task.parentId ? {...t, childOrder:(t.childOrder||[]).filter(cid=>cid!==id)} : t));
     } else {
       setUndoStack(s=>[...s.slice(-9),{id,before:task,deleted:true}]);
-      setTasks(prev=>prev.filter(t=>t.id!==id));
+      setTasks(prev => prev.filter(t => t.id!==id && !(followers && followers.followerIds.has(t.id))));
     }
+    if (followers) adjustOpenCount(followers.openCountName, -1);
     setSelectedIds(prev=>{const next=new Set(prev);next.delete(id);return next;});
     if(drawerId===id) setDrawerId(null);
     if(focusedId===id) setFocusedId(null);
@@ -1651,17 +1672,37 @@ function App() {
   };
   const archiveTask = (id) => {
     const task=taskById(id); if(!task) return;
-    // Project: cascade archive to all children.
+    // Project: cascade archive to all children. Also archive the delegation
+    // followers (check-ins/expiry) so they don't linger as ghost tasks.
     if(task.cardType==='project') {
       const now = new Date().toISOString();
+      // Gather follower IDs from the project itself and any delegated children.
+      const followerIds = new Set();
+      const openCountAdjustments = [];
+      const collect = (t) => {
+        const f = delegationFollowersOf(t, tasks);
+        if (f) {
+          f.followerIds.forEach(fid => followerIds.add(fid));
+          openCountAdjustments.push(f.openCountName);
+        }
+      };
+      collect(task);
+      tasks.filter(t => t.parentId===id).forEach(collect);
       pushSnapshotUndo();
       setTasks(prev=>prev.map(t=>{
-        if(t.id===id || t.parentId===id) return {...t, archived:true, archivedAt:now};
+        if(t.id===id || t.parentId===id || followerIds.has(t.id)) return {...t, archived:true, archivedAt:now};
         return t;
       }));
+      openCountAdjustments.forEach(name => adjustOpenCount(name, -1));
     } else {
+      const followers = delegationFollowersOf(task, tasks);
+      const now = new Date().toISOString();
       setUndoStack(s=>[...s.slice(-9),{id,before:task}]);
-      setTasks(prev=>prev.map(t=>t.id===id?{...t,archived:true,archivedAt:new Date().toISOString()}:t));
+      setTasks(prev=>prev.map(t=>{
+        if (t.id===id || (followers && followers.followerIds.has(t.id))) return {...t, archived:true, archivedAt:now};
+        return t;
+      }));
+      if (followers) adjustOpenCount(followers.openCountName, -1);
     }
     if(drawerId===id) setDrawerId(null);
     if(focusedId===id) setFocusedId(null);
@@ -2044,6 +2085,14 @@ function App() {
           if (firstUnblockedId) setFocusedId(firstUnblockedId);
         }
       }
+      // Delegation sweep: when a delegated project is marked done, drop pending check-ins/expiry.
+      // (Mirrors the per-task sweep at the bottom of completeTask. setProjectDone bypasses that
+      // branch because projects cascade, so the cleanup has to happen here.)
+      if (nowDone && projectAfter && projectAfter.delegatedTo) {
+        const sweepDel = sweepDelegationOnComplete(next, projectAfter, ts);
+        next = sweepDel.tasks;
+        if (sweepDel.openCountChange && sweepDel.openCountName) adjustOpenCount(sweepDel.openCountName, sweepDel.openCountChange);
+      }
       return next;
     });
     // Recurrence on the project shell, only when marking done.
@@ -2089,12 +2138,26 @@ function App() {
     setTasks(prev=>{
       let next = applyDoneToTask(prev, id, nowDone, ts);
       // If completing a child, check if all siblings are now done → auto-complete project (passive, no dialog).
+      let autoCompletedProject = null;
       if(nowDone && task.parentId) {
         const siblings = next.filter(t=>t.parentId===task.parentId);
         const allDone = siblings.length > 0 && siblings.every(s=>s.done);
         if(allDone) {
-          next = next.map(t => t.id===task.parentId && !t.done ? {...t, done:true, completedAt:ts} : t);
+          next = next.map(t => {
+            if (t.id===task.parentId && !t.done) {
+              const updated = {...t, done:true, completedAt:ts};
+              autoCompletedProject = updated;
+              return updated;
+            }
+            return t;
+          });
         }
+      }
+      // If a delegated project just auto-completed, sweep its pending check-ins/expiry.
+      if (autoCompletedProject && autoCompletedProject.delegatedTo) {
+        const sweepDel = sweepDelegationOnComplete(next, autoCompletedProject, ts);
+        next = sweepDel.tasks;
+        if (sweepDel.openCountChange && sweepDel.openCountName) adjustOpenCount(sweepDel.openCountName, sweepDel.openCountChange);
       }
       // Auto-unblock any tasks whose blockers just got completed.
       if (nowDone) {

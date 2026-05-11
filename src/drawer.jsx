@@ -758,9 +758,8 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
           </DRow>
         </DrSection>
 
-        {/* DELEGATION (delegation parent OR a check-in task) */}
-        {(task.cardType !== 'project') && (
-          <DrSection title={task.checkInOf ? 'Check-in' : 'Delegation'} open={secs.dele} onToggle={()=>tog('dele')}>
+        {/* DELEGATION (delegation parent — task OR project — or a check-in task) */}
+        <DrSection title={task.checkInOf ? 'Check-in' : 'Delegation'} open={secs.dele} onToggle={()=>tog('dele')}>
             {task.checkInOf ? (() => {
               const parent = (tasks||[]).find(t => t.id === task.checkInOf);
               if (!parent) return <div className="dr-empty">Parent task no longer exists</div>;
@@ -912,7 +911,6 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
               );
             })()}
           </DrSection>
-        )}
 
         {/* NOTES */}
         <DrSection title="Notes" open={secs.notes} onToggle={()=>tog('notes')}>
