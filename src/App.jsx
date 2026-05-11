@@ -918,7 +918,10 @@ function App() {
   // sticky column at the edge so it stays pinned regardless of how far the
   // window has been shifted.
   const todayOutOfRange = todayIdx < 0;
-  const renderTodaySeparately = !!todayPin && (todayOutOfRange || todayIdx < firstRenderCol || todayIdx >= lastRenderCol);
+  // Decoupled from todayPin so virtualization doesn't drop the today column
+  // from the DOM while React state catches up — sticky resolution is CSS-only
+  // now (both left:0 and right:0 set on .today-pinned).
+  const renderTodaySeparately = todayOutOfRange || (todayIdx >= 0 && (todayIdx < firstRenderCol || todayIdx >= lastRenderCol));
   const renderTodayBefore = renderTodaySeparately && (todayOutOfRange ? todayPin === 'left' : todayIdx < firstRenderCol);
   const renderTodayAfter = renderTodaySeparately && (todayOutOfRange ? todayPin === 'right' : todayIdx >= lastRenderCol);
   const beforeTimelineSpacerWidth = renderTodayBefore && !todayOutOfRange ? todayIdx * COL_W : beforeColsWidth;
@@ -3097,7 +3100,10 @@ function App() {
   const renderTimelineColumn = (date, keyPrefix='') => {
     const colKey=D.str(date);
     const colTasks=tasksForCol(colKey);
-    const pinClass = colKey===todayStr && todayPin ? `today-pinned pin-${todayPin}` : '';
+    // Always apply today-pinned so sticky is CSS-resolved (no React state
+    // race when crossing today's natural position). pin-${dir} is only for
+    // the directional shadow + border — lagging that a frame is fine.
+    const pinClass = colKey===todayStr ? `today-pinned${todayPin ? ` pin-${todayPin}` : ''}` : '';
     return <Column key={`${keyPrefix}${colKey}`} className={pinClass} date={date} tasks={colTasks}
       focusedCardId={focusedId} selectedIds={selectedIds} spawning={spawning} theme={theme} tweaks={tweaks}
       renamingId={renamingId}
