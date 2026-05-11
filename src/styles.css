@@ -1447,7 +1447,7 @@ button,
   transform-origin:center;
 }
 button:active:not(:disabled):not(.no-press),
-[role="button"]:active:not(.no-press),
+[role="button"]:active:not(.no-press):not(.card):not(.scard):not(.list-item),
 .card-chk:active,
 .scard-chk:active,
 .scard-sub-chk:active,
