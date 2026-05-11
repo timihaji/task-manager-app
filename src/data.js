@@ -627,6 +627,17 @@ const INIT_TASKS = [
     ]}),
 ];
 
+// Seed events for the calendar drawer in dev-bypass mode. Dates are applied
+// at load time so today's drawer is always populated; event ids are stable
+// so reloads don't keep stacking duplicates. Mix of task-linked blocks and a
+// freeform "Lunch" time block to exercise both code paths.
+const INIT_EVENTS = [
+  { id:'ev1', taskId:'d3', startMin: 7*60 + 30, durationMin: 30 },
+  { id:'ev2', taskId:'d1', startMin: 9*60,      durationMin: 90 },
+  { id:'ev3', taskId:null, title:'Lunch & walk', color:'#5eead4', startMin: 12*60, durationMin: 45 },
+  { id:'ev4', taskId:'d2', startMin: 14*60,     durationMin: 45 },
+];
+
 
 
 export {
@@ -658,6 +669,7 @@ export {
   parseTimeEst,
   fmtTimeEst,
   INIT_TASKS,
+  INIT_EVENTS,
   daysSince,
   defaultLifeAreaForLocation,
   suggestLifeAreaFromTitle,

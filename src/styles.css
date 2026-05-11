@@ -13,6 +13,13 @@
   --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;
   /* Hit-target floor — keeps interactive padding above the 44px touch target. */
   --hit-min:44px;
+  /* Motion tokens — see Button Physics plan. --ease-spring overshoots slightly
+     for the "release rebound" feel; --ease-snap is the existing app-wide
+     easing aliased here for consistency. */
+  --ease-spring:cubic-bezier(.34,1.56,.64,1);
+  --ease-snap:cubic-bezier(.2,.8,.2,1);
+  --shadow-press:0 1px 1px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.08);
+  --shadow-lift:0 12px 28px rgba(0,0,0,.18),0 2px 6px rgba(0,0,0,.10);
 }
 body[data-theme="dark"]{
   --bg:#071512;--bg-side:#06110f;--bg-top:#06110f;--bg-inbox:#06110f;--bg-dr:#10201d;
@@ -1410,3 +1417,921 @@ body.has-bulk-bar .list-view{padding-bottom:96px}
   }
   .scard-now-tag::before{animation:none !important}
 }
+
+/* ── Button Physics ─────────────────────────────────────────
+   Universal press depression. CSS :active gives every button a
+   tactile press without per-component edits. Primary buttons
+   layer useTapSpring on top for the release-overshoot kick.
+   Cards/rows/draggables are excluded (they have their own drag
+   feedback) — same for inputs and links inside text. */
+button,
+[role="button"],
+.card-chk,
+.scard-chk,
+.scard-sub-chk,
+.dr-sub-chk,
+.bulk-check{
+  transition:transform .14s var(--ease-spring),
+             background .12s,
+             color .12s,
+             border-color .12s,
+             box-shadow .12s;
+  transform-origin:center;
+}
+button:active:not(:disabled):not(.no-press),
+[role="button"]:active:not(.no-press),
+.card-chk:active,
+.scard-chk:active,
+.scard-sub-chk:active,
+.dr-sub-chk:active,
+.bulk-check:active{
+  transform:scale(.96);
+  box-shadow:var(--shadow-press);
+}
+
+/* Drag overlay ghost — lift physics while a card is being dragged.
+   The DragOverlay clones the source HTML into .dnd-overlay-ghost; this
+   gives it scale + tilt so it reads as picked up rather than pinned to
+   the cursor. */
+.dnd-overlay-ghost{
+  transform:scale(1.04) rotate(-1.5deg);
+  filter:drop-shadow(0 12px 28px rgba(0,0,0,.18)) drop-shadow(0 2px 6px rgba(0,0,0,.10));
+  cursor:grabbing;
+  pointer-events:none;
+}
+.dnd-overlay-ghost > .card,
+.dnd-overlay-ghost > .scard{
+  box-shadow:var(--shadow-lift) !important;
+}
+
+/* Drop-target armed state — dashed accent border + tinted bg so the
+   user reads "release here". Builds on existing .col.drag-over. */
+.col.drag-over{
+  border:1px dashed var(--accent-border);
+  border-right:1px dashed var(--accent-border);
+}
+.col.drag-over .col-hdr{background:var(--accent-dim)}
+.side-panel.inbox-col.drag-over-inbox{
+  outline:1px dashed var(--accent-border);
+  outline-offset:-3px;
+}
+.grp-box.grp-drop-into{
+  background:color-mix(in srgb,var(--accent) 10%,var(--surface));
+}
+
+/* Stack-card drag source (matches .card.dragging treatment from L283). */
+.scard.dragging{
+  background:color-mix(in srgb,var(--accent) 8%,var(--surface));
+  outline:2px dashed var(--accent);
+  outline-offset:-2px;
+  box-shadow:none;
+  cursor:grabbing;
+}
+.scard.dragging > *{visibility:hidden}
+
+/* Hold-to-confirm button (Phase 6b) — destructive actions */
+.hold-btn{
+  position:relative;
+  background:var(--danger,#b91c1c);
+  color:#fff;
+  border:none;
+  padding:8px 18px;
+  border-radius:var(--rk-ctrl,2px);
+  font:600 12px var(--font);
+  cursor:pointer;
+  overflow:hidden;
+  letter-spacing:.02em;
+  user-select:none;
+  touch-action:none;
+  isolation:isolate;
+}
+.hold-btn-fill{
+  position:absolute; inset:0;
+  background:rgba(255,255,255,.22);
+  transform-origin:left center;
+  pointer-events:none;
+  z-index:0;
+}
+.hold-btn-label{position:relative; z-index:1}
+.hold-btn.committed{background:var(--success,#047857)}
+
+/* Magnetic add button — eased follow inside container */
+.col-add,.stack-add-top{
+  transition:transform .18s var(--ease-spring),background .12s,color .12s;
+  will-change:transform;
+}
+/* Magnet zones extend the hit field for the cursor-attract effect */
+.stack-add-magnet-zone{
+  display:flex; justify-content:center;
+  padding:8px 24px 4px;
+}
+.col-add-magnet-zone{
+  display:flex; flex-shrink:0;
+  /* host of .col-add — ensures pointer-move fires across full column footer */
+}
+.col-add-magnet-zone .col-add{flex:1; border-top:1px solid var(--border)}
+
+/* Checkmark stroke morph — used by CheckGlyph. */
+.cg-circle{transition:fill .2s, stroke .2s}
+.cg-tick{transition:stroke-dashoffset .26s var(--ease-snap) .04s}
+/* Wrapper that opts a button/div out of legacy chk visuals (border, ::after
+   checkmark) so the embedded CheckGlyph SVG renders cleanly. */
+.scard-chk.cg-host,.card-chk.cg-host,.scard-sub-chk.cg-host,.dr-sub-chk.cg-host,.bulk-check.cg-host{
+  width:auto !important; height:auto !important;
+  border:none !important; background:transparent !important;
+  padding:0 !important; min-width:0 !important;
+}
+.scard-chk.cg-host::before,.card-chk.cg-host::before,.scard-sub-chk.cg-host::before,
+.scard-chk.cg-host::after,.card-chk.cg-host::after,.scard-sub-chk.cg-host::after,
+.dr-sub-chk.cg-host::after{content:none !important}
+.scard-chk.cg-host:hover,.scard-sub-chk.cg-host:hover{background:transparent !important}
+/* Strikethrough that grows from the left — applied to titles when done.
+   Override the static text-decoration:line-through so we draw our own line
+   that animates in. */
+.card-title.done,
+.dr-sub-ttl.done,
+.list-item-title.done,
+.scard-sub-title.done{
+  position:relative;
+  text-decoration:none !important;
+}
+.card-title.done::after,
+.dr-sub-ttl.done::after,
+.list-item-title.done::after,
+.scard-sub-title.done::after{
+  content:'';
+  position:absolute;
+  left:0; right:0; top:50%;
+  height:1px;
+  background:currentColor;
+  opacity:.65;
+  transform-origin:left center;
+  animation:strike-grow .32s var(--ease-snap) forwards;
+}
+@keyframes strike-grow{from{transform:scaleX(0)} to{transform:scaleX(1)}}
+
+/* ────────────────────────────────────────────────────────────
+   Calendar Drawer — Sunsama-style day calendar overlay.
+   Ported verbatim from the prototype, every selector scoped to
+   .cal-drawer so it can't bleed into the rest of the app.
+   The prototype's design tokens (--bg, --surface, --accent, …)
+   are redeclared inside .cal-drawer to shadow the global ones,
+   keeping the drawer's exact "deep teal" palette.
+   ──────────────────────────────────────────────────────────── */
+
+.cal-drawer{
+  /* prototype tokens — local to the drawer */
+  --bg:#071512;
+  --bg-side:#06110f;
+  --bg-top:#06110f;
+  --bg-dr:#0a1916;
+  --surface:#10201d;
+  --surface-2:#1d342f;
+  --surface-3:#294a44;
+  --border:#1d342f;
+  --border-s:#224039;
+  --t1:#e6fffb;
+  --t2:#c3ddd7;
+  --t3:#8eada6;
+  --t4:#66837c;
+  --accent:#14a89a;
+  --accent-dim:rgba(20,168,154,.14);
+  --accent-border:rgba(20,168,154,.36);
+  --shadow:0 1px 3px rgba(0,0,0,.4),0 4px 12px rgba(0,0,0,.3);
+  --shadow-lg:0 8px 32px rgba(0,0,0,.6);
+  --shadow-hover:0 2px 8px rgba(0,0,0,.5);
+
+  /* fixed-position overlay (override the prototype's flex-inline layout) */
+  position:fixed;
+  top:44px; right:0; bottom:0;
+  width:460px;
+  z-index:60;
+  background:var(--bg-dr);
+  border-left:1px solid var(--border);
+  display:flex;flex-direction:column;
+  box-shadow:-12px 0 36px rgba(0,0,0,.5);
+  font-family:'Geist','Geist Mono',system-ui,sans-serif;
+  color:var(--t1);
+  transform:translateX(100%);
+  transition:transform .22s cubic-bezier(.34,1.56,.64,1);
+}
+.cal-drawer.is-open{transform:translateX(0);}
+
+.cal-drawer ::-webkit-scrollbar{width:6px;height:6px;}
+.cal-drawer ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.06);border-radius:99px;}
+.cal-drawer ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.12);}
+
+.cal-drawer kbd{
+  font:10px var(--mono);
+  padding:1px 5px;
+  border:1px solid var(--border-s);
+  border-radius:2px;
+  background:var(--surface-2);
+  color:var(--t2);
+}
+.cal-drawer .dotsep{color:var(--t4);margin:0 4px;}
+
+.cal-drawer .cal-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 14px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.cal-drawer .cal-hdr-left{display:flex;align-items:center;gap:6px;}
+.cal-drawer .cal-hdr-right{display:flex;align-items:center;gap:8px;}
+.cal-drawer .icon-btn{
+  width:28px;height:28px;
+  border:1px solid var(--border-s);background:var(--surface);
+  border-radius:3px;color:var(--t3);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font:600 14px var(--font);line-height:1;
+  padding:0;
+}
+.cal-drawer .icon-btn:hover{background:var(--surface-2);color:var(--t1);}
+.cal-drawer .cal-close{font-size:18px;font-weight:400;}
+.cal-drawer .cal-today{
+  height:28px;padding:0 11px;border-radius:3px;
+  border:1px solid var(--accent-border);background:var(--accent-dim);
+  color:var(--accent);font:600 11.5px var(--font);letter-spacing:.02em;
+  cursor:pointer;
+}
+.cal-drawer .cal-today:hover{background:rgba(20,168,154,.22);}
+.cal-drawer .cal-date{display:flex;align-items:baseline;gap:6px;margin-left:8px;}
+.cal-drawer .cal-date-day{font:600 10px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--t4);}
+.cal-drawer .cal-date-num{font-size:14px;font-weight:600;color:var(--t1);letter-spacing:-.2px;}
+
+.cal-drawer .zoom-range{
+  width:84px;height:18px;
+  appearance:none;background:transparent;cursor:pointer;
+}
+.cal-drawer .zoom-range::-webkit-slider-runnable-track{height:3px;background:var(--surface-3);border-radius:99px;}
+.cal-drawer .zoom-range::-moz-range-track{height:3px;background:var(--surface-3);border-radius:99px;}
+.cal-drawer .zoom-range::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:12px;height:12px;border-radius:50%;
+  background:var(--accent);margin-top:-4.5px;
+  border:2px solid var(--bg-dr);
+}
+.cal-drawer .zoom-range::-moz-range-thumb{
+  width:12px;height:12px;border-radius:50%;
+  background:var(--accent);border:2px solid var(--bg-dr);
+}
+.cal-drawer .snap-btn{
+  height:28px;padding:0 8px;border-radius:3px;
+  border:1px solid var(--border-s);background:var(--surface);
+  color:var(--t3);font:11.5px var(--font);cursor:pointer;
+  display:flex;align-items:center;gap:4px;
+}
+.cal-drawer .snap-btn:hover{background:var(--surface-2);color:var(--t1);}
+.cal-drawer .snap-btn.on{background:var(--accent-dim);color:var(--accent);border-color:var(--accent-border);font-weight:600;}
+.cal-drawer .snap-btn svg{opacity:.85;}
+.cal-drawer .snap-lbl{font:600 10.5px var(--mono);letter-spacing:.02em;}
+
+.cal-drawer .auto-plan-btn{
+  height:28px;padding:0 10px;border-radius:3px;
+  border:1px solid var(--accent-border);background:var(--accent-dim);
+  color:var(--accent);font:600 11.5px var(--font);
+  cursor:pointer;display:flex;align-items:center;gap:5px;
+}
+.cal-drawer .auto-plan-btn:hover:not(:disabled){background:rgba(20,168,154,.22);}
+.cal-drawer .auto-plan-btn:disabled{opacity:.4;cursor:not-allowed;}
+.cal-drawer .auto-plan-btn svg{flex:none;}
+
+.cal-drawer .cal-capacity{padding:10px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.cal-drawer .capacity-row{display:flex;align-items:baseline;gap:6px;margin-bottom:6px;}
+.cal-drawer .capacity-label{font:600 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--t4);}
+.cal-drawer .capacity-val{font-size:13px;font-weight:600;color:var(--t1);margin-left:auto;font-feature-settings:"tnum";}
+.cal-drawer .capacity-val.over{color:#fca5a5;}
+.cal-drawer .capacity-of{font:11px var(--mono);color:var(--t4);}
+.cal-drawer .capacity-bar{height:5px;background:var(--surface);border-radius:99px;overflow:hidden;}
+.cal-drawer .capacity-fill{height:100%;background:linear-gradient(90deg,var(--accent),#1ec7b6);border-radius:99px;transition:width .42s cubic-bezier(.34,1.56,.64,1),background .25s;}
+.cal-drawer .capacity-fill.over{background:linear-gradient(90deg,#ef4444,#f59e0b);}
+
+.cal-drawer .cal-scroll{flex:1;overflow-y:auto;overflow-x:hidden;}
+.cal-drawer .cal-grid-wrap{position:relative;display:grid;grid-template-columns:56px 1fr;}
+.cal-drawer .cal-gutter{position:relative;height:100%;border-right:1px solid var(--border);}
+.cal-drawer .hour-label{
+  position:absolute;left:0;right:0;padding-right:8px;
+  font:500 10px var(--mono);color:var(--t4);text-align:right;
+  transform:translateY(-7px);
+}
+.cal-drawer .cal-grid{position:relative;height:100%;cursor:crosshair;}
+.cal-drawer .hour-line       {position:absolute;left:0;right:0;height:1px;background:var(--border);pointer-events:none;}
+.cal-drawer .halfhour-line   {position:absolute;left:0;right:0;height:1px;background:var(--border);opacity:.5;pointer-events:none;}
+.cal-drawer .quarterhour-line{position:absolute;left:0;right:0;height:1px;background:var(--border);opacity:.25;pointer-events:none;}
+
+.cal-drawer .now-line{
+  position:absolute;left:0;right:8px;height:0;
+  border-top:1.5px solid #ef4444;
+  z-index:5;pointer-events:none;
+}
+.cal-drawer .now-dot{
+  position:absolute;left:-5px;top:-5px;
+  width:9px;height:9px;border-radius:50%;
+  background:#ef4444;box-shadow:0 0 0 2px var(--bg-dr),0 0 12px rgba(239,68,68,.6);
+  animation:cal-now-breathe 2.4s ease-in-out infinite;
+}
+@keyframes cal-now-breathe{
+  0%,100%{box-shadow:0 0 0 2px #0a1916,0 0 8px rgba(239,68,68,.4);transform:scale(1);}
+  50%    {box-shadow:0 0 0 2px #0a1916,0 0 14px rgba(239,68,68,.75);transform:scale(1.12);}
+}
+.cal-drawer .now-time{
+  position:absolute;right:0;top:-16px;
+  font:600 9px var(--mono);color:#ef4444;letter-spacing:.04em;
+  background:var(--bg-dr);padding:1px 4px;border-radius:2px;
+}
+
+.cal-drawer .cal-event{
+  --mass:1;
+  --lift-scale:1.025;
+  --lift-tilt:-0.4deg;
+  position:absolute;left:6px;right:8px;
+  background:color-mix(in srgb,var(--ev-color) 22%,var(--surface));
+  border:1px solid color-mix(in srgb,var(--ev-color) 55%,var(--border-s));
+  border-radius:4px;
+  padding:5px 8px 5px 12px;
+  display:flex;align-items:stretch;
+  cursor:grab;
+  transition:
+    top         calc(.22s + var(--mass) * .14s) cubic-bezier(.34,1.56,.64,1),
+    height      calc(.22s + var(--mass) * .14s) cubic-bezier(.34,1.56,.64,1),
+    transform   calc(.18s + var(--mass) * .08s) cubic-bezier(.34,1.56,.64,1),
+    box-shadow  .15s ease-out,
+    opacity     .12s,
+    filter      .15s;
+  overflow:hidden;
+  box-shadow:0 1px 2px rgba(0,0,0,.35);
+  will-change:transform;
+}
+.cal-drawer .cal-event:hover{box-shadow:0 2px 12px rgba(0,0,0,.45),0 0 0 1px color-mix(in srgb,var(--ev-color) 60%,var(--border-s));z-index:4;}
+.cal-drawer .cal-event:active{cursor:grabbing;}
+.cal-drawer .cal-grid.is-dragging .cal-event{transition:none;}
+.cal-drawer .cal-event-stripe{
+  position:absolute;left:0;top:0;bottom:0;
+  width:3px;background:var(--ev-color);
+}
+.cal-drawer .cal-event-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
+.cal-drawer .cal-event-title{font:500 12px/1.3 var(--font);color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cal-drawer .cal-event-meta{font:10.5px var(--mono);color:var(--t3);display:flex;align-items:center;gap:0;font-feature-settings:"tnum";}
+.cal-drawer .cal-event.is-small{padding-top:2px;padding-bottom:2px;}
+.cal-drawer .cal-event.is-small .cal-event-title{font-size:11px;}
+.cal-drawer .cal-event-resize{
+  position:absolute;left:0;right:0;bottom:0;height:7px;
+  cursor:ns-resize;
+}
+.cal-drawer .cal-event-resize::after{
+  content:'';position:absolute;left:50%;bottom:2px;
+  width:24px;height:2px;transform:translateX(-50%);
+  background:color-mix(in srgb,var(--ev-color) 70%,transparent);
+  border-radius:99px;opacity:0;
+  transition:opacity .12s;
+}
+.cal-drawer .cal-event:hover .cal-event-resize::after{opacity:1;}
+.cal-drawer .cal-event.is-grabbing{
+  transform:scale(var(--lift-scale)) rotate(var(--lift-tilt));
+  box-shadow:
+    0 18px 40px rgba(0,0,0,.55),
+    0 4px 12px rgba(0,0,0,.35),
+    0 0 0 1px color-mix(in srgb,var(--ev-color) 70%,transparent);
+  z-index:9;
+  cursor:grabbing;
+}
+.cal-drawer .cal-event.is-grabbing .cal-event-stripe{
+  box-shadow:0 0 8px color-mix(in srgb,var(--ev-color) 60%,transparent);
+}
+.cal-drawer .cal-event.is-selected{
+  outline:2px solid var(--accent);
+  outline-offset:-2px;
+  z-index:5;
+}
+.cal-drawer .cal-event.is-unscheduling{
+  opacity:.35;
+  transform:scale(.94) rotate(-2deg) !important;
+  outline:2px dashed #ef4444;
+  outline-offset:-2px;
+  filter:grayscale(.5) brightness(.85);
+  box-shadow:0 24px 48px rgba(239,68,68,.25),0 4px 14px rgba(0,0,0,.4);
+}
+.cal-drawer .cal-event.is-dimmed{opacity:.55;}
+.cal-drawer .cal-event.is-settling{
+  animation:cal-event-settle calc(.32s + var(--mass) * .2s) cubic-bezier(.34,1.56,.64,1);
+  z-index:6;
+}
+@keyframes cal-event-settle{
+  0%   {transform:scale(.985) translateY(.5px);box-shadow:0 1px 2px rgba(0,0,0,.35);}
+  35%  {transform:scale(1.018) translateY(-1px);box-shadow:0 8px 22px rgba(0,0,0,.45);}
+  70%  {transform:scale(.998) translateY(.2px);}
+  100% {transform:scale(1)    translateY(0);   box-shadow:0 1px 2px rgba(0,0,0,.35);}
+}
+.cal-drawer .cal-event-resize-top{top:0;bottom:auto;height:7px;}
+.cal-drawer .cal-event-resize-top::after{top:2px;bottom:auto;}
+
+.cal-drawer .work-band{
+  position:absolute;left:0;right:0;
+  background:linear-gradient(180deg,rgba(20,168,154,.045),rgba(20,168,154,.025));
+  border-top:1px dashed rgba(20,168,154,.18);
+  border-bottom:1px dashed rgba(20,168,154,.18);
+  pointer-events:none;
+}
+
+.cal-drawer .hover-line{
+  position:absolute;left:0;right:8px;height:0;
+  border-top:1px dashed rgba(20,168,154,.45);
+  pointer-events:none;z-index:3;
+  animation:cal-hover-fade-in .14s ease-out;
+}
+@keyframes cal-hover-fade-in{
+  from{opacity:0;transform:translateY(-2px);}
+  to  {opacity:1;transform:translateY(0);}
+}
+.cal-drawer .hover-time{
+  position:absolute;right:0;top:-7px;
+  font:600 9px var(--mono);color:var(--accent);
+  background:var(--bg-dr);padding:1px 5px;border-radius:2px;
+  border:1px solid var(--accent-border);
+}
+
+.cal-drawer .snap-guide{
+  position:absolute;left:6px;right:8px;
+  border:1.5px dashed var(--accent-border);
+  border-radius:4px;
+  background:linear-gradient(180deg,rgba(20,168,154,.06),rgba(20,168,154,.02));
+  pointer-events:none;
+  z-index:4;
+  animation:cal-snap-guide-breathe 1.6s ease-in-out infinite;
+}
+@keyframes cal-snap-guide-breathe{
+  0%,100%{opacity:.55;}
+  50%    {opacity:.9;}
+}
+
+.cal-drawer .snap-pulse{
+  position:absolute;left:0;right:8px;height:0;
+  border-top:1px solid var(--accent);
+  pointer-events:none;z-index:7;
+  animation:cal-snap-pulse-out .24s cubic-bezier(.2,.7,.2,1) forwards;
+}
+@keyframes cal-snap-pulse-out{
+  0%  {opacity:0;  transform:scaleX(.6);filter:drop-shadow(0 0 6px #14a89a);}
+  20% {opacity:.9; transform:scaleX(1); filter:drop-shadow(0 0 8px #14a89a);}
+  100%{opacity:0;  transform:scaleX(1); filter:none;}
+}
+
+.cal-drawer .drag-tip{
+  position:absolute;right:14px;
+  transform:translateY(-50%);
+  background:var(--surface-3);
+  color:var(--t1);
+  font:500 10.5px var(--mono);
+  padding:4px 8px;border-radius:3px;
+  box-shadow:var(--shadow);
+  pointer-events:none;
+  z-index:8;
+  white-space:nowrap;
+  font-feature-settings:"tnum";
+}
+
+.cal-drawer .cal-foot{
+  flex-shrink:0;
+  padding:9px 14px;
+  border-top:1px solid var(--border);
+  font-size:11px;color:var(--t4);
+  background:var(--bg-side);
+}
+
+/* Floating drag ghost — lives outside the drawer (it follows the cursor
+   anywhere on the page during inbox→calendar drags). */
+.drag-ghost{
+  position:fixed;z-index:1000;pointer-events:none;
+  display:flex;align-items:center;gap:8px;
+  padding:7px 10px;border-radius:4px;
+  background:#10201d;
+  border:1px solid rgba(20,168,154,.36);
+  box-shadow:0 8px 32px rgba(0,0,0,.6),0 0 0 4px rgba(20,168,154,.14);
+  max-width:280px;
+  transform:rotate(-1.5deg);
+  font-family:'Geist',system-ui,sans-serif;
+}
+.drag-ghost-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+.drag-ghost-title{font-size:12px;color:#e6fffb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.drag-ghost-est{font:10px 'Geist Mono',ui-monospace,monospace;color:#66837c;margin-left:auto;}
+
+/* topbar toggle button active state */
+.tb-btn.cal-toggle.active{background:var(--accent-dim);color:var(--accent);border-color:var(--accent-border);}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   POLISH LAYER — feel-first refinements (see polish-review.html)
+   Phases: 1 cursor+press · 2 easing+motion · 3 optimistic+haptic+scroll
+   ·       4 geometry · 5 cards · 6 empty · 7 springs · 8 discovery
+   Last-rule-wins; scoped here so the entire pass is one diff.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* Single house easing curves. Applied everywhere via the polish layer. */
+  --ease-out: cubic-bezier(.2, 0, 0, 1);                /* soft landing */
+  --ease-settle: cubic-bezier(.34, 1.56, .64, 1);       /* 5% overshoot */
+  --ease-stiff-out: cubic-bezier(.4, 0, 1, 1);          /* fast exit (drawer close) */
+}
+
+/* ── 1 · cursor language ─────────────────────────────────────────────── */
+.card,.scard{cursor:grab}
+.card.dragging,.scard.is-dragging{cursor:grabbing}
+.card.blocked{cursor:not-allowed}
+.card-add-zone,.card-add-zone button{cursor:copy}
+
+/* ── 1 · press-down (~80 ms scale to .97 on every clickable) ─────────── */
+.card,.scard,.tb-btn,.tb-icon-btn,.tb-btn-group .tb-btn,
+.fdd-item,.lnav-item,.project-pill,.col-add,.col-groupby,
+.bulk-check,.card-chk,.scard-sub-chk,.card-meta-btn,.card-proj-chv,
+.tax-btn,.dr-act-btn,.side-collapse,.grp-add-btn,
+.inbox-capture button,.card-add-zone button,.grp-dd-item,
+.confirm-acts button,.del-card-hdr,.del-task-title{
+  transition: transform .08s var(--ease-out),
+              box-shadow .14s var(--ease-out),
+              background-color .12s var(--ease-out),
+              border-color .12s var(--ease-out),
+              color .12s var(--ease-out);
+}
+.card:active,.scard:active,.tb-btn:active,.tb-icon-btn:active,
+.tb-btn-group .tb-btn:active,.fdd-item:active,.lnav-item:active,
+.project-pill:active,.col-add:active,.col-groupby:active,
+.bulk-check:active,.card-chk:active,.scard-sub-chk:active,
+.card-meta-btn:active,.card-proj-chv:active,.tax-btn:active,
+.dr-act-btn:active,.side-collapse:active,.grp-add-btn:active,
+.inbox-capture button:active,.card-add-zone button:active,
+.grp-dd-item:active,.confirm-acts button:active,
+.del-card-hdr:active,.del-task-title:active{
+  transform: scale(.97);
+}
+/* Combine the existing card hover lift with the press compress. */
+.card:hover:active{transform: translateY(-1px) scale(.97)}
+
+/* ── 2 · easing & motion polish (re-declare existing keyframes) ─────── */
+
+/* Spawn: card arrives from above + scale-settle. Replaces purple-shadow
+   notification ping. */
+@keyframes spawn-pulse{
+  0%   {opacity:0; transform: scale(.94) translateY(-4px)}
+  60%  {opacity:1; transform: scale(1.02) translateY(0)}
+  100% {opacity:1; transform: scale(1)    translateY(0)}
+}
+.card.spawning{animation: spawn-pulse .42s var(--ease-settle)}
+
+/* Modal & popover entrance: scale-from-origin instead of slide-from-above. */
+@keyframes su   {from{opacity:0;transform:scale(.96)} to{opacity:1;transform:scale(1)}}
+@keyframes popIn{from{opacity:0;transform:scale(.96)} to{opacity:1;transform:scale(1)}}
+.palette {animation: su    .18s var(--ease-settle); transform-origin: center top}
+.card-pop{animation: popIn .14s var(--ease-settle); transform-origin: top left}
+
+/* Drawer asymmetric: slow in, fast out (Things-style). */
+.drawer{transition: transform .22s var(--ease-out)}
+.drawer:not(.open){transition: transform .15s var(--ease-stiff-out)}
+
+/* Drop preview pinned to house easing. */
+.drop-ph,.drop-ph-sm,.drop-ph-preview{animation-timing-function: var(--ease-out)}
+
+/* Strike-through that DRAWS rather than appears (1q). */
+.card-title.done,
+.scard-title.done,
+.scard-sub-title.done{
+  text-decoration: none !important;
+  position: relative;
+  color: var(--t4);
+  transition: color .25s var(--ease-out);
+}
+.card-title.done::after,
+.scard-title.done::after,
+.scard-sub-title.done::after{
+  content: '';
+  position: absolute;
+  left: 0; top: 50%;
+  height: 1px; background: currentColor;
+  transform-origin: left center;
+  animation: strike-draw .22s var(--ease-out) both;
+  pointer-events: none;
+}
+@keyframes strike-draw{from{width:0} to{width:100%}}
+
+/* ── 3 · scroll containment (no chained scroll-bubbling, calmer edges) ─ */
+.col-body,.stack-inner,.lnav,.settings-scroll,.dr-body,.timeline-scroll,
+.project-list,.side-panel .col-body{
+  overscroll-behavior: contain;
+}
+
+/* ── 4 · geometry tokens (radius / padding / type / gap / shadow) ───── */
+
+/* Default (minimal) "look" picks up a 6px radius — soft Things-style.
+   Sharp / glass / soft variants stay intact via existing rules. */
+body[data-look="minimal"]{--rk: 6px}
+
+/* (Reverted: card padding, title size, chip font sizes, chip icon sizes —
+   user prefers the original tighter task type scale.) */
+.grp-name{font-size: 12px; font-weight: 700}
+.lnav-item{font-size: 13px}
+.tb-btn{font-size: 12px}
+
+/* Calmer list rhythm — 3 px gap → 6 px (per density). */
+.col-body{gap: 6px}
+body[data-density="compact"] .col-body{gap: 3px}
+body[data-density="airy"]    .col-body{gap: 10px}
+
+/* Soften & widen the dark-mode shadow so cards float instead of press. */
+body[data-theme="dark"]{
+  --shadow: 0 1px 2px rgba(0,0,0,.25), 0 8px 24px rgba(0,0,0,.18);
+  --shadow-hover: 0 2px 6px rgba(0,0,0,.30), 0 12px 32px rgba(0,0,0,.24);
+}
+
+/* Topbar logo: drop the indigo→violet gradient that mismatched the teal palette. */
+.tb-icon{background: var(--accent); border-radius: var(--rk-pill, 6px)}
+
+/* ── 5 · card refinements ───────────────────────────────────────────── */
+
+/* 5a · Chip taming: empty placeholders fade in only on hover. The slot
+   stays in flow (no jumpy reflow) — only its opacity changes. Active
+   popovers force visible so the chip stays anchored while editing. */
+.card .card-meta.empty{opacity: 0; transition: opacity .15s var(--ease-out)}
+.card:hover .card-meta.empty,
+.card .card-meta-btn.act .card-meta.empty,
+.card.focused .card-meta.empty{opacity: 1}
+
+/* (Reverted: 18 px checkbox upsize + fill/tick keyframes — user prefers
+   the existing CheckGlyph spring at original sizes.) */
+
+/* 5c · Focus ring sits OUTSIDE the card border (was inset → muddy). */
+.card.focused{outline: 2px solid var(--accent); outline-offset: 2px}
+
+/* 5d · Done-state title transitions softly (paired with strike-draw in §2). */
+.card-title{transition: color .25s var(--ease-out)}
+
+/* ── 6 · Designed empty states (replaces flat "Nothing here yet.") ───── */
+.es{
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 48px 20px 36px;
+  color: var(--t3); gap: 6px;
+  animation: es-in .35s var(--ease-out);
+}
+.es-compact{padding: 24px 16px 20px}
+.es .es-icon{
+  display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; margin-bottom: 6px;
+  color: var(--t4); opacity: .7;
+}
+.es .es-icon svg{width: 28px; height: 28px}
+.es .es-title{font-size: var(--fs-md, 15px); font-weight: 600; color: var(--t1); letter-spacing: -.005em}
+.es .es-hint{font-size: var(--fs-xs, 11.5px); color: var(--t3); line-height: 1.5; max-width: 240px}
+.es .es-hint kbd{
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  background: var(--surface-2); border: 1px solid var(--border-s);
+  border-radius: 3px; padding: 1px 6px; color: var(--t2); margin: 0 1px;
+}
+@keyframes es-in{from{opacity: 0; transform: translateY(4px)} to{opacity: 1; transform: translateY(0)}}
+
+/* Compact mode for narrow Inbox column where the 48px padding is too much. */
+.side-panel .es{padding: 32px 12px 20px}
+.side-panel .es-icon{width: 32px; height: 32px}
+.side-panel .es-icon svg{width: 24px; height: 24px}
+.side-panel .es .es-hint{font-size: 11px; max-width: 180px}
+
+/* ── 7 · Hover anticipation: neighbours subtly lean away ─────────────── */
+.col-body .card,.col-body .scard,.list-view .card{
+  transition: transform .18s var(--ease-out), box-shadow .18s var(--ease-out);
+}
+.col-body .card:hover,.col-body .card:has(+ .card:hover),
+.list-view .card:hover,.list-view .card:has(+ .card:hover){
+  transform: translateY(-1px);
+}
+.col-body .card:hover + .card,.list-view .card:hover + .card{
+  transform: translateY(1px);
+}
+
+/* ── 7 · Ambient breathing on the Today badge ────────────────────────── */
+.col-today-badge{
+  background: var(--warning-bg, color-mix(in srgb, #f59e0b 14%, transparent));
+  color: var(--warning, #f59e0b);
+  animation: today-breathe 4s ease-in-out infinite;
+}
+@keyframes today-breathe{0%,100%{opacity: .85} 50%{opacity: 1}}
+
+/* Subtle warm tint on the Today column body — gives Today its own place. */
+.col.is-today{
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--warning, #f59e0b) 4%, var(--bg)) 0%,
+    var(--bg) 220px);
+}
+
+/* ── 7 · Number ticker animation (used by <Tick/> component) ─────────── */
+.tick-num{display: inline-block; position: relative}
+.tick-num > span{display: inline-block; animation: tick-up .26s var(--ease-out) both}
+.tick-num > span.down{animation-name: tick-down}
+@keyframes tick-up  {from{opacity: 0; transform: translateY(8px)}  to{opacity: 1; transform: translateY(0)}}
+@keyframes tick-down{from{opacity: 0; transform: translateY(-8px)} to{opacity: 1; transform: translateY(0)}}
+
+/* ── 8a · Quick Entry overlay (Ctrl+Space) ──────────────────────────── */
+.qe-backdrop{
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(2px);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 18vh;
+}
+.qe-panel{
+  width: 540px; max-width: calc(100vw - 32px);
+  background: var(--surface); border: 1px solid var(--border-s);
+  border-radius: 10px; box-shadow: var(--shadow-lg);
+  padding: 18px 20px 14px; display: flex; flex-direction: column; gap: 12px;
+}
+.qe-input{
+  font: 18px var(--font); font-weight: 500;
+  background: transparent; border: none; outline: none;
+  color: var(--t1); width: 100%;
+  padding: 4px 0; border-bottom: 1px solid var(--border);
+}
+.qe-input::placeholder{color: var(--t4)}
+.qe-meta{
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.qe-target{
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500; color: var(--t3);
+  background: var(--surface-2); border: 1px solid var(--border-s);
+  border-radius: 99px; padding: 4px 10px;
+}
+.qe-target.qe-target-dated{
+  color: var(--accent); background: var(--accent-dim); border-color: var(--accent-border);
+}
+.qe-help{font-size: 11px; color: var(--t4); flex: 1; text-align: right; min-width: 200px}
+.qe-help kbd{
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  background: var(--surface-2); border: 1px solid var(--border-s);
+  border-radius: 3px; padding: 1px 5px; color: var(--t2); margin: 0 1px;
+}
+.qe-help em{color: var(--t3); font-style: italic}
+
+/* ── 8c · Project completion ring (replaces horizontal bar) ─────────── */
+.proj-ring{transform: rotate(-90deg); flex-shrink: 0}
+.proj-ring-track{fill: none; stroke: var(--surface-3); stroke-width: 2.5}
+.proj-ring-fill{
+  fill: none; stroke: var(--accent); stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 50.27;
+  transition: stroke-dashoffset .55s var(--ease-settle);
+}
+.card-proj-stat{display: flex; align-items: center; gap: 7px; margin: 0 0 6px}
+/* Hide the legacy bar in case any view still references it. */
+.card-proj-prog{display: none}
+
+/* ── 8d · Sundries ──────────────────────────────────────────────────── */
+
+/* Inbox capture +: ghost instead of bright accent square. */
+.inbox-capture button{
+  background: transparent; color: var(--accent);
+  border: 1px solid var(--border-s);
+}
+.inbox-capture button:hover{
+  background: var(--accent-dim); border-color: var(--accent-border);
+}
+
+/* Card-del × moved into hover-only via opacity (existing) — soften further. */
+.card-del{opacity: 0; transition: opacity .15s var(--ease-out)}
+.card:hover .card-del{opacity: .55}
+.card .card-del:hover{opacity: 1; background: var(--danger-bg, rgba(239,68,68,.14)); color: var(--danger, #ef4444)}
+
+/* Spacer for the standardised hit-target floor — checkbox stays 18px visual
+   but the click area is 28×28 (well clear of misclicks). */
+.card-chk,.bulk-check{position: relative}
+.card-chk::before,.bulk-check::before{
+  content:''; position: absolute; inset: -8px;
+}
+
+/* ── Drag-and-drop port: §08 "Drag to reorder" from the Button Physics plan
+   ────────────────────────────────────────────────────────────────────────
+   Spec: lift = scale 1.04 + shadow 0→24px (no rotation); siblings clear
+   on `spring.snap` (~280 ms cubic-bezier(.2,.7,.2,1)). The source card
+   itself reads as the lifted thing — not a dashed placeholder — so we
+   make it invisible while the DragOverlay (whose visual we tune below)
+   carries the lift. The slot still holds layout, so siblings shift as
+   the cursor crosses midpoints. */
+.dnd-overlay-ghost{
+  transform: scale(1.04);                          /* drop the rotate(-1.5deg) tilt */
+  filter:
+    drop-shadow(0 12px 28px rgba(0,0,0,.18))
+    drop-shadow(0 2px 6px rgba(0,0,0,.10));        /* §08's two-layer shadow */
+  cursor: grabbing;
+  pointer-events: none;
+}
+
+/* Source during drag: invisible card body (the lifted overlay carries the
+   visual) PLUS a thin accent pill at the centre of the slot as the actual
+   drop preview. The slot still occupies its full height so @dnd-kit's
+   sibling-shift math stays correct, and the pill moves with the slot as
+   the sortable strategy snaps the insertion point between cards. No
+   compromise on §08's "card lifts off" feel; a clear "land here" signal. */
+/* Source during drag: invisible body, slot still occupies layout space so
+   @dnd-kit's sibling-shift math stays correct. No marker on the source —
+   the destination card carries the drop-line indicator (below). */
+body .card.dragging,
+body .scard.dragging,
+body .scard.is-dragging{
+  background: transparent !important;
+  backdrop-filter: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  opacity: 1;
+  position: relative;
+}
+body .card.dragging > *,
+body .scard.dragging > *,
+body .scard.is-dragging > *{visibility: hidden}
+
+/* Drop preview = a real card-sized gap, not a glowing line. The over-card
+   gets margin-top or margin-bottom equal to the dragged source's height,
+   so the cards above/below visually clear out and the lifted card visibly
+   has a slot to land in. Direction is set from App.jsx pointer logic
+   ("before" → gap above, "after" → gap below). The --drag-card-h variable
+   is set on <body> at dragStart from the source card's measured height.
+   Transitions are inherited from the §08 sibling rule above. */
+body .card[data-drop-line="before"],
+body .scard[data-drop-line="before"]{
+  margin-top: calc(var(--drag-card-h, 40px) + 6px);
+}
+body .card[data-drop-line="after"],
+body .scard[data-drop-line="after"]{
+  margin-bottom: calc(var(--drag-card-h, 40px) + 6px);
+}
+
+/* Siblings shift on `spring.snap` — 280 ms cubic-bezier(.2,.7,.2,1).
+   Inline transition is set by @dnd-kit's useSortable, so we override
+   with !important. Only applies to non-dragging cards. Includes
+   margin-top/-bottom so the cross-column drop gap (data-drop-line) opens
+   and closes smoothly. */
+.col-body .card:not(.dragging),
+.stack-inner .scard:not(.dragging):not(.is-dragging){
+  transition:
+    transform 280ms cubic-bezier(.2,.7,.2,1),
+    margin-top 280ms cubic-bezier(.2,.7,.2,1),
+    margin-bottom 280ms cubic-bezier(.2,.7,.2,1),
+    box-shadow .14s var(--ease-out),
+    opacity .12s var(--ease-out) !important;
+}
+
+/* ── §09 port — Cross-column drop arming ─────────────────────────────────
+   Spec: column tint ~8% accent · 1px dashed accent border · header text
+   shifts to accent when armed · soft 150 ms cross-fade.
+
+   ARCHITECTURE: dnd-kit's collision detection resolves over-target to the
+   nearest CARD when the column has any cards in it (so the column-level
+   `useDroppable.isOver` is false). To highlight the destination column
+   regardless, App.jsx mirrors the active over-column's key onto
+   `body.dataset.armedCol` from the DragOverContext. Each .col / inbox
+   wrapper carries `data-col-key={colKey}` so we can match by attr.
+   Dragging within the same column is suppressed via :not([data-from-col=...]). */
+.col,.side-panel.inbox-col{
+  transition:
+    background .15s var(--ease-out),
+    border-color .15s var(--ease-out),
+    box-shadow .15s var(--ease-out);
+}
+/* Day-column: armed when body's armed-col attr matches AND fromCol differs */
+body[data-armed-col] .col[data-col-key]{
+  /* baseline so transitions feel right when arming arrives */
+}
+body[data-armed-col="2000-01-01"] { /* dummy keep-rule to anchor attr selector */ }
+
+/* Generic match (works for any value) — armed col gets accent treatment.
+   We CSS-target the column with matching data-col-key to body's armed-col. */
+.col[data-col-key].col-armed,
+.side-panel.inbox-col.col-armed,
+/* Fallback for dnd-kit's empty-column droppable (no cards) — col-body
+   itself receives .drag-over from useDroppable, climb back to the parent. */
+.col:has(> .col-body.drag-over),
+.side-panel.inbox-col:has(.col-body.drag-over){
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg)) !important;
+  border-color: var(--accent) !important;
+  box-shadow: inset 0 0 0 1.5px var(--accent) !important;
+}
+.col.col-armed .col-hdr,
+.col:has(> .col-body.drag-over) .col-hdr{background: transparent !important}
+.col.col-armed .col-day,
+.col.col-armed .col-date,
+.col.col-armed .col-cnt,
+.col:has(> .col-body.drag-over) .col-day,
+.col:has(> .col-body.drag-over) .col-date,
+.col:has(> .col-body.drag-over) .col-cnt{color: var(--accent) !important}
+
+/* Inner ring on the actual drop body — covers the empty-column path. */
+.col-body.drag-over,
+.col-armed > .col-body{
+  outline: 1px dashed var(--accent);
+  outline-offset: -4px;
+  border-radius: 6px;
+}
+
+/* Inbox armed treatment */
+.side-panel.inbox-col.col-armed,
+.side-panel.inbox-col:has(.col-body.drag-over){
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-inbox)) !important;
+}
+.side-panel.inbox-col.col-armed .inbox-title,
+.side-panel.inbox-col.col-armed .inbox-cnt,
+.side-panel.inbox-col:has(.col-body.drag-over) .inbox-title,
+.side-panel.inbox-col:has(.col-body.drag-over) .inbox-cnt{color: var(--accent) !important}

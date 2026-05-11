@@ -4,8 +4,12 @@ import { I } from '../utils/icons.jsx';
 import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from '../utils/colors.js';
 import { groupTasksBy, getGLabel, getGColor } from '../utils/grouping.js';
 import { TaskCard } from './TaskCard.jsx';
+import { EmptyState } from './EmptyState.jsx';
+import { Tick } from './Tick.jsx';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
+import { useTapSpring } from '../hooks/useTapSpring.js';
+import { useMagnet } from '../hooks/useMagnet.js';
 
 // Wraps a column or group body so dnd-kit can resolve drops onto empty/padded
 // areas (where there's no card under the cursor) to a useful target. Splats
@@ -30,6 +34,8 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
   blockingCountFor, taskTitleById,
   cardExtras, className='', style }) {
+  const addTap = useTapSpring();
+  const [addBtnRef, addMagnet] = useMagnet({ range: 80, pull: 0.4 });
   const dow = date.getDay();
   const colKey = D.str(date);
   const past = D.isPast(colKey);
@@ -60,6 +66,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
   return (
     <div className={`col${past?' is-past':''}${today?' is-today':''}${className?` ${className}`:''}`}
       style={style}
+      data-col-key={colKey}
       data-screen-label={`${DAY_S[dow]} ${date.getDate()}`}>
       <div className="col-hdr">
         <div className="col-day">{DAY_S[dow]}</div>
@@ -68,7 +75,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
           {today && <span className="col-today-badge">Today</span>}
         </div>
         <div className="col-meta">
-          <span className="col-cnt">{doneCount}/{totalCount}</span>
+          <span className="col-cnt"><Tick value={doneCount}/>/<Tick value={totalCount}/></span>
           <div className="col-prog"><div className="col-prog-fill" style={{width:`${pct}%`}}/></div>
         </div>
       </div>
@@ -207,9 +214,17 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, grou
         )}
         </SortableContext>
       </ColDroppable>
-      <button className="col-add" onClick={()=>onAdd(colKey,date)}>
-        <I.Plus/> Add task
-      </button>
+      <div className="col-add-magnet-zone"
+           onPointerMove={addMagnet.onPointerMove}
+           onPointerLeave={addMagnet.onPointerLeave}>
+        <button className="col-add no-press"
+                ref={addBtnRef}
+                {...addTap.props}
+                style={{ transform: `${addMagnet.transform} scale(${addTap.scale})` }}
+                onClick={()=>onAdd(colKey,date)}>
+          <I.Plus/> Add task
+        </button>
+      </div>
     </div>
   );
 }
@@ -266,7 +281,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
   ];
   const activeLabel = views.find(([v])=>v===panelView)?.[1] || 'Inbox';
   return (
-    <div className={`side-panel inbox-col${collapsed?' collapsed':''}`} style={{width, minWidth:collapsed?34:132, left:0}}>
+    <div className={`side-panel inbox-col${collapsed?' collapsed':''}`} data-col-key="inbox" style={{width, minWidth:collapsed?34:132, left:0}}>
       <div className="inbox-hdr">
         <div className="side-panel-tools">
           <div style={{position:'relative'}}>
@@ -338,7 +353,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
           )}
           <button className="side-collapse" onClick={onCollapse} title={collapsed?'Expand inbox':'Collapse inbox'}><I.Chv d={collapsed?'r':'l'}/></button>
         </div>
-        <div className="inbox-cnt">{tasks.length}</div>
+        <div className="inbox-cnt"><Tick value={tasks.length}/></div>
       </div>
       <div className="inbox-capture">
         <input placeholder="Capture…" value={cap} onChange={e=>setCap(e.target.value)}
@@ -348,7 +363,7 @@ function InboxCol({ tasks, theme, focusedCardId, selectedIds, renamingId, spawni
       <ColDroppable id="col:inbox" data={{ kind: 'column', date: null }} className="col-body"
         style={{flex:1}}
         onDoubleClick={e=>{ if(insertable && !e.target.closest('.card,.card-add-zone,.grp-hdr')) onAdd(null,null,'Untitled'); }}>
-        {tasks.length===0 && <div className="list-empty">Nothing here yet.</div>}
+        {tasks.length===0 && <EmptyState kind="inbox" title="Inbox is clear" hint={<>Capture anything — type above, or press <kbd>Ctrl</kbd>+<kbd>Space</kbd> from anywhere.</>}/>}
         <SortableContext items={inboxSortableIds} strategy={verticalListSortingStrategy}>
         {(()=>{
           const customGroups = cardExtras?.customGroups || [];

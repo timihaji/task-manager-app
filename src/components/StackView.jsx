@@ -5,6 +5,10 @@ import { lifeAreaPalette } from '../utils/colors.js';
 import { PriBars } from './PriBars.jsx';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useTapSpring } from '../hooks/useTapSpring.js';
+import { SPRING } from '../hooks/springs.js';
+import { useMagnet } from '../hooks/useMagnet.js';
+import { CheckGlyph } from './CheckGlyph.jsx';
 
 const PRI_RANK = { p1:0, p2:1, p3:2, p4:3 };
 const COMPLETE_ANIM_MS = 320;
@@ -194,6 +198,9 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
                     sortableIds,
                     focused, renaming, onFocus, onContextMenu, onRename, onStartRename, onRenameDone,
                     selected, onSelect }) {
+  const doneTap = useTapSpring({ pressedScale: 0.9, releaseKick: 3.0, spring: SPRING.bounce });
+  const upTap = useTapSpring();
+  const downTap = useTapSpring();
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
   } = useSortable({
@@ -266,18 +273,24 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
 
       <div className="scard-actions" onClick={e=>e.stopPropagation()}>
         {isNow && (
-          <button className="scard-act-btn scard-act-done" title="Mark done (Enter)"
+          <button className="scard-act-btn scard-act-done no-press" title="Mark done (Enter)"
+                  {...doneTap.props}
+                  style={{ transform: `scale(${doneTap.scale})` }}
                   onClick={()=>onComplete?.(task.id)}>
             ✓ Done
           </button>
         )}
-        <button className="scard-act-btn scard-act-icon" title="Send to top"
+        <button className="scard-act-btn scard-act-icon no-press" title="Send to top"
                 disabled={isFirst}
+                {...upTap.props}
+                style={{ transform: `scale(${upTap.scale})` }}
                 onClick={()=>onSendToTop?.(task.id)} aria-label="Send to top">
           <I.ArrUp/>
         </button>
-        <button className="scard-act-btn scard-act-icon" title="Send to bottom"
+        <button className="scard-act-btn scard-act-icon no-press" title="Send to bottom"
                 disabled={isLast}
+                {...downTap.props}
+                style={{ transform: `scale(${downTap.scale})` }}
                 onClick={()=>onSendToBottom?.(task.id)} aria-label="Send to bottom">
           <I.ArrDown/>
         </button>
@@ -289,8 +302,10 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
             (button + checkbox + Enter). Hide it on Now to keep the gesture
             unambiguous; cards 2+ still show the checkbox. */}
         {!isNow && (
-          <button className="scard-chk" title="Mark complete"
-                  onClick={(e)=>{e.stopPropagation(); onComplete?.(task.id);}}/>
+          <button className="scard-chk cg-host no-press" title="Mark complete"
+                  onClick={(e)=>{e.stopPropagation(); onComplete?.(task.id);}}>
+            <CheckGlyph done={!!task.done} size={16}/>
+          </button>
         )}
         {renaming ? (
           <input ref={inputRef} className="scard-title-input" value={draft}
@@ -333,8 +348,11 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
         <div className="scard-subs" onClick={e=>e.stopPropagation()}>
           {[...openSubs, ...doneSubs].map(c => (
             <div key={c.id} className="scard-sub" onClick={()=>onOpen?.(c.id)}>
-              <div className={`scard-sub-chk${c.done?' done':''}`}
-                   onClick={(e)=>{e.stopPropagation(); onSubToggle?.(c);}}/>
+              <span className={`scard-sub-chk cg-host${c.done?' done':''}`}
+                   onClick={(e)=>{e.stopPropagation(); onSubToggle?.(c);}}
+                   style={{display:'inline-flex',cursor:'pointer'}}>
+                <CheckGlyph done={!!c.done} size={14}/>
+              </span>
               <div className={`scard-sub-title${c.done?' done':''}`}>{c.title}</div>
               {c.date && <span className="scard-sub-meta">{c.date}</span>}
               {c.timeEstimate && <span className="scard-sub-meta">{c.timeEstimate}</span>}
@@ -378,6 +396,8 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                              navCollapsed, onToggleNav,
                              selectedIds, onSelect, onMarqueeStart,
                              renamingGroupId, onStartGroupRename, onGroupRenameDone, onRenameGroup }) {
+  const addTap = useTapSpring();
+  const [addBtnRef, addMagnet] = useMagnet({ range: 110, pull: 0.35 });
   const sortMode = tweaks.stackSort || 'smart';
   // Stack-view-specific manual order, persisted via tweaks → user_settings.
   // Intentionally separate from `task.position` (which drives week/day/inbox
@@ -548,11 +568,18 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
            }}>
         <div className={`stack-inner${showSpine ? '' : ' no-spine'}`}>
           {onAddNew && (
-            <button className="stack-add-top"
-                    onClick={(e)=>{ e.stopPropagation(); onAddNew(); }}
-                    title="Add new task at top">
-              <I.Plus/> New task
-            </button>
+            <div className="stack-add-magnet-zone"
+                 onPointerMove={addMagnet.onPointerMove}
+                 onPointerLeave={addMagnet.onPointerLeave}>
+              <button className="stack-add-top no-press"
+                      ref={addBtnRef}
+                      {...addTap.props}
+                      style={{ transform: `${addMagnet.transform} scale(${addTap.scale})` }}
+                      onClick={(e)=>{ e.stopPropagation(); onAddNew(); }}
+                      title="Add new task at top">
+                <I.Plus/> New task
+              </button>
+            </div>
           )}
           {sorted.length === 0 && (
             <div className="empty">

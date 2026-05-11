@@ -3,6 +3,8 @@ import { PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREA_NAMES, daysSince } from
 import { I } from '../utils/icons.jsx';
 import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from '../utils/colors.js';
 import { PRI_INFO } from '../utils/constants.js';
+import { CheckGlyph } from './CheckGlyph.jsx';
+import { EmptyState } from './EmptyState.jsx';
 
 function ListTaskItem({ task, focused, selected, renaming, onOpen, onFocus, onSelect, onRename, onRenameDone }) {
   const [draft,setDraft] = useState(task.title || '');
@@ -18,7 +20,7 @@ function ListTaskItem({ task, focused, selected, renaming, onOpen, onFocus, onSe
     <div className={`list-item${focused?' focused':''}${selected?' selected':''}`} data-list-id={task.id} onMouseEnter={()=>onFocus(task.id)} onClick={()=>!renaming&&onFocus(task.id)} onDoubleClick={()=>!renaming&&onOpen(task.id)}>
       <button className={`bulk-check${selected?' on':''}`} title={selected?'Deselect task':'Select task'}
         onClick={e=>{e.stopPropagation();onSelect(task.id);}}>{selected?'✓':''}</button>
-      <div className={`card-chk${task.done?' done':''}`} style={{width:13,height:13,borderRadius:'50%',border:'1.5px solid var(--border-s)',flexShrink:0}}/>
+      <CheckGlyph done={!!task.done} size={13} interactive={false}/>
       {renaming ? (
         <input ref={ref} className="card-title-input" value={draft}
           onClick={e=>e.stopPropagation()}
@@ -48,7 +50,7 @@ function ListView({ title, tasks, onOpen, onFocus, onSelect, selectedIds, focuse
   const shownTasks = tasks.slice(0, renderLimit);
   return <div className="list-view">
     <div className="list-view-title">{title}</div>
-    {tasks.length===0 && <div className="list-empty">Nothing here yet.</div>}
+    {tasks.length===0 && <EmptyState kind="list" title="Nothing here yet" hint="Switch to Calendar or Inbox to capture something."/>}
     {shownTasks.map(t=>(
       <ListTaskItem key={t.id} task={t} focused={focusedCardId===t.id} selected={selectedIds?.has(t.id)} renaming={renamingId===t.id}
         onOpen={onOpen} onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}/>

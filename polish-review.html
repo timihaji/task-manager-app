@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polish review · Task Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#071512;--bg-soft:#0a1816;
+  --surface:#10201d;--surface-2:#1d342f;--surface-3:#243d37;
+  --border:#1d342f;--border-s:#243d37;
+  --t1:#e6fffb;--t2:#c3ddd7;--t3:#8eada6;--t4:#66837c;
+  --accent:#14b8a6;--accent-soft:#2dd4bf;
+  --accent-dim:rgba(20,184,166,.14);
+  --accent-border:rgba(20,184,166,.3);
+  --warning:#f59e0b;--warning-dim:rgba(245,158,11,.14);
+  --danger:#ef4444;
+  --shadow:0 1px 2px rgba(0,0,0,.25),0 8px 24px rgba(0,0,0,.18);
+  --shadow-lg:0 8px 32px rgba(0,0,0,.4);
+  --radius:8px;--radius-sm:6px;--radius-card:6px;
+  --ease-out:cubic-bezier(.2,0,0,1);
+  --ease-settle:cubic-bezier(.34,1.56,.64,1);
+  --ease-stiff:cubic-bezier(.4,0,.2,1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--t1);font-family:'Geist',system-ui,sans-serif;font-size:15.5px;line-height:1.65;-webkit-font-smoothing:antialiased}
+body{background:radial-gradient(ellipse at top,var(--bg-soft) 0%,var(--bg) 60%);min-height:100vh}
+code,pre,.mono{font-family:'Geist Mono',monospace;font-size:.9em}
+::selection{background:var(--accent-dim);color:var(--t1)}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
+::-webkit-scrollbar-thumb:hover{background:var(--surface-3)}
+
+/* Layout */
+.layout{display:grid;grid-template-columns:240px minmax(0,1fr);max-width:1200px;margin:0 auto;padding:0 32px;gap:64px}
+@media (max-width:920px){.layout{grid-template-columns:1fr;gap:24px}.toc{display:none}}
+
+/* TOC */
+.toc{position:sticky;top:0;align-self:start;padding:32px 0;height:100vh;overflow-y:auto;font-size:13px;border-right:1px solid var(--border);padding-right:20px}
+.toc-title{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--t4);margin-bottom:16px;padding-left:12px}
+.toc a{display:block;color:var(--t3);text-decoration:none;padding:5px 12px;border-left:1px solid transparent;transition:color .15s var(--ease-out),border-color .15s var(--ease-out),background .15s var(--ease-out);border-radius:0 4px 4px 0}
+.toc a:hover{color:var(--t1)}
+.toc a.active{color:var(--accent);border-left-color:var(--accent);background:var(--accent-dim)}
+.toc a.sub{padding-left:22px;font-size:12px;color:var(--t4)}
+.toc a.sub.active{color:var(--accent-soft)}
+.toc-section{margin-bottom:18px}
+
+main{padding:48px 0 120px;max-width:780px;min-width:0}
+
+/* Hero */
+.hero{padding:24px 0 64px;border-bottom:1px solid var(--border);margin-bottom:48px}
+.hero-eyebrow{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:18px;display:flex;align-items:center;gap:10px}
+.hero-eyebrow::before{content:'';width:24px;height:1px;background:var(--accent)}
+.hero h1{font-size:46px;font-weight:600;letter-spacing:-.025em;line-height:1.1;margin-bottom:20px;background:linear-gradient(180deg,var(--t1) 0%,var(--t2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero p.lead{font-size:18px;color:var(--t2);line-height:1.55;max-width:620px}
+.hero p.lead em{color:var(--accent-soft);font-style:italic}
+
+/* Sections */
+section{margin:80px 0;scroll-margin-top:24px}
+section h2{font-size:28px;font-weight:600;letter-spacing:-.015em;line-height:1.2;margin-bottom:8px;display:flex;align-items:baseline;gap:14px}
+section h2 .num{color:var(--t4);font-weight:400;font-size:18px;font-family:'Geist Mono',monospace}
+section .lede{color:var(--t3);font-size:15.5px;margin-bottom:32px;max-width:580px;line-height:1.6}
+
+h3{font-size:18px;font-weight:600;margin:40px 0 8px;letter-spacing:-.005em;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+h3 .num{color:var(--t4);font-weight:400;font-size:13px;font-family:'Geist Mono',monospace}
+h3 .effort{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:99px;border:1px solid var(--border-s);color:var(--t4);margin-left:auto}
+h3 .effort.xs{color:#86efac;border-color:rgba(134,239,172,.3);background:rgba(134,239,172,.08)}
+h3 .effort.s{color:var(--accent-soft);border-color:var(--accent-border);background:var(--accent-dim)}
+h3 .effort.m{color:#fcd34d;border-color:rgba(252,211,77,.3);background:rgba(252,211,77,.08)}
+h3 .effort.l{color:#fca5a5;border-color:rgba(252,165,165,.3);background:rgba(252,165,165,.08)}
+
+p{margin-bottom:14px;color:var(--t2)}
+p strong{color:var(--t1);font-weight:600}
+ul,ol{margin:10px 0 14px 24px;color:var(--t2)}
+li{margin-bottom:6px}
+li::marker{color:var(--t4)}
+code{background:var(--surface);padding:1.5px 7px;border-radius:4px;color:var(--t1);border:1px solid var(--border-s);font-size:.86em}
+pre{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:12.5px;line-height:1.55}
+pre code{background:none;border:none;padding:0;color:var(--t2)}
+.kw{color:#5eead4}.str{color:#fcd34d}.num{color:#fca5a5}.com{color:var(--t4);font-style:italic}
+
+a{color:var(--accent-soft);text-decoration:none;border-bottom:1px solid transparent;transition:border-color .15s var(--ease-out)}
+a:hover{border-bottom-color:var(--accent-soft)}
+.file-ref{font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--t4)}
+
+blockquote{border-left:2px solid var(--accent);background:var(--accent-dim);padding:12px 16px;margin:16px 0;border-radius:0 var(--radius-sm) var(--radius-sm) 0;color:var(--t2)}
+
+/* Pull quote / callout */
+.callout{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin:20px 0;font-size:15px;color:var(--t2);line-height:1.6}
+.callout-label{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+
+/* Demo blocks */
+.demo{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin:24px 0;position:relative}
+.demo-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px}
+.demo-label{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:8px}
+.demo-label::before{content:'▸';font-size:8px}
+.demo-instructions{font-size:13px;color:var(--t3);font-style:italic}
+.demo-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch}
+@media (max-width:680px){.demo-row{grid-template-columns:1fr}}
+.demo-col{background:var(--bg-soft);border:1px solid var(--border);border-radius:var(--radius-sm);padding:18px 20px;display:flex;flex-direction:column;gap:14px;min-height:160px}
+.demo-col h4{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.demo-col h4 .dot{width:6px;height:6px;border-radius:99px}
+.demo-col h4.before{color:var(--t4)}
+.demo-col h4.before .dot{background:var(--t4)}
+.demo-col h4.after{color:var(--accent)}
+.demo-col h4.after .dot{background:var(--accent)}
+
+/* Mock task card (used in many demos) */
+.mock-card{background:var(--surface-2);border:1px solid var(--border-s);border-radius:var(--radius-card);padding:11px 14px;cursor:grab;user-select:none;font-size:13.5px;display:flex;align-items:center;gap:11px;position:relative;transition:transform .14s var(--ease-out),box-shadow .14s var(--ease-out);overflow:hidden}
+.mock-card .chk{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--t4);flex-shrink:0;cursor:pointer;position:relative;background:transparent;transition:border-color .15s var(--ease-out)}
+.mock-card .chk:hover{border-color:var(--accent)}
+.mock-card .chk.checked{background:var(--accent);border-color:var(--accent)}
+.mock-card .chk.checked::after{content:'';position:absolute;top:5px;left:4px;width:6.5px;height:3.5px;border-left:1.6px solid #fff;border-bottom:1.6px solid #fff;transform:rotate(-45deg)}
+.mock-card .title{flex:1;color:var(--t1);position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+.mock-card .meta{font-size:10.5px;color:var(--t4);font-family:'Geist Mono',monospace;flex-shrink:0}
+
+/* Section dividers */
+hr{border:none;height:1px;background:linear-gradient(90deg,transparent,var(--border) 30%,var(--border) 70%,transparent);margin:48px 0}
+
+/* Top 5 cards */
+.top5-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:24px 0}
+.top5-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;transition:transform .14s var(--ease-out),box-shadow .14s var(--ease-out),border-color .14s var(--ease-out);cursor:default}
+.top5-card:hover{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--accent-border)}
+.top5-card .num{font-family:'Geist Mono',monospace;font-size:11px;color:var(--accent);margin-bottom:10px;letter-spacing:.06em}
+.top5-card h4{font-size:14.5px;font-weight:600;color:var(--t1);margin-bottom:6px;line-height:1.35}
+.top5-card p{font-size:12.5px;color:var(--t3);margin:0;line-height:1.5}
+
+/* Properties grid (10 properties) */
+.props-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:24px 0}
+.prop{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;transition:border-color .14s var(--ease-out)}
+.prop:hover{border-color:var(--accent-border)}
+.prop .prop-num{font-family:'Geist Mono',monospace;font-size:10px;color:var(--t4);letter-spacing:.06em}
+.prop h5{font-size:13.5px;font-weight:600;color:var(--t1);margin:4px 0 4px}
+.prop p{font-size:12.5px;color:var(--t3);margin:0;line-height:1.5}
+
+/* Buttons */
+button.btn{font-family:inherit;font-size:13px;font-weight:500;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);padding:7px 14px;cursor:pointer;transition:opacity .12s var(--ease-out),transform .08s var(--ease-out);display:inline-flex;align-items:center;gap:6px}
+button.btn:hover{opacity:.9}
+button.btn:active{transform:scale(.97)}
+button.btn-ghost{background:transparent;color:var(--t2);border:1px solid var(--border-s)}
+button.btn-ghost:hover{background:var(--surface);color:var(--t1)}
+button.btn-ghost:active{transform:scale(.97)}
+
+/* Toggle */
+.toggle-row{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--t3);margin-bottom:14px;flex-wrap:wrap}
+.toggle{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:99px;padding:2px}
+.toggle button{background:transparent;border:none;color:var(--t4);font-size:11.5px;font-weight:500;padding:5px 14px;border-radius:99px;cursor:pointer;font-family:inherit;transition:all .15s var(--ease-out)}
+.toggle button.active{background:var(--accent);color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+
+/* Cursor demo */
+.cursor-row{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.cursor-chip{padding:8px 12px;background:var(--surface-2);border:1px solid var(--border-s);border-radius:var(--radius-sm);font-size:12px;color:var(--t2)}
+.cursor-chip[data-c="grab"]{cursor:grab}
+.cursor-chip[data-c="pointer"]{cursor:pointer}
+.cursor-chip[data-c="text"]{cursor:text}
+.cursor-chip[data-c="not-allowed"]{cursor:not-allowed;opacity:.6}
+.cursor-chip[data-c="copy"]{cursor:copy}
+.cursor-chip[data-c="col-resize"]{cursor:col-resize}
+.cursor-chip code{background:var(--bg-soft);font-size:10.5px;margin-left:6px}
+
+/* Strike-through demo */
+.strike-card{padding:12px 14px;background:var(--surface-2);border:1px solid var(--border-s);border-radius:var(--radius-card);display:flex;align-items:center;gap:11px}
+.strike-card .strike-text{position:relative;color:var(--t1);transition:color .25s var(--ease-out)}
+.strike-card .strike-text.done-current{text-decoration:line-through;color:var(--t4)}
+.strike-card .strike-text.done-proposed{color:var(--t4)}
+.strike-card .strike-text.done-proposed::after{content:'';position:absolute;top:50%;left:0;height:1px;background:var(--t4);width:100%;transform-origin:left center;animation:draw-strike .26s var(--ease-out) both}
+@keyframes draw-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+
+/* Spawn demo */
+.spawn-list{display:flex;flex-direction:column;gap:6px;min-height:140px}
+.spawn-card{background:var(--surface-2);border:1px solid var(--border-s);border-radius:var(--radius-card);padding:10px 13px;font-size:13px;color:var(--t1);display:flex;align-items:center;gap:10px}
+.spawn-card .chk{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--t4);flex-shrink:0}
+.spawn-card.spawn-current{animation:spawn-current .7s ease}
+.spawn-card.spawn-proposed{animation:spawn-proposed .35s var(--ease-settle) both}
+@keyframes spawn-current{
+  0%{box-shadow:0 0 0 0 rgba(99,102,241,.6);transform:scale(1.04)}
+  50%{box-shadow:0 0 0 8px rgba(99,102,241,0)}
+  100%{box-shadow:none;transform:scale(1)}
+}
+@keyframes spawn-proposed{
+  from{opacity:0;transform:scale(.92) translateY(-8px)}
+  to{opacity:1;transform:scale(1) translateY(0)}
+}
+
+/* Stagger demo */
+.stagger-list{display:flex;flex-direction:column;gap:5px;min-height:240px;position:relative}
+.stagger-card{background:var(--surface-2);border:1px solid var(--border-s);border-radius:var(--radius-card);padding:10px 13px;font-size:13px;color:var(--t1);display:flex;align-items:center;gap:10px;position:relative}
+.stagger-card.fading{position:absolute;left:0;right:0;z-index:1;pointer-events:none;transition:opacity .35s var(--ease-out),transform .35s var(--ease-out)}
+.stagger-card .chk{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--t4);flex-shrink:0;cursor:pointer}
+.stagger-card .chk:hover{border-color:var(--accent)}
+
+/* Drop landing demo */
+.drop-list{min-height:200px;background:var(--bg-soft);border:1px dashed var(--border-s);border-radius:var(--radius-sm);padding:8px;display:flex;flex-direction:column;gap:5px}
+.drop-list .drop-card{background:var(--surface-2);border:1px solid var(--border-s);border-radius:var(--radius-card);padding:10px 13px;font-size:13px;color:var(--t1)}
+.drop-list .drop-card.dropping-current{animation:drop-current .08s linear both}
+.drop-list .drop-card.dropping-proposed{animation:drop-proposed .6s var(--ease-out) both;transform-origin:top center}
+@keyframes drop-current{from{opacity:0}to{opacity:1}}
+@keyframes drop-proposed{
+  0%   {opacity:0; transform:translateY(-32px) scale(.82)}
+  55%  {opacity:1; transform:translateY(0)     scale(1.10)}
+  75%  {            transform:translateY(0)    scale(.98)}
+  100% {            transform:translateY(0)    scale(1)}
+}
+
+/* Ambient breathing */
+.today-badge{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:4px 10px;border-radius:99px;background:var(--warning-dim);color:var(--warning);border:1px solid rgba(245,158,11,.3);animation:breathe 4s ease-in-out infinite}
+.today-badge::before{content:'★';font-size:11px}
+@keyframes breathe{0%,100%{opacity:.85}50%{opacity:1}}
+
+/* Number ticker */
+.ticker{display:inline-block;background:var(--surface-2);border:1px solid var(--border-s);border-radius:var(--radius-sm);padding:8px 14px;font-family:'Geist Mono',monospace;font-size:18px;font-weight:600;color:var(--t1);min-width:64px;text-align:center;position:relative;overflow:hidden;height:42px;line-height:26px}
+.ticker .ticker-digit{display:inline-block;animation:tick-up .25s var(--ease-out) both}
+.ticker .ticker-digit.down{animation-name:tick-down}
+@keyframes tick-up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes tick-down{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+
+/* Hover anticipation */
+.hover-list{display:flex;flex-direction:column;gap:0}
+.hover-list .hov-card{background:var(--surface-2);border:1px solid var(--border-s);border-radius:var(--radius-card);padding:10px 13px;font-size:13px;color:var(--t1);margin:2px 0;transition:transform .18s var(--ease-out),box-shadow .18s var(--ease-out);position:relative}
+.hover-list.proposed .hov-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:2}
+.hover-list.proposed .hov-card:has(+ .hov-card:hover){transform:translateY(-1px)}
+.hover-list.proposed .hov-card:hover + .hov-card{transform:translateY(1px)}
+
+/* Quick entry mockup */
+.qe-mock{background:var(--surface);border:1px solid var(--border-s);border-radius:var(--radius);box-shadow:var(--shadow-lg);padding:18px;max-width:480px;margin:16px auto}
+.qe-mock-input{font-size:18px;font-weight:500;color:var(--t1);background:transparent;border:none;outline:none;width:100%;padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:12px;font-family:inherit}
+.qe-mock-input::placeholder{color:var(--t4)}
+.qe-mock-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.qe-mock-chip{font-size:11.5px;padding:4px 10px;border-radius:99px;background:var(--surface-2);color:var(--t3);border:1px solid var(--border-s);cursor:pointer;font-weight:500}
+.qe-mock-chip.active{background:var(--accent-dim);color:var(--accent);border-color:var(--accent-border)}
+.qe-mock-foot{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:12px;font-size:11px;color:var(--t4)}
+.qe-mock-foot kbd{background:var(--surface-2);border:1px solid var(--border-s);border-radius:3px;padding:1px 6px;font-family:'Geist Mono',monospace;font-size:10.5px;color:var(--t2);margin:0 2px}
+
+/* Empty state mockup */
+.empty-mock{padding:48px 24px;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin:14px 0}
+.empty-mock svg{width:42px;height:42px;color:var(--accent);margin-bottom:14px;opacity:.85}
+.empty-mock h4{font-size:15.5px;font-weight:600;color:var(--t1);margin-bottom:4px}
+.empty-mock p{font-size:13px;color:var(--t3);margin:0}
+
+/* Card before/after side-by-side */
+.cards-side{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}
+@media (max-width:600px){.cards-side{grid-template-columns:1fr}}
+.cards-side > div{background:var(--bg-soft);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+.cards-side h5{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--t4);margin-bottom:10px}
+.cards-side h5.after{color:var(--accent)}
+
+/* Current style card (replicates app's actual current state) */
+.cur-card{background:#10201d;border:1px solid #1d342f;border-radius:2px;padding:7px 8px;font-family:'Geist',sans-serif;cursor:pointer;position:relative}
+.cur-card .cur-top{display:flex;align-items:flex-start;gap:6px;margin-bottom:6px}
+.cur-card .cur-chk{width:13px;height:13px;border-radius:50%;border:1.5px solid #1d342f;margin-top:1px;flex-shrink:0}
+.cur-card .cur-title{font-size:12px;font-weight:400;line-height:1.4;color:#e6fffb;flex:1}
+.cur-card .cur-bottom{display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:9.5px}
+.cur-card .cur-tag{font-size:9.5px;font-weight:500;padding:1.5px 5px;border-radius:2px;background:rgba(20,184,166,.15);color:#5eead4}
+.cur-card .cur-meta{display:inline-flex;align-items:center;gap:3px;font-size:9.5px;color:#66837c}
+.cur-card .cur-pri{display:flex;align-items:flex-end;gap:1.5px;height:10px;margin-left:auto;margin-top:2px}
+.cur-card .cur-pri span{width:2.5px;border-radius:1px;background:#66837c}
+
+/* Proposed card */
+.new-card{background:var(--surface-2);border:1px solid var(--border-s);border-radius:6px;padding:11px 13px;cursor:grab;transition:all .18s var(--ease-out)}
+.new-card:hover{border-color:var(--accent-border);transform:translateY(-1px);box-shadow:var(--shadow)}
+.new-card .new-top{display:flex;align-items:flex-start;gap:11px;margin-bottom:6px}
+.new-card .new-chk{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--t4);margin-top:0;flex-shrink:0}
+.new-card .new-title{font-size:14.5px;font-weight:400;line-height:1.45;color:var(--t1);flex:1}
+.new-card .new-bottom{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;padding-left:29px}
+.new-card .new-tag{font-size:11px;font-weight:500;padding:2px 8px;border-radius:99px;background:var(--accent-dim);color:var(--accent-soft)}
+.new-card .new-meta{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--t4)}
+
+/* Roadmap */
+.roadmap{display:flex;flex-direction:column;gap:8px;margin:24px 0}
+.rm-step{display:grid;grid-template-columns:36px 1fr auto;gap:14px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;transition:border-color .14s var(--ease-out)}
+.rm-step:hover{border-color:var(--accent-border)}
+.rm-step .rm-num{width:28px;height:28px;border-radius:50%;background:var(--accent-dim);color:var(--accent);font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.rm-step .rm-text strong{display:block;font-size:14px;color:var(--t1);font-weight:600;margin-bottom:2px}
+.rm-step .rm-text span{font-size:12.5px;color:var(--t3);line-height:1.4}
+.rm-step .rm-time{font-family:'Geist Mono',monospace;font-size:11px;color:var(--t4);white-space:nowrap}
+
+/* Sundries table */
+table.sundries{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+table.sundries th,table.sundries td{padding:11px 12px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top;color:var(--t2)}
+table.sundries th{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t4);border-bottom:1px solid var(--border-s)}
+table.sundries td:first-child{color:var(--t1)}
+table.sundries tr:last-child td{border-bottom:none}
+
+/* Project ring */
+.ring-demo{display:flex;align-items:center;gap:24px;justify-content:center;padding:24px;background:var(--bg-soft);border:1px solid var(--border);border-radius:var(--radius)}
+.ring{position:relative;width:80px;height:80px;cursor:pointer}
+.ring svg{width:80px;height:80px;transform:rotate(-90deg)}
+.ring .ring-track{fill:none;stroke:var(--border-s);stroke-width:6}
+.ring .ring-fill{fill:none;stroke:var(--accent);stroke-width:6;stroke-linecap:round;stroke-dasharray:226;transition:stroke-dashoffset .7s var(--ease-settle)}
+.ring .ring-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;color:var(--t1)}
+.bar{height:14px;background:var(--surface-3);border-radius:99px;overflow:hidden;width:120px}
+.bar-fill{height:100%;background:var(--accent);border-radius:99px;width:42%;transition:width .4s var(--ease-out)}
+
+/* Pre-baked badge */
+.bench{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;letter-spacing:.06em;padding:2px 8px;border-radius:99px;background:var(--surface);border:1px solid var(--border-s);color:var(--t3);text-transform:uppercase}
+
+/* Section headers floating */
+section h2:hover .anchor{opacity:1}
+section h2 .anchor{opacity:0;transition:opacity .12s;color:var(--t4);font-size:14px;text-decoration:none;margin-left:8px}
+section h2 .anchor:hover{color:var(--accent)}
+
+/* Optimistic strike demo */
+.opt-card{background:var(--surface-2);border:1px solid var(--border-s);border-radius:var(--radius-card);padding:11px 13px;display:flex;align-items:center;gap:11px;font-size:13px;position:relative}
+.opt-card .chk{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--t4);flex-shrink:0;cursor:pointer;position:relative;background:transparent;transition:border-color .15s var(--ease-out)}
+.opt-card .chk:hover{border-color:var(--accent)}
+.opt-card .chk.checked{background:var(--accent);border-color:var(--accent);animation:chk-fill .25s var(--ease-settle)}
+.opt-card .chk.checked::after{content:'';position:absolute;top:5px;left:4px;width:6.5px;height:3.5px;border-left:1.6px solid #fff;border-bottom:1.6px solid #fff;transform:rotate(-45deg);animation:tick-in .22s var(--ease-settle) .08s both}
+.opt-card .title{flex:1;color:var(--t1);transition:color .25s var(--ease-out)}
+.opt-spinner{position:absolute;top:13px;right:13px;width:12px;height:12px;border:1.5px solid var(--border-s);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;opacity:0;transition:opacity .15s}
+.opt-spinner.active{opacity:1}
+@keyframes spin{to{transform:rotate(360deg)}}
+.opt-status{font-size:11px;color:var(--t4);font-family:'Geist Mono',monospace;margin-top:8px;height:14px;display:flex;align-items:center;gap:6px}
+.opt-status .pulse-dot{width:6px;height:6px;border-radius:99px;background:var(--accent)}
+.opt-status.committing .pulse-dot{background:var(--warning);animation:pulse .9s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Ease comparison demo */
+.ease-track{height:64px;background:var(--bg-soft);border:1px dashed var(--border-s);border-radius:var(--radius-sm);position:relative;margin:8px 0;overflow:hidden}
+.ease-target{position:absolute;top:50%;width:32px;height:32px;border-radius:var(--radius-card);background:var(--accent);transform:translate(-50%,-50%);left:0;opacity:0}
+.ease-target.run-stiff{animation:ease-stiff 1s var(--ease-stiff) forwards}
+.ease-target.run-out{animation:ease-out-anim 1s var(--ease-out) forwards}
+.ease-target.run-settle{animation:ease-settle 1s var(--ease-settle) forwards}
+@keyframes ease-stiff{0%{left:0%;opacity:0}10%{opacity:1}100%{left:100%;opacity:1}}
+@keyframes ease-out-anim{0%{left:0%;opacity:0}10%{opacity:1}100%{left:100%;opacity:1}}
+@keyframes ease-settle{0%{left:0%;opacity:0}10%{opacity:1}100%{left:100%;opacity:1}}
+.ease-label{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--t3);margin-top:4px;font-family:'Geist Mono',monospace}
+
+/* Press demo */
+.press-row{display:flex;gap:10px;flex-wrap:wrap}
+.press-row .mock-card{cursor:pointer;flex:1;min-width:130px;justify-content:center}
+.press-row .pchip{padding:6px 14px;background:var(--accent-dim);color:var(--accent-soft);border:1px solid var(--accent-border);border-radius:99px;font-size:12px;cursor:pointer;transition:transform .08s var(--ease-out)}
+.press-row .pbtn{padding:7px 16px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;font-family:inherit;font-weight:500;transition:transform .08s var(--ease-out),opacity .12s var(--ease-out)}
+.press-row .pbtn:hover{opacity:.9}
+.press-row.with-press .mock-card:active,.press-row.with-press .pchip:active,.press-row.with-press .pbtn:active{transform:scale(.96)}
+
+/* Magnetism demo */
+.mag-zone{position:relative;height:100px;background:var(--bg-soft);border:1px dashed var(--border-s);border-radius:var(--radius-sm);overflow:hidden;display:flex;align-items:center;justify-content:space-around;padding:0 10%}
+.mag-slot{width:80px;height:60px;border:2px dashed var(--border-s);border-radius:var(--radius-card);background:var(--surface);transition:transform .15s var(--ease-out),border-color .15s var(--ease-out),background .15s var(--ease-out)}
+.mag-zone.proposed .mag-slot.near{border-color:var(--accent);background:var(--accent-dim);transform:scale(1.06)}
+.mag-cursor{position:absolute;top:50%;width:24px;height:24px;background:var(--accent);border-radius:50%;transform:translate(-50%,-50%);opacity:.85;pointer-events:none;box-shadow:0 0 0 8px rgba(20,184,166,.18)}
+
+/* Section chip */
+.section-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:24px}
+.sc{font-size:10.5px;font-weight:600;letter-spacing:.06em;padding:3px 10px;border-radius:99px;background:var(--surface-2);color:var(--t3);border:1px solid var(--border-s)}
+.sc.feel{background:var(--accent-dim);color:var(--accent);border-color:var(--accent-border)}
+
+/* This document is explicitly about motion; we deliberately do NOT honour
+   prefers-reduced-motion here, otherwise every demo looks identical between
+   "current" and "proposed". The production app should still honour it. */
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc">
+    <div class="toc-title">Polish review</div>
+    <div class="toc-section">
+      <a href="#meaning">What "feel" means</a>
+      <a href="#top5">Top 5 changes</a>
+    </div>
+    <div class="toc-title">The plan</div>
+    <div class="toc-section">
+      <a href="#feel">§1 · Feel & physics</a>
+      <a href="#feel-curves" class="sub">1a · Easing curves</a>
+      <a href="#feel-press" class="sub">1b · Press-down</a>
+      <a href="#feel-optimistic" class="sub">1c · Optimistic UI</a>
+      <a href="#feel-landing" class="sub">1d · Drop landing</a>
+      <a href="#feel-magnet" class="sub">1e · Magnetism</a>
+      <a href="#feel-stagger" class="sub">1f · List stagger</a>
+      <a href="#feel-cursor" class="sub">1g · Cursor states</a>
+      <a href="#feel-hover" class="sub">1h · Hover anticipation</a>
+      <a href="#feel-modal" class="sub">1i · Modal entrance</a>
+      <a href="#feel-spawn" class="sub">1k · Spawn animation</a>
+      <a href="#feel-haptics" class="sub">1l · Haptics</a>
+      <a href="#feel-ambient" class="sub">1o · Ambient motion</a>
+      <a href="#feel-ticker" class="sub">1p · Number tickers</a>
+      <a href="#feel-strike" class="sub">1q · Strike-through</a>
+    </div>
+    <div class="toc-section">
+      <a href="#visual">§2 · Visual polish</a>
+      <a href="#card">§3 · The card</a>
+      <a href="#empty">§4 · Empty states</a>
+      <a href="#today">§5 · Today</a>
+      <a href="#discovery">§6 · Discovery</a>
+      <a href="#ring">§7 · Project ring</a>
+      <a href="#sundries">§8 · Sundries</a>
+    </div>
+    <div class="toc-title">Action</div>
+    <div class="toc-section">
+      <a href="#roadmap">Roadmap</a>
+    </div>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="hero-eyebrow">Implementation plan</div>
+      <h1>Making the task app feel like Things</h1>
+      <p class="lead">Things doesn't actually do more than this app does — it just <em>responds</em> differently. Cards have weight. Buttons press down. Things settle instead of snap. Lists ripple instead of jump. This document is a feel-first review, with interactive demos so you can hold each change in your hands before we ship it.</p>
+    </header>
+
+    <section id="meaning">
+      <h2><span class="num">·</span>What "feel" actually means</h2>
+      <p class="lede">Decompose the felt quality into ten concrete properties. Each translates to code; together they're the difference between "tool" and "object."</p>
+      <div class="props-grid">
+        <div class="prop"><div class="prop-num">01</div><h5>Settle, don't snap</h5><p>Every position change overshoots ~1–3% and resolves, like a heavy object losing momentum.</p></div>
+        <div class="prop"><div class="prop-num">02</div><h5>Press-down on touch</h5><p>Every interactive element compresses on press (~0.96) and releases. The body knows the click registered before the brain.</p></div>
+        <div class="prop"><div class="prop-num">03</div><h5>Optimistic, never waiting</h5><p>State change is local-instant. Server sync is invisible.</p></div>
+        <div class="prop"><div class="prop-num">04</div><h5>Stagger when many move</h5><p>Re-sorting cards step into position with ~25 ms delay between them, not all at once.</p></div>
+        <div class="prop"><div class="prop-num">05</div><h5>Magnetism on drag</h5><p>Drop slots gently pull toward the cursor when within ~24 px.</p></div>
+        <div class="prop"><div class="prop-num">06</div><h5>Anticipation on hover</h5><p>Adjacent cards subtly part before any action.</p></div>
+        <div class="prop"><div class="prop-num">07</div><h5>Cursor knows</h5><p><code>grab</code> on draggables, <code>pointer</code> on chips, <code>text</code> in inputs, <code>not-allowed</code> on locked.</p></div>
+        <div class="prop"><div class="prop-num">08</div><h5>Continuity over replacement</h5><p>Modal scales from origin. Drawer slides. Card morphs. Never a hard cut where motion is possible.</p></div>
+        <div class="prop"><div class="prop-num">09</div><h5>Inertial scroll</h5><p>Lists carry past a flick, gently rubber-band against the edge.</p></div>
+        <div class="prop"><div class="prop-num">10</div><h5>Haptics on touch</h5><p>10 ms vibrate on long-press, completion, drop. Cheap. Transformative on phone.</p></div>
+      </div>
+      <div class="callout">
+        <div class="callout-label">Where we are now</div>
+        The current app does <strong>almost none</strong> of this. CSS easing is in place (good), but no springs, no <code>:active</code> press, no stagger, no magnetism, only one cursor state (<code>grabbing</code>), modal slides from <em>above</em> (a notification idiom). The infrastructure for feel is missing, not the will.
+      </div>
+    </section>
+
+    <hr>
+
+    <section id="top5">
+      <h2><span class="num">·</span>Top 5 changes (do these first)</h2>
+      <p class="lede">Ranked by felt jump per hour invested. If time were finite, this is the order.</p>
+      <div class="top5-grid">
+        <div class="top5-card">
+          <div class="num">01 · ~30 min · CSS only</div>
+          <h4>Press-down on every clickable</h4>
+          <p>One CSS block adds <code>:active { transform: scale(.97) }</code> across cards, buttons, chips, checkboxes. The whole UI suddenly feels physical.</p>
+        </div>
+        <div class="top5-card">
+          <div class="num">02 · ~1 hr · CSS only</div>
+          <h4>Settle curves &amp; cursor states</h4>
+          <p>Define <code>--ease-settle</code> + <code>--ease-out</code> tokens and apply. Add <code>cursor: grab</code>. Things land softly instead of snap.</p>
+        </div>
+        <div class="top5-card">
+          <div class="num">03 · ~1 hr · React + CSS</div>
+          <h4>Reborn checkbox + optimistic strike</h4>
+          <p>18 px circle, fill-and-tick animation. Strike happens <em>synchronously</em> with the click, not after the React render.</p>
+        </div>
+        <div class="top5-card">
+          <div class="num">04 · ~2 hr · framer-motion</div>
+          <h4>Stagger when lists re-sort</h4>
+          <p><code>&lt;motion.div layout&gt;</code> with spring + 25 ms delay per index. The list reads as fabric, not as React.</p>
+        </div>
+        <div class="top5-card">
+          <div class="num">05 · ~2 hr · React + CSS</div>
+          <h4>Magnetism + drop landing</h4>
+          <p>Slots pull toward cursor when near. Dropped card scales 1.02 → 1.0. Drag becomes a conversation.</p>
+        </div>
+      </div>
+    </section>
+
+    <hr>
+
+    <section id="feel">
+      <h2><span class="num">§1</span>Feel &amp; physics</h2>
+      <p class="lede">The heart of the review. Each subsection has a felt deficit, the fix, the file/line where it lives, and — where it helps — an interactive demo so you can hold the change before we ship it.</p>
+      <div class="section-chips">
+        <span class="sc feel">17 items</span>
+        <span class="sc">most CSS-only</span>
+        <span class="sc">3 items want framer-motion</span>
+      </div>
+
+      <h3 id="feel-curves"><span class="num">1a</span>Animation curves are merely OK; nothing actually springs<span class="effort xs">XS</span></h3>
+      <p>Three different <code>cubic-bezier</code> curves in use across the app — none are spring-like. The card transform uses <code>cubic-bezier(.2,.8,.2,1)</code>; the drawer slide uses <code>cubic-bezier(.2,0,0,1)</code>; complete-fade uses <code>cubic-bezier(.4,0,.2,1)</code>. None overshoot. Things' equivalent curves end with a tiny back-bounce that signals "this thing has mass."</p>
+      <p><strong>Fix:</strong> define <code>--ease-out</code> (the drawer one — soft landing) and <code>--ease-settle</code> (a pre-computed elastic curve that overshoots ~5% and resolves). Apply <code>--ease-settle</code> to checkbox check, drawer entrance, modal entrance, drop preview, spawn-pulse end, list-item enter. Apply <code>--ease-out</code> to everything else.</p>
+
+      <div class="demo">
+        <div class="demo-header">
+          <div class="demo-label">Demo · Watch the difference between curves</div>
+          <button class="btn" onclick="runEases()">Run all three</button>
+        </div>
+        <div class="ease-label"><span style="color:var(--t4)">stiff (current)</span> · <code>cubic-bezier(.4,0,.2,1)</code></div>
+        <div class="ease-track"><div class="ease-target" id="ease-stiff"></div></div>
+        <div class="ease-label"><span style="color:var(--t3)">soft</span> · <code>cubic-bezier(.2,0,0,1)</code> &nbsp; <span style="color:var(--t4)">→ recommended for non-settling motion</span></div>
+        <div class="ease-track"><div class="ease-target" id="ease-out"></div></div>
+        <div class="ease-label"><span style="color:var(--accent)">settle</span> · <code>cubic-bezier(.34,1.56,.64,1)</code> &nbsp; <span style="color:var(--t4)">→ recommended for landings</span></div>
+        <div class="ease-track"><div class="ease-target" id="ease-settle"></div></div>
+        <div class="demo-instructions">Notice how only the bottom one overshoots and resolves — that's the <em>settle</em>. The brain reads it as mass.</div>
+      </div>
+
+      <h3 id="feel-press"><span class="num">1b</span>There is no <code>:active</code> feedback on anything<span class="effort xs">XS</span></h3>
+      <p>Searched <code>styles.css</code> for <code>:active</code> — <strong>zero rules</strong>. Buttons, cards, chips, checkboxes, the entire topbar: nothing compresses on press. This is the highest perceptual ROI in the entire document.</p>
+      <pre><code><span class="com">/* One CSS block. Add to styles.css. */</span>
+.card,.tb-btn,.tb-icon-btn,.card-meta-btn,.bulk-check,
+.card-chk,.scard,.lnav-item,.project-pill,.fdd-item,
+.col-add,.card-add-zone button,.confirm-acts button {
+  transition: transform .08s var(--ease-out), <span class="com">/* keep existing */</span>;
+}
+.card:active,.tb-btn:active,.tb-icon-btn:active,
+.card-meta-btn:active,.bulk-check:active,.card-chk:active,
+.scard:active,.lnav-item:active,.project-pill:active,
+.fdd-item:active,.col-add:active {
+  transform: <span class="kw">scale</span>(<span class="num">.97</span>);
+}</code></pre>
+
+      <div class="demo">
+        <div class="demo-header">
+          <div class="demo-label">Demo · Click each element. Toggle to compare.</div>
+          <div class="toggle">
+            <button class="active" data-press="off">Current</button>
+            <button data-press="on">Proposed</button>
+          </div>
+        </div>
+        <div class="press-row" id="press-row">
+          <div class="mock-card" style="cursor:pointer">
+            <div class="chk"></div>
+            <div class="title">Send drafts to Q1 board</div>
+          </div>
+          <div class="pchip">work</div>
+          <button class="pbtn">Add task</button>
+        </div>
+        <div class="demo-instructions">Same elements, same click. With press-down on, every press is acknowledged before any other thing happens.</div>
+      </div>
+
+      <h3 id="feel-optimistic"><span class="num">1c</span>Optimistic UI is structurally correct but not visibly optimistic<span class="effort s">S</span></h3>
+      <p>Tasks update locally before Supabase confirms — so the data layer is already optimistic. But the <em>animation</em> doesn't honour it: clicking the checkbox waits for a re-render before the strike-through fires. Even a 16 ms delay reads as "did I click that right?"</p>
+      <p><strong>Fix:</strong> Add a local <code>done</code> state in <code>TaskCard</code> that flips on the click event itself. The strike animation runs synchronously. Server sync surfaces as a tiny pending indicator, not a UI freeze.</p>
+      <div class="demo">
+        <div class="demo-header">
+          <div class="demo-label">Demo · Click the checkbox. Toggle 800 ms latency.</div>
+          <div class="toggle" id="opt-mode">
+            <button class="active" data-opt="current">Current</button>
+            <button data-opt="proposed">Proposed</button>
+          </div>
+        </div>
+        <div class="opt-card" id="opt-card">
+          <div class="chk" id="opt-chk"></div>
+          <div class="title" id="opt-title">Approve the design system PR</div>
+          <div class="opt-spinner" id="opt-spinner"></div>
+        </div>
+        <div class="opt-status" id="opt-status"><span class="pulse-dot"></span><span id="opt-msg">Idle. Click the checkbox.</span></div>
+        <div class="demo-instructions">In <em>current</em>, the strike waits for the simulated 800 ms server round-trip. In <em>proposed</em>, the strike happens instantly; a tiny spinner indicates the server is catching up. Try both.</div>
+      </div>
+
+      <h3 id="feel-landing"><span class="num">1d</span>Drag is good; landing is not<span class="effort s">S</span></h3>
+      <p>The drag itself is well-tuned: opacity drops to 0.4, scales to .97, rotates 1.5 deg (<span class="file-ref">styles.css:281</span>). StackView clones with 3 deg tilt. Autoscroll has 60 px edge zones with proximity-scaled velocity. All Things-grade.</p>
+      <p>What's missing is the <strong>landing</strong>. When you drop, the card just appears in its new position. Things' drop scales briefly (1.02) at release, settles to 1.0 with the elastic curve, while neighbours that shifted to make room <em>also</em> settle, staggered.</p>
+      <div class="demo">
+        <div class="demo-header">
+          <div class="demo-label">Demo · Drop a new task into the list</div>
+          <div class="toggle" id="drop-mode">
+            <button class="active" data-drop="current">Current</button>
+            <button data-drop="proposed">Proposed</button>
+          </div>
+          <button class="btn" onclick="dropTask()">Drop task</button>
+        </div>
+        <div class="drop-list" id="drop-list">
+          <div class="drop-card">Submit Q4 board pack</div>
+          <div class="drop-card">Pay invoice 2024-018</div>
+          <div class="drop-card">Reply to Charlotte</div>
+        </div>
+        <div class="demo-instructions">Watch the dropped card. <em>Current</em> snaps in. <em>Proposed</em> arrives, briefly oversized, and settles.</div>
+      </div>
+
+      <h3 id="feel-magnet"><span class="num">1e</span>Magnetic drop zones<span class="effort s">S</span></h3>
+      <p>Currently drop-zone activation is binary: you're either over a card (drop preview) or you aren't. Things has subtle attraction — when your cursor is <em>near</em> a slot, the slot widens to claim you.</p>
+      <p><strong>Fix:</strong> in existing drag-over handlers (<code>onCardDragOver</code> in <span class="file-ref">Column.jsx</span> and <span class="file-ref">StackView.jsx</span>), compute distance from cursor to each candidate slot's centre. For slots within 24 px: apply a <code>transform</code> proportional to <code>(1 - distance/24)</code> × 4 px toward the cursor. The slot itself can grow slightly. ~30 lines.</p>
+      <div class="demo">
+        <div class="demo-header">
+          <div class="demo-label">Demo · Move your cursor across the zones</div>
+          <div class="toggle" id="mag-mode">
+            <button class="active" data-mag="current">Current (binary)</button>
+            <button data-mag="proposed">Proposed (magnetic)</button>
+          </div>
+        </div>
+        <div class="mag-zone" id="mag-zone">
+          <div class="mag-slot" data-slot="0"></div>
+          <div class="mag-slot" data-slot="1"></div>
+          <div class="mag-slot" data-slot="2"></div>
+        </div>
+        <div class="demo-instructions">In <em>proposed</em> mode, the nearest slot lights up early and grows slightly. Drag becomes a conversation, not a binary state machine.</div>
+      </div>
+
+      <h3 id="feel-stagger"><span class="num">1f</span>Lists don't stagger when they re-sort<span class="effort m">M</span></h3>
+      <p>When you complete a task in a column, the cards below slide up to fill the gap — but all at once with no offset. This is the single biggest "feels like React, not like an app" tell.</p>
+      <p><strong>Fix:</strong> wrap rendered card lists in <code>&lt;motion.div layout&gt;</code> (framer-motion) with <code>transition={'{type:'spring',stiffness:350,damping:35,mass:0.9}'}</code> and a per-index delay so the ripple emanates from the action.</p>
+      <div class="demo">
+        <div class="demo-header">
+          <div class="demo-label">Demo · Click a checkbox to complete a task</div>
+          <div class="toggle" id="stg-mode">
+            <button class="active" data-stg="current">Current (no stagger)</button>
+            <button data-stg="proposed">Proposed (stagger)</button>
+          </div>
+        </div>
+        <div class="stagger-list" id="stagger-list"></div>
+        <div class="demo-instructions">In <em>proposed</em> mode, the cards below the completed one shift up with 25 ms delay each. Reads as a wave through fabric, not a frame-perfect React render.</div>
+      </div>
+
+      <h3 id="feel-cursor"><span class="num">1g</span>Cursor states are mostly absent<span class="effort xs">XS</span></h3>
+      <p>The codebase uses <code>cursor: pointer</code> everywhere and <code>cursor: grabbing</code> on dragging cards. Almost nothing else. Five lines of CSS recover this whole signal channel.</p>
+      <div class="demo">
+        <div class="demo-header">
+          <div class="demo-label">Demo · Hover each chip to feel the cursor change</div>
+        </div>
+        <div class="cursor-row">
+          <div class="cursor-chip" data-c="grab">Draggable card <code>grab</code></div>
+          <div class="cursor-chip" data-c="grabbing" style="cursor:grabbing">Mid-drag <code>grabbing</code></div>
+          <div class="cursor-chip" data-c="pointer">Chip / button <code>pointer</code></div>
+          <div class="cursor-chip" data-c="text">Inline rename <code>text</code></div>
+          <div class="cursor-chip" data-c="copy">Add zone <code>copy</code></div>
+          <div class="cursor-chip" data-c="not-allowed">Blocked task <code>not-allowed</code></div>
+          <div class="cursor-chip" data-c="col-resize">Side resizer <code>col-resize</code></div>
+        </div>
+        <div class="demo-instructions">Each cursor is a quiet narrator. The hand learns the layout faster than the eye.</div>
+      </div>
+
+      <h3 id="feel-hover"><span class="num">1h</span>Hover anticipation between cards<span class="effort xs">XS</span></h3>
+      <p>Subtle Things move: when you hover a card, the cards immediately above and below shift apart by ~1 px to acknowledge it. Pure decoration; makes the list feel responsive in a way nothing else does.</p>
+      <div class="demo">
+        <div class="demo-header">
+          <div class="demo-label">Demo · Hover any task</div>
+          <div class="toggle" id="hov-mode">
+            <button class="active" data-hov="current">Current (no anticipation)</button>
+            <button data-hov="proposed">Proposed</button>
+          </div>
+        </div>
+        <div class="hover-list" id="hover-list">
+          <div class="hov-card">Final review on the auth migration</div>
+          <div class="hov-card">Schedule retro for Wednesday</div>
+          <div class="hov-card">Cancel old domain renewal</div>
+          <div class="hov-card">Charlie's birthday — present?</div>
+          <div class="hov-card">Update README badge</div>
+        </div>
+        <div class="demo-instructions">The hover lifts the card by 1 px and the cards above/below lean away by 1 px. The list "breathes" around your attention. Browser support for <code>:has()</code> is now ubiquitous.</div>
+      </div>
+
+      <h3 id="feel-modal"><span class="num">1i</span>Modal &amp; popover entrance directions are wrong<span class="effort xs">XS</span></h3>
+      <p><code>@keyframes su</code> in <span class="file-ref">styles.css:461</span>: <code>transform: translateY(-8px)</code> — modal slides <em>down from above</em>. That's a notification idiom, not a modal. <code>@keyframes popIn</code> in <span class="file-ref">styles.css:570</span> has the same problem for chip popovers.</p>
+      <p><strong>Fix:</strong> swap to scale-from-origin. For chip popovers, <code>transform-origin</code> is the anchor; for modals, the click point. Both use <code>--ease-settle</code> so the entrance finishes with a 1% overshoot.</p>
+      <pre><code>@<span class="kw">keyframes</span> modal-in {
+  <span class="kw">from</span> { opacity: <span class="num">0</span>; transform: <span class="kw">scale</span>(<span class="num">.96</span>); }
+  <span class="kw">to</span>   { opacity: <span class="num">1</span>; transform: <span class="kw">scale</span>(<span class="num">1</span>); }
+}</code></pre>
+
+      <h3 id="feel-spawn"><span class="num">1k</span>Spawn-pulse is a notification, not a birth<span class="effort xs">XS</span></h3>
+      <p><code>@keyframes spawn-pulse</code> at <span class="file-ref">styles.css:309</span> does an outward shadow ripple in <code>rgba(99,102,241,...)</code> — purple, on a teal accent palette. Cards "ping" outward like a notification. Worse, the colour is wrong.</p>
+      <div class="demo">
+        <div class="demo-header">
+          <div class="demo-label">Demo · Add a task</div>
+          <div class="toggle" id="spawn-mode">
+            <button class="active" data-spawn="current">Current</button>
+            <button data-spawn="proposed">Proposed</button>
+          </div>
+          <button class="btn" onclick="spawnTask()">+ Add task</button>
+        </div>
+        <div class="spawn-list" id="spawn-list">
+          <div class="spawn-card"><div class="chk"></div>Existing task A</div>
+          <div class="spawn-card"><div class="chk"></div>Existing task B</div>
+        </div>
+        <div class="demo-instructions">In <em>current</em>, the new card pings outward with a purple shadow. In <em>proposed</em>, it arrives from above with a small scale settle. Cards are born, not announced.</div>
+      </div>
+
+      <h3 id="feel-haptics"><span class="num">1l</span>No haptics on touch<span class="effort xs">XS</span></h3>
+      <p>The <code>useTouchDrag</code> hook in <span class="file-ref">src/utils/useTouchDrag.js</span> handles long-press-to-drag. Add a single line at the moment long-press succeeds: <code>navigator.vibrate?.(10)</code>. Likewise on completion (10 ms) and on drop (15 ms). On phone, this is the difference between a website and an app.</p>
+
+      <h3 id="feel-ambient"><span class="num">1o</span>Subtle ambient motion<span class="effort xs">XS</span></h3>
+      <p>Things has <em>one</em> always-moving thing: the Today star very gently breathes. Tells you the app is alive. Restraint matters — pick exactly one. Two becomes noise.</p>
+      <div class="demo">
+        <div class="demo-header">
+          <div class="demo-label">Demo · The Today badge breathes (4 s cycle)</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;padding:8px 0">
+          <div class="today-badge">Today</div>
+          <span style="font-size:12px;color:var(--t3)">↑ subtle opacity breath, 0.85 → 1.0 → 0.85, 4 s cycle</span>
+        </div>
+        <div class="demo-instructions">Don't add a second one. The whole effect depends on it being singular — it's how the app says "I'm awake."</div>
+      </div>
+
+      <h3 id="feel-ticker"><span class="num">1p</span>Number tickers<span class="effort s">S</span></h3>
+      <p>When a count changes (column count, sidebar nav count, project completion x/y), it just pops to the new value. Things flips digits when they change.</p>
+      <div class="demo">
+        <div class="demo-header">
+          <div class="demo-label">Demo · Click +/− to change the count</div>
+          <div>
+            <button class="btn-ghost btn" onclick="tickN(-1)">−</button>
+            <button class="btn" onclick="tickN(1)">+</button>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <span style="font-size:11px;color:var(--t4);text-transform:uppercase;letter-spacing:.1em;font-weight:700">Today</span>
+          <div class="ticker"><span class="ticker-digit" id="ticker-val">7</span></div>
+        </div>
+        <div class="demo-instructions">The system says "this number changed." Cheap CSS-only animation; no library.</div>
+      </div>
+
+      <h3 id="feel-strike"><span class="num">1q</span>The strike-through should draw, not appear<span class="effort xs">XS</span></h3>
+      <p><code>.card-title.done { text-decoration: line-through }</code> at <span class="file-ref">styles.css:320</span> is a binary toggle. Things-style: a 1 px line draws across with <code>width: 0 → 100%</code> over ~200 ms. It's the kind of detail nobody notices but <em>everybody</em> feels — the difference between "a checkbox got checked" and "I just crossed this thing off my list."</p>
+      <div class="demo">
+        <div class="demo-header">
+          <div class="demo-label">Demo · Click each checkbox</div>
+        </div>
+        <div class="demo-row">
+          <div class="demo-col"><h4 class="before"><span class="dot"></span>Current</h4>
+            <div class="strike-card">
+              <div class="chk" id="strike-cur-chk"></div>
+              <div class="strike-text" id="strike-cur-text">Renew car insurance</div>
+            </div>
+          </div>
+          <div class="demo-col"><h4 class="after"><span class="dot"></span>Proposed</h4>
+            <div class="strike-card">
+              <div class="chk" id="strike-new-chk"></div>
+              <div class="strike-text" id="strike-new-text">Renew car insurance</div>
+            </div>
+          </div>
+        </div>
+        <div class="demo-instructions">Both end in the same place. The path matters: a line that <em>draws</em> reads as "I just did that," a line that <em>appears</em> reads as a CSS class flipped.</div>
+      </div>
+    </section>
+
+    <hr>
+
+    <section id="visual">
+      <h2><span class="num">§2</span>Visual polish</h2>
+      <p class="lede">Geometry that lets the physics breathe. Token-and-class-only changes; no JSX. ~30 min total.</p>
+
+      <h3><span class="num">2a–g</span>The token pass<span class="effort s">S</span></h3>
+      <p>One CSS block in <span class="file-ref">styles.css</span> changes nine tokens and unlocks the visual delta:</p>
+      <pre><code><span class="com">/* Default radius from 2px (sharp) to 6px (Things-soft) */</span>
+body[data-look=<span class="str">"minimal"</span>] { --rk: <span class="num">6px</span>; }   <span class="com">/* was 2px */</span>
+
+<span class="com">/* Card padding 7×8 → 10×12; title 12px → 15px */</span>
+.card { padding: <span class="num">10px</span> <span class="num">12px</span>; }
+.card-title { font-size: <span class="kw">var</span>(--fs-md); line-height: <span class="num">1.45</span>; }
+
+<span class="com">/* Chip text below the type scale → onto it */</span>
+.card-meta, .card-tag { font-size: <span class="kw">var</span>(--fs-xs); }   <span class="com">/* 9.5px → 11px */</span>
+.grp-name { font-size: <span class="num">12px</span>; font-weight: <span class="num">700</span>; }   <span class="com">/* was 10.5/600 */</span>
+
+<span class="com">/* List gap 3px (tense) → 6px (calm) */</span>
+.col-body { --card-gap: <span class="num">6px</span>; }
+
+<span class="com">/* Dark-mode shadow softer, wider */</span>
+body[data-theme=<span class="str">"dark"</span>] {
+  --shadow: <span class="num">0</span> <span class="num">1px</span> <span class="num">2px</span> <span class="kw">rgba</span>(<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">.25</span>),
+            <span class="num">0</span> <span class="num">8px</span> <span class="num">24px</span> <span class="kw">rgba</span>(<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">.18</span>);
+}
+
+<span class="com">/* Spawn-pulse colour from purple to accent */</span>
+@<span class="kw">keyframes</span> spawn-pulse {
+  <span class="num">0%</span> { box-shadow: <span class="num">0</span> <span class="num">0</span> <span class="num">0</span> <span class="num">0</span> <span class="kw">var</span>(--accent); }
+  <span class="num">100%</span> { box-shadow: <span class="num">0</span> <span class="num">0</span> <span class="num">0</span> <span class="num">8px</span> <span class="kw">var</span>(--accent-dim); }
+}</code></pre>
+    </section>
+
+    <hr>
+
+    <section id="card">
+      <h2><span class="num">§3</span>The card itself</h2>
+      <p class="lede">A default card today renders up to eight chips. Things shows the title and maybe a tag. Hide what isn't set.</p>
+
+      <h3><span class="num">3a</span>Side-by-side: current vs proposed</h3>
+      <div class="cards-side">
+        <div>
+          <h5>Current</h5>
+          <div class="cur-card">
+            <div class="cur-top">
+              <div class="cur-chk"></div>
+              <div class="cur-title">Send drafts to Q1 board</div>
+            </div>
+            <div class="cur-bottom">
+              <span class="cur-tag">work</span>
+              <span class="cur-meta">📍HOME</span>
+              <span class="cur-meta">🕐 30m</span>
+              <span class="cur-meta">📅 Today</span>
+              <span class="cur-pri"><span style="height:4px"></span><span style="height:7px"></span><span style="height:10px"></span></span>
+            </div>
+          </div>
+          <p style="margin-top:10px;font-size:12px;color:var(--t4);line-height:1.5">2 px radius, 12 px title, 9.5 px chips. All metadata always visible. Hover doesn't change much.</p>
+        </div>
+        <div>
+          <h5 class="after">Proposed</h5>
+          <div class="new-card">
+            <div class="new-top">
+              <div class="new-chk"></div>
+              <div class="new-title">Send drafts to Q1 board</div>
+            </div>
+            <div class="new-bottom">
+              <span class="new-tag">work</span>
+              <span class="new-meta">30m</span>
+            </div>
+          </div>
+          <p style="margin-top:10px;font-size:12px;color:var(--t4);line-height:1.5">6 px radius, 15 px title, 11 px chips. Only set chips show. The rest appears on <code>:hover</code> when unset, ready to be filled.</p>
+        </div>
+      </div>
+
+      <h3><span class="num">3b</span>The checkbox redesign</h3>
+      <p>Current is a 13 px circle with no animation on check. Proposed: 18 px circle, fill animates from outside-in with a 1.05 → 1.0 elastic settle on the dot, tick draws after fill completes.</p>
+      <div class="demo" style="text-align:center">
+        <div class="demo-header" style="justify-content:center"><div class="demo-label">Click a checkbox</div></div>
+        <div style="display:flex;justify-content:center;gap:48px;align-items:center;padding:14px 0">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+            <div style="width:13px;height:13px;border-radius:50%;border:1.5px solid var(--t4);cursor:pointer" onclick="this.classList.toggle('chk-cur-on')" id="chk-mini-old"></div>
+            <span style="font-size:11px;color:var(--t4);text-transform:uppercase;letter-spacing:.1em;font-weight:700">Current · 13 px</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+            <div class="chk" id="chk-mini-new" style="width:18px;height:18px;cursor:pointer" onclick="toggleChkNew()"></div>
+            <span style="font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;font-weight:700">Proposed · 18 px</span>
+          </div>
+        </div>
+      </div>
+      <style>
+        #chk-mini-old.chk-cur-on{background:var(--accent);border-color:var(--accent)}
+        #chk-mini-old.chk-cur-on::after{content:'';position:absolute}
+        #chk-mini-new.checked{background:var(--accent);border-color:var(--accent);animation:chk-fill .3s var(--ease-settle)}
+        #chk-mini-new.checked::after{content:'';position:absolute;top:5px;left:4px;width:7px;height:3.5px;border-left:1.6px solid #fff;border-bottom:1.6px solid #fff;transform:rotate(-45deg);animation:tick-in .25s var(--ease-settle) .08s both}
+        @keyframes chk-fill{0%{transform:scale(.6)}60%{transform:scale(1.08)}100%{transform:scale(1)}}
+        @keyframes tick-in{0%{opacity:0;transform:rotate(-45deg) scale(.6)}100%{opacity:1;transform:rotate(-45deg) scale(1)}}
+      </style>
+    </section>
+
+    <hr>
+
+    <section id="empty">
+      <h2><span class="num">§4</span>Empty states</h2>
+      <p class="lede">The app has one good empty state: the celebratory Today after everything is done. Use it as the template.</p>
+
+      <h3><span class="num">4a–b</span>From flat copy to designed empty</h3>
+      <div class="demo-row">
+        <div class="demo-col"><h4 class="before"><span class="dot"></span>Current · empty future day</h4>
+          <div style="text-align:center;padding:32px 8px;color:var(--t4);font-size:13px;background:var(--bg-soft);border:1px dashed var(--border);border-radius:var(--radius-sm)">Nothing here yet.</div>
+        </div>
+        <div class="demo-col"><h4 class="after"><span class="dot"></span>Proposed</h4>
+          <div class="empty-mock" style="margin:0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <h4>Open day</h4>
+            <p>Drag a task here, or click + to add</p>
+          </div>
+        </div>
+      </div>
+      <div class="demo-row">
+        <div class="demo-col"><h4 class="before"><span class="dot"></span>Current · empty Inbox</h4>
+          <div style="text-align:center;padding:32px 8px;color:var(--t4);font-size:13px;background:var(--bg-soft);border:1px dashed var(--border);border-radius:var(--radius-sm)">Nothing here yet.</div>
+        </div>
+        <div class="demo-col"><h4 class="after"><span class="dot"></span>Proposed · teaches the shortcut</h4>
+          <div class="empty-mock" style="margin:0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+            <h4>Inbox is clear</h4>
+            <p>Capture anything — <kbd style="font-family:'Geist Mono',monospace;font-size:11px;background:var(--surface-2);border:1px solid var(--border-s);border-radius:3px;padding:1px 6px">Ctrl + Space</kbd> from anywhere</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <hr>
+
+    <section id="today">
+      <h2><span class="num">§5</span>Today as a destination</h2>
+      <p class="lede">The today badge could claim a piece of the palette no other element gets — a Things-yellow that says "this is the place."</p>
+      <div class="demo">
+        <div class="demo-header"><div class="demo-label">Mockup · Today column header</div></div>
+        <div style="background:linear-gradient(180deg,rgba(245,158,11,.04) 0%,transparent 100%);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px">
+          <div style="font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--warning);margin-bottom:4px">Sunday</div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
+            <span style="font-size:22px;font-weight:600;letter-spacing:-.5px;color:var(--t1);line-height:1">10</span>
+            <div class="today-badge">Today</div>
+          </div>
+          <div style="font-size:11px;color:var(--t4);font-family:'Geist Mono',monospace">3 of 7 done</div>
+        </div>
+        <div class="demo-instructions">Today is the only place yellow appears in the entire UI. The whole-column subtle warm tint signals "you are here" without shouting.</div>
+      </div>
+    </section>
+
+    <hr>
+
+    <section id="discovery">
+      <h2><span class="num">§6</span>Discovery &amp; keyboard</h2>
+      <p class="lede">Things' single best feature is Quick Entry. Build the in-app version of it.</p>
+
+      <h3><span class="num">6a</span>Quick Entry mockup<span class="effort m">M</span></h3>
+      <p>Press <code>Ctrl + Space</code> from any view. A small floating dialog appears, keyboard-driven. Title, when, project, tags, notes — Esc cancels, Enter saves to Inbox unless date is set. Reuse <code>parseNLDate</code> for "tomorrow 4 pm" parsing; reuse pickers from <span class="file-ref">pickers.jsx</span>.</p>
+      <div class="demo">
+        <div class="demo-header"><div class="demo-label">Mockup · Quick Entry overlay</div></div>
+        <div class="qe-mock">
+          <input class="qe-mock-input" placeholder="What's on your mind?" value="Pay rent" autocomplete="off" disabled>
+          <div class="qe-mock-row">
+            <span class="qe-mock-chip active">📅 tomorrow 4pm</span>
+            <span class="qe-mock-chip">📍 ADMIN</span>
+            <span class="qe-mock-chip">🏷 tag</span>
+            <span class="qe-mock-chip">▤ priority</span>
+          </div>
+          <div class="qe-mock-foot">
+            <span><kbd>Tab</kbd> next field &nbsp;·&nbsp; <kbd>↵</kbd> save &nbsp;·&nbsp; <kbd>Esc</kbd> cancel</span>
+            <span style="color:var(--accent)">Goes to Inbox</span>
+          </div>
+        </div>
+      </div>
+
+      <h3><span class="num">6b–c</span>Magic Plus + keyboard nav<span class="effort m">M</span></h3>
+      <p>Floating <code>+</code> in each column's bottom-right, draggable. While dragging, the existing <code>.card-add-zone</code> markers light up; releasing creates a task at the drop point. Existing <code>onAdd</code> hooks at <span class="file-ref">App.jsx:1542</span> handle the create.</p>
+      <p>Bind arrows / <code>J/K</code> to walk <code>focusedId</code>; <code>Space</code> toggles done; <code>Enter</code> opens the drawer. The focus ring (post-fix from §3e) becomes legible.</p>
+    </section>
+
+    <hr>
+
+    <section id="ring">
+      <h2><span class="num">§7</span>Project completion ring</h2>
+      <p class="lede">Things' famous concentric ring fills as subtasks complete. The horizontal bar in the current card works; the ring is more iconic.</p>
+      <div class="ring-demo">
+        <div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--t4);text-align:center;margin-bottom:8px">Current</div>
+          <div class="bar"><div class="bar-fill"></div></div>
+          <div style="font-size:11px;color:var(--t3);text-align:center;margin-top:8px">3 / 7</div>
+        </div>
+        <div style="font-size:24px;color:var(--t4)">→</div>
+        <div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);text-align:center;margin-bottom:8px">Proposed</div>
+          <div class="ring" id="proj-ring" onclick="cycleRing()">
+            <svg viewBox="0 0 80 80">
+              <circle class="ring-track" cx="40" cy="40" r="36"/>
+              <circle class="ring-fill" cx="40" cy="40" r="36" id="ring-fill" style="stroke-dashoffset:131"/>
+            </svg>
+            <div class="ring-text">3/7</div>
+          </div>
+          <div style="font-size:11px;color:var(--t3);text-align:center;margin-top:8px">Click to fill</div>
+        </div>
+      </div>
+    </section>
+
+    <hr>
+
+    <section id="sundries">
+      <h2><span class="num">§8</span>Sundries</h2>
+      <p class="lede">Smaller nits worth a sweep when you're already in the file.</p>
+      <table class="sundries">
+        <thead><tr><th>Issue</th><th>File</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td>Stroke widths in custom SVG icons range 1.8–2.5</td><td><span class="file-ref">utils/icons.jsx</span></td><td>Pick one (1.75 or 2) and apply across all icons</td></tr>
+          <tr><td>Inbox capture button is a bright accent square</td><td><span class="file-ref">styles.css:154</span></td><td>Make it ghost — transparent bg, accent text, fills only on hover</td></tr>
+          <tr><td><code>--hit-min:44px</code> declared but few buttons hit it</td><td><span class="file-ref">styles.css:15</span></td><td>Audit <code>.tb-icon-btn</code>, <code>.card-chk</code>, <code>.bulk-check</code>. Make hit-zone 44 × 44 even if visual stays small</td></tr>
+          <tr><td><code>.card-del</code> × button on every card</td><td><span class="file-ref">styles.css:337</span></td><td>Move delete behind right-click; the visible × is utility-belt clutter</td></tr>
+          <tr><td>Light-mode <code>--bg-top</code> and <code>--surface</code> are identical, no chrome separation</td><td><span class="file-ref">styles.css:31–32</span></td><td>Pick one warmer top-chrome or one cooler surface — the chrome should subtly recede</td></tr>
+          <tr><td>Topbar logo gradient (indigo → violet) on a teal palette</td><td><span class="file-ref">styles.css:74</span></td><td>Drop the gradient; use solid <code>var(--accent)</code> or <code>var(--t1)</code></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <hr>
+
+    <section id="roadmap">
+      <h2><span class="num">·</span>Roadmap</h2>
+      <p class="lede">Eight phased PRs. Feel-first; each one is independently shippable. Reload-and-feel after each — automated tests don't help here, the diff is felt.</p>
+      <div class="roadmap">
+        <div class="rm-step"><div class="rm-num">1</div><div class="rm-text"><strong>Press-down + cursor pass</strong><span>One CSS block. <code>:active { transform: scale(.97) }</code> across cards, buttons, chips, checkboxes. Add <code>cursor: grab</code> on draggables. The whole UI starts feeling physical.</span></div><div class="rm-time">~30 min</div></div>
+        <div class="rm-step"><div class="rm-num">2</div><div class="rm-text"><strong>Easing tokens + motion polish</strong><span>Define <code>--ease-out</code> and <code>--ease-settle</code>. Rebuild spawn-pulse, modal entrance, drawer asymmetry, strike-through draw. Pure CSS, no library.</span></div><div class="rm-time">~1–2 hr</div></div>
+        <div class="rm-step"><div class="rm-num">3</div><div class="rm-text"><strong>Optimistic + haptic + scroll</strong><span>Local <code>done</code> state for instant strike. <code>navigator.vibrate(10)</code> on long-press / completion. <code>overscroll-behavior: contain</code> on scroll containers.</span></div><div class="rm-time">~1 hr</div></div>
+        <div class="rm-step"><div class="rm-num">4</div><div class="rm-text"><strong>Visual geometry pass</strong><span>Tokens only. <code>--rk: 6px</code>, card padding 10×12, title 15 px, gap 6 px, softer shadows. No JSX touched.</span></div><div class="rm-time">~30 min</div></div>
+        <div class="rm-step"><div class="rm-num">5</div><div class="rm-text"><strong>Card refinements</strong><span>TaskCard JSX changes. Chip taming (only show set values; placeholders on hover). 18 px checkbox with fill-and-tick animation. Outside focus ring.</span></div><div class="rm-time">~2 hr</div></div>
+        <div class="rm-step"><div class="rm-num">6</div><div class="rm-text"><strong>Empty states</strong><span>Apply the celebratory-Today template across column, list, stack, inbox. Teach the Quick Entry shortcut once it exists.</span></div><div class="rm-time">~1 hr</div></div>
+        <div class="rm-step"><div class="rm-num">7</div><div class="rm-text"><strong>Library-grade physics</strong><span>Adopt framer-motion. Drop landing settle, list stagger, magnetic drop zones, hover anticipation, ambient breathing, number tickers. The biggest perceptual jump of the whole sequence.</span></div><div class="rm-time">~3–4 hr</div></div>
+        <div class="rm-step"><div class="rm-num">8</div><div class="rm-text"><strong>Discovery features</strong><span>Quick Entry overlay (<code>Ctrl+Space</code>), Magic Plus (draggable +), keyboard nav (arrows / J/K / Space / Enter). Today + project ring + sundries.</span></div><div class="rm-time">~3–4 hr</div></div>
+      </div>
+      <div class="callout" style="margin-top:32px">
+        <div class="callout-label">Verification per PR</div>
+        Reload the dev server. <strong>Press feedback:</strong> click any button — instant compress? <strong>Settle:</strong> drop a card — does anything overshoot? If no, the curve is wrong. <strong>Stagger:</strong> complete a task — do cards below shift in unison? If yes, stagger isn't applied. <strong>Optimistic:</strong> disable network, click checkbox — strike instant? <strong>Mobile:</strong> long-press, vibrate. <strong>Drag regression:</strong> stack drop-preview still card-shaped, drop above/below group still works.
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+/* === TOC scroll-spy === */
+const tocLinks = document.querySelectorAll('.toc a');
+const sections = [...tocLinks].map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const spy = () => {
+  const y = window.scrollY + 120;
+  let active = sections[0];
+  for (const s of sections) if (s.offsetTop <= y) active = s;
+  tocLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + active?.id));
+};
+window.addEventListener('scroll', spy, {passive: true});
+spy();
+
+/* === Easing demo === */
+function runEases() {
+  const targets = ['ease-stiff','ease-out','ease-settle'];
+  const classes = ['run-stiff','run-out','run-settle'];
+  targets.forEach((id, i) => {
+    const el = document.getElementById(id);
+    el.classList.remove(classes[i]);
+    void el.offsetWidth;
+    setTimeout(() => el.classList.add(classes[i]), i * 200);
+  });
+}
+setTimeout(runEases, 600);
+
+/* === Press demo === */
+document.querySelectorAll('[data-press]').forEach(b => b.addEventListener('click', e => {
+  document.querySelectorAll('[data-press]').forEach(x => x.classList.toggle('active', x === b));
+  document.getElementById('press-row').classList.toggle('with-press', b.dataset.press === 'on');
+}));
+
+/* === Optimistic strike demo === */
+let optMode = 'current';
+document.querySelectorAll('[data-opt]').forEach(b => b.addEventListener('click', () => {
+  optMode = b.dataset.opt;
+  document.querySelectorAll('[data-opt]').forEach(x => x.classList.toggle('active', x === b));
+  resetOpt();
+}));
+function resetOpt(){
+  document.getElementById('opt-chk').classList.remove('checked');
+  const t = document.getElementById('opt-title');
+  t.style.textDecoration = '';
+  t.style.color = 'var(--t1)';
+  t.style.transition = '';
+  document.getElementById('opt-spinner').classList.remove('active');
+  document.getElementById('opt-msg').textContent = 'Idle. Click the checkbox.';
+  document.getElementById('opt-status').classList.remove('committing');
+}
+document.getElementById('opt-chk').addEventListener('click', () => {
+  const chk = document.getElementById('opt-chk');
+  const title = document.getElementById('opt-title');
+  const status = document.getElementById('opt-status');
+  const msg = document.getElementById('opt-msg');
+  const spin = document.getElementById('opt-spinner');
+  if (chk.classList.contains('checked')) { resetOpt(); return; }
+  if (optMode === 'current') {
+    msg.textContent = 'Waiting for server… (800 ms)';
+    status.classList.add('committing');
+    setTimeout(() => {
+      chk.classList.add('checked');
+      title.style.transition = 'color .25s';
+      title.style.textDecoration = 'line-through';
+      title.style.color = 'var(--t4)';
+      msg.textContent = 'Saved.';
+      status.classList.remove('committing');
+    }, 800);
+  } else {
+    chk.classList.add('checked');
+    title.style.transition = 'color .25s';
+    title.style.textDecoration = 'line-through';
+    title.style.color = 'var(--t4)';
+    spin.classList.add('active');
+    msg.textContent = 'Synced locally · pushing to server…';
+    status.classList.add('committing');
+    setTimeout(() => {
+      spin.classList.remove('active');
+      msg.textContent = 'Saved.';
+      status.classList.remove('committing');
+    }, 800);
+  }
+});
+
+/* === Drop landing demo === */
+let dropMode = 'current';
+document.querySelectorAll('[data-drop]').forEach(b => b.addEventListener('click', () => {
+  dropMode = b.dataset.drop;
+  document.querySelectorAll('[data-drop]').forEach(x => x.classList.toggle('active', x === b));
+}));
+function dropTask() {
+  const list = document.getElementById('drop-list');
+  const titles = ['Charge laptop', 'Refill prescription', 'Call dentist', 'Plan weekend trip', 'Order groceries'];
+  const t = titles[Math.floor(Math.random() * titles.length)];
+  const el = document.createElement('div');
+  el.className = 'drop-card ' + (dropMode === 'current' ? 'dropping-current' : 'dropping-proposed');
+  el.textContent = t;
+  list.insertBefore(el, list.firstChild);
+  if (list.children.length > 5) list.removeChild(list.lastChild);
+}
+
+/* === Magnetism demo === */
+let magMode = 'current';
+document.querySelectorAll('[data-mag]').forEach(b => b.addEventListener('click', () => {
+  magMode = b.dataset.mag;
+  document.querySelectorAll('[data-mag]').forEach(x => x.classList.toggle('active', x === b));
+  document.getElementById('mag-zone').classList.toggle('proposed', magMode === 'proposed');
+}));
+const magZone = document.getElementById('mag-zone');
+let magCursor = null;
+magZone.addEventListener('mousemove', e => {
+  if (!magCursor) {
+    magCursor = document.createElement('div');
+    magCursor.className = 'mag-cursor';
+    magZone.appendChild(magCursor);
+  }
+  const rect = magZone.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  magCursor.style.left = x + 'px';
+  const slots = magZone.querySelectorAll('.mag-slot');
+  slots.forEach(s => {
+    const sRect = s.getBoundingClientRect();
+    const sCenter = sRect.left - rect.left + sRect.width / 2;
+    const dist = Math.abs(x - sCenter);
+    const near = dist < 80;
+    s.classList.toggle('near', near && magMode === 'proposed');
+    if (magMode === 'proposed' && near) {
+      const pull = (1 - dist / 80) * 6;
+      const dir = x > sCenter ? 1 : -1;
+      s.style.transform = `scale(${1 + (1 - dist / 80) * 0.08}) translateX(${dir * pull}px)`;
+    } else {
+      s.style.transform = '';
+    }
+  });
+});
+magZone.addEventListener('mouseleave', () => {
+  if (magCursor) { magCursor.remove(); magCursor = null; }
+  magZone.querySelectorAll('.mag-slot').forEach(s => { s.style.transform = ''; s.classList.remove('near'); });
+});
+
+/* === Stagger demo === */
+let stgMode = 'current';
+document.querySelectorAll('[data-stg]').forEach(b => b.addEventListener('click', () => {
+  stgMode = b.dataset.stg;
+  document.querySelectorAll('[data-stg]').forEach(x => x.classList.toggle('active', x === b));
+  rebuildStagger();
+}));
+function rebuildStagger() {
+  const list = document.getElementById('stagger-list');
+  const titles = [
+    'Audit payment flow for tax compliance',
+    'Reply to Mum about the weekend',
+    'Push the auth migration to staging',
+    'Draft Q2 board pre-read',
+    'Cancel old SaaS subscription',
+    'Refactor the column code path',
+    'Write the polish review (this!)',
+    'Ship the checkbox redesign'
+  ];
+  list.innerHTML = '';
+  titles.forEach((t, i) => {
+    const el = document.createElement('div');
+    el.className = 'stagger-card';
+    el.innerHTML = `<div class="chk" data-i="${i}"></div><span>${t}</span>`;
+    list.appendChild(el);
+  });
+  list.querySelectorAll('.chk').forEach(c => c.addEventListener('click', completeStagger));
+}
+function completeStagger(e) {
+  const card = e.target.closest('.stagger-card');
+  if (!card || card.classList.contains('fading')) return;
+  const list = document.getElementById('stagger-list');
+  const all = [...list.querySelectorAll('.stagger-card:not(.fading)')];
+  const idx = all.indexOf(card);
+  if (idx < 0) return;
+  const siblings = all.slice(idx + 1);
+
+  // 1. Capture old sibling positions BEFORE removing the card from layout.
+  const oldPositions = new Map();
+  siblings.forEach(s => oldPositions.set(s, s.getBoundingClientRect().top));
+
+  // 2. Take the completed card OUT of layout (position:absolute) so siblings shift instantly.
+  const cardRect = card.getBoundingClientRect();
+  const listRect = list.getBoundingClientRect();
+  card.style.top = (cardRect.top - listRect.top) + 'px';
+  card.classList.add('fading');
+  // Force layout to apply the absolute positioning.
+  void card.offsetHeight;
+  // Now fade it out.
+  card.style.opacity = '0';
+  card.style.transform = stgMode === 'proposed' ? 'translateX(8px) scale(.97)' : 'scale(.95)';
+
+  // 3. FLIP the siblings: instantly translate them back to their OLD positions, then animate to 0.
+  requestAnimationFrame(() => {
+    siblings.forEach((s, i) => {
+      const newY = s.getBoundingClientRect().top;
+      const delta = oldPositions.get(s) - newY;
+      if (!delta) return;
+
+      // Disable transition, set the offset that puts the sibling back where it started.
+      s.style.transition = 'none';
+      s.style.transform = `translateY(${delta}px)`;
+
+      // Force reflow so the next style change animates from this offset.
+      void s.offsetHeight;
+
+      // Re-enable transition with the appropriate timing for this mode.
+      if (stgMode === 'current') {
+        s.style.transition = 'transform .12s linear';
+        s.style.transitionDelay = '0ms';
+      } else {
+        s.style.transition = 'transform .5s var(--ease-settle)';
+        s.style.transitionDelay = `${i * 35}ms`;
+      }
+      // Animate to final position.
+      s.style.transform = 'translateY(0)';
+    });
+  });
+
+  // 4. Cleanup: remove card and clear sibling inline styles after animation finishes.
+  const cleanupDelay = stgMode === 'proposed' ? 1200 + siblings.length * 35 : 400;
+  setTimeout(() => {
+    card.remove();
+    siblings.forEach(s => {
+      s.style.transition = '';
+      s.style.transform = '';
+      s.style.transitionDelay = '';
+    });
+  }, cleanupDelay);
+}
+rebuildStagger();
+
+/* === Hover anticipation === */
+document.querySelectorAll('[data-hov]').forEach(b => b.addEventListener('click', () => {
+  const mode = b.dataset.hov;
+  document.querySelectorAll('[data-hov]').forEach(x => x.classList.toggle('active', x === b));
+  document.getElementById('hover-list').classList.toggle('proposed', mode === 'proposed');
+}));
+
+/* === Spawn === */
+let spawnMode = 'current';
+document.querySelectorAll('[data-spawn]').forEach(b => b.addEventListener('click', () => {
+  spawnMode = b.dataset.spawn;
+  document.querySelectorAll('[data-spawn]').forEach(x => x.classList.toggle('active', x === b));
+}));
+function spawnTask() {
+  const list = document.getElementById('spawn-list');
+  const titles = ['New idea: weekly review template', 'Read this article', 'Investigate slow query', 'Buy birthday card'];
+  const t = titles[Math.floor(Math.random() * titles.length)];
+  const el = document.createElement('div');
+  el.className = 'spawn-card ' + (spawnMode === 'current' ? 'spawn-current' : 'spawn-proposed');
+  el.innerHTML = `<div class="chk"></div>${t}`;
+  list.insertBefore(el, list.firstChild);
+  if (list.children.length > 4) list.removeChild(list.lastChild);
+}
+
+/* === Ticker === */
+let tickerVal = 7;
+function tickN(d) {
+  const next = Math.max(0, tickerVal + d);
+  if (next === tickerVal) return;
+  const span = document.getElementById('ticker-val');
+  const dir = d < 0 ? 'down' : '';
+  tickerVal = next;
+  const newSpan = document.createElement('span');
+  newSpan.className = 'ticker-digit' + (dir ? ' ' + dir : '');
+  newSpan.textContent = tickerVal;
+  newSpan.id = 'ticker-val';
+  span.replaceWith(newSpan);
+}
+
+/* === Strike-through demo === */
+const strikeCurChk = document.getElementById('strike-cur-chk');
+const strikeCurText = document.getElementById('strike-cur-text');
+strikeCurChk.addEventListener('click', () => {
+  strikeCurChk.classList.toggle('checked');
+  strikeCurText.classList.toggle('done-current');
+});
+const strikeNewChk = document.getElementById('strike-new-chk');
+const strikeNewText = document.getElementById('strike-new-text');
+strikeNewChk.addEventListener('click', () => {
+  if (strikeNewChk.classList.contains('checked')) {
+    strikeNewChk.classList.remove('checked');
+    strikeNewText.classList.remove('done-proposed');
+  } else {
+    strikeNewChk.classList.add('checked');
+    strikeNewText.classList.add('done-proposed');
+  }
+});
+
+/* === Mini checkbox demo === */
+function toggleChkNew() {
+  const c = document.getElementById('chk-mini-new');
+  c.classList.toggle('checked');
+}
+
+/* === Project ring === */
+const ringStates = [{n:0, off:226}, {n:3, off:131}, {n:5, off:65}, {n:7, off:0}];
+let ringIdx = 1;
+function cycleRing() {
+  ringIdx = (ringIdx + 1) % ringStates.length;
+  const state = ringStates[ringIdx];
+  document.getElementById('ring-fill').style.strokeDashoffset = state.off;
+  document.querySelector('#proj-ring .ring-text').textContent = state.n + '/7';
+}
+</script>
+</body>
+</html>

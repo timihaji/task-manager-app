@@ -10,6 +10,7 @@ import { PriBars } from './PriBars.jsx';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
+import { CheckGlyph } from './CheckGlyph.jsx';
 
 const fmtStartDate = (s) => {
   if (!s) return '';
@@ -38,7 +39,7 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
   sortableData,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
   selectedIds, renamingId, spawningSet, focusedId, onAdd, depth=0, blockingCountFor, taskTitleById,
-  onContextMenu, onBulkUpdate, recents, onRecentTag, onRecentProj, openPopRequest, onPopHandled, getEffectiveLifeArea, onAddTaxonomy, onStartRename }) {
+  onContextMenu, onBulkUpdate, recents, onRecentTag, onRecentProj, openPopRequest, onPopHandled, getEffectiveLifeArea, onAddTaxonomy, onStartRename, onExternalDrag }) {
   const tagPalette = theme==='dark'?TAG_DARK:TAG_LIGHT;
   const tp = tagPalette[task.tags?.[0]] || tagPalette.admin;
   const proj = PROJ.find(p=>p.id===task.project);
@@ -109,6 +110,11 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
     disabled: !renderAsProject,
   });
   const isSortable = !!sortableData && !renaming;
+  // When the calendar drawer is open, inbox/standalone task cards initiate
+  // the prototype's external-drag system instead of @dnd-kit's pointer
+  // sensor. We only switch for top-level cards (subtasks inside a project
+  // body keep @dnd-kit reordering).
+  const useExtDrag = !!onExternalDrag && !renaming && depth === 0;
   const isDragging = sortable.isDragging;
   const isProjectDropTarget = renderAsProject && projectDrop.isOver;
   const dragStyle = isSortable ? {
@@ -127,13 +133,16 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
       onDoubleClick={()=>!renaming&&!openPop&&onOpen(task.id)}
       onContextMenu={e=>{ if(onContextMenu){ e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}
       onMouseEnter={()=>onFocus(task.id)}
+      onMouseDown={useExtDrag ? (e)=>onExternalDrag(e, task) : undefined}
       {...(isSortable ? sortable.attributes : {})}
-      {...(isSortable ? sortable.listeners : {})}
+      {...(isSortable && !useExtDrag ? sortable.listeners : {})}
     >
       <div className="card-top">
         <button className={`bulk-check${selected?' on':''}`} title={selected?'Deselect task':'Select task'}
           onClick={e=>{e.stopPropagation();onSelect(task.id);}}>{selected?'✓':''}</button>
-        <div className={`card-chk${task.done?' done':''}`} onClick={e=>{e.stopPropagation();onToggle(task.id,colKey);}}/>
+        <span className={`card-chk cg-host${task.done?' done':''}`} onClick={e=>{e.stopPropagation();onToggle(task.id,colKey);}} style={{display:'inline-flex',marginTop:1,cursor:'pointer'}}>
+          <CheckGlyph done={!!task.done} size={13}/>
+        </span>
         {renaming ? (
           <input ref={editRef} className="card-title-input" value={draft}
             onClick={e=>e.stopPropagation()}
@@ -154,7 +163,11 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
       </div>
       {renderAsProject && stats?.total>0 && (
         <div className="card-proj-stat">
-          <span className="card-proj-prog"><span className="card-proj-prog-fill" style={{width:`${pct}%`}}/></span>
+          <svg className="proj-ring" viewBox="0 0 20 20" width="16" height="16" aria-hidden>
+            <circle className="proj-ring-track" cx="10" cy="10" r="8"/>
+            <circle className="proj-ring-fill"  cx="10" cy="10" r="8"
+              style={{strokeDashoffset: 50.27 * (1 - pct/100)}}/>
+          </svg>
           <span className="card-proj-cnt">{stats.done}/{stats.total}</span>
         </div>
       )}

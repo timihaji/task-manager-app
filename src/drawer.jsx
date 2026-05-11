@@ -6,6 +6,7 @@ import {
   loadPeople, savePeople, getPreferredCadence, recordContact, peopleRollup, personKey,
   buildCheckInTasks, buildExpiryTask, stretchSchedule,
 } from './data.js';
+import { CheckGlyph } from './components/CheckGlyph.jsx';
 
 // Task Manager — right drawer task editor (560px)
 // Requires: tm-data.jsx loaded first (PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_NAMES, LIFE_AREA_DARK, LIFE_AREA_LIGHT, D on window)
@@ -906,7 +907,9 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
         {task.cardType !== 'project' && <DrSection title={`Subtasks${subCount?` (${doneCount}/${subCount})`:''}`} open={secs.subs} onToggle={()=>tog('subs')}>
           {(task.subtasks||[]).map(s=>(
             <div key={s.id} className="dr-sub">
-              <div className={`dr-sub-chk${s.done?' done':''}`} onClick={()=>togSub(s.id)}/>
+              <span className="dr-sub-chk cg-host" onClick={()=>togSub(s.id)} style={{display:'inline-flex',cursor:'pointer'}}>
+                <CheckGlyph done={!!s.done} size={14}/>
+              </span>
               <span className={`dr-sub-ttl${s.done?' done':''}`}>{s.title}</span>
               <span className="dr-sub-del" onClick={()=>delSub(s.id)}>×</span>
             </div>

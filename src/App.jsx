@@ -28,6 +28,7 @@ import {
   parseTimeEst,
   fmtTimeEst,
   INIT_TASKS,
+  INIT_EVENTS,
   daysSince,
   defaultLifeAreaForLocation,
   suggestLifeAreaFromTitle,
@@ -69,6 +70,7 @@ import { parseNLDate } from './utils/parseNLDate.js';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useDndSensors, getInsertionIndex, compositeCollisionDetection } from './utils/dnd.js';
+import * as haptics from './utils/haptics.js';
 
 // ── extracted leaf components ────────────────────────────────────────────
 import { CardPopover } from './components/CardPopover.jsx';
@@ -89,7 +91,12 @@ import { SwatchPicker, SettingsScrollPane, TaxonomyManager, PRESETS_DATA, Settin
 import { ListTaskItem, ListView } from './components/ListView.jsx';
 import { StackView } from './components/StackView.jsx';
 import { AddModal } from './components/AddModal.jsx';
+import { QuickEntry } from './components/QuickEntry.jsx';
 import { MigrateFromLocal } from './components/MigrateFromLocal.jsx';
+import CalendarDrawer from './components/CalendarDrawer.jsx';
+import { fetchAllEvents, upsertEvent, deleteEvent as deleteEventRow } from './lib/eventsDb.js';
+import { currentMinOfDay } from './utils/timeOfDay.js';
+import { HoldButton } from './components/HoldButton.jsx';
 
 // ── color/taxonomy helpers (used inside App body) ────────────────────────
 import {
@@ -157,6 +164,21 @@ function App() {
   const [tasks,setTasks]     = useState([]);
   const [tasksReady, setTasksReady] = useState(false);
   const [todayKey, setTodayKey] = useState(() => D.str(D.today()));
+
+  // Calendar drawer state — events live alongside tasks but persist in their
+  // own table. Loaded once at boot (cloud) or synthesised from INIT_EVENTS
+  // (dev-bypass) so the drawer is always populated.
+  const [events, setEvents] = useState([]);
+  const [eventsReady, setEventsReady] = useState(false);
+  const lastSyncedEventsRef = useRef([]);
+  const [calendarDateStr, setCalendarDateStr] = useState(() => D.str(D.today()));
+  const [pxh, setPxh] = useState(80);
+  const [snapOn, setSnapOn] = useState(true);
+  // Inbox→calendar drag state. Mirrors the prototype's external-drag
+  // mechanism: extDrag tracks live cursor position; extDragRef holds the
+  // task metadata for the floating ghost.
+  const [extDrag, setExtDrag] = useState(null);
+  const extDragRef = useRef(null);
   // Last array we successfully synced to the cloud. The sync effect diffs
   // against this — not against React's previous render — so debounced
   // edits coalesce correctly.
@@ -444,6 +466,7 @@ function App() {
   const [addModal,setAddModal]= useState(null); // {date,label}
   const [palette,setPalette] = useState(false);
   const [shortcuts,setShortcuts]=useState(false);
+  const [quickEntry,setQuickEntry]=useState(false);
   const [filters,setFilters] = useState({projects:[],tags:[],lifeAreas:[],priorities:[]});
   // filterMode / globalGroupBy / inboxGroupBy live inside `tweaks` so they
   // ride the same cloud sync as the rest of the settings blob.
@@ -560,6 +583,168 @@ function App() {
     })();
     return () => { cancelled = true; };
   }, [workspaceId, supabaseDisabled]);
+
+  // Calendar events — same load pattern as tasks. Dev-bypass seeds INIT_EVENTS
+  // onto today's date so the drawer is always populated; cloud mode does a
+  // single workspace-wide fetch and lets day navigation be a client-side filter.
+  useEffect(() => {
+    if (supabaseDisabled) {
+      let saved = null;
+      try {
+        const raw = localStorage.getItem('tm_events_v1');
+        if (raw) saved = JSON.parse(raw);
+      } catch {}
+      const today = D.str(D.today());
+      const seed = Array.isArray(saved) && saved.length
+        ? saved
+        : INIT_EVENTS.map(e => ({ ...e, date: today }));
+      setEvents(seed);
+      lastSyncedEventsRef.current = seed;
+      setEventsReady(true);
+      return;
+    }
+    if (!workspaceId) { setEventsReady(false); return; }
+    let cancelled = false;
+    setEventsReady(false);
+    (async () => {
+      try {
+        const fetched = await fetchAllEvents(workspaceId);
+        if (cancelled) return;
+        setEvents(fetched);
+        lastSyncedEventsRef.current = fetched;
+        setEventsReady(true);
+      } catch (e) {
+        console.error('[events] initial fetch failed', e);
+        if (!cancelled) setEventsReady(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [workspaceId, supabaseDisabled]);
+
+  // Sync events: localStorage shadow + cloud diff sync. Mirrors the tasks
+  // pattern but simpler (no conflict logic — events are short-lived and the
+  // drawer is single-user).
+  useEffect(() => {
+    if (!eventsReady) return;
+    try { localStorage.setItem('tm_events_v1', JSON.stringify(events)); } catch {}
+    if (supabaseDisabled || !userId || !workspaceId) {
+      lastSyncedEventsRef.current = events;
+      return;
+    }
+    const prev = lastSyncedEventsRef.current;
+    const prevById = new Map(prev.map(e => [e.id, e]));
+    const nextById = new Map(events.map(e => [e.id, e]));
+    const upserts = [];
+    for (const [id, ev] of nextById) {
+      const old = prevById.get(id);
+      if (!old || JSON.stringify(old) !== JSON.stringify(ev)) upserts.push(ev);
+    }
+    const deletes = [];
+    for (const id of prevById.keys()) if (!nextById.has(id)) deletes.push(id);
+    if (!upserts.length && !deletes.length) return;
+    (async () => {
+      try {
+        for (const ev of upserts) await upsertEvent(ev, userId, workspaceId);
+        for (const id of deletes) await deleteEventRow(id);
+        lastSyncedEventsRef.current = events;
+      } catch (e) {
+        console.error('[events] sync failed', e);
+      }
+    })();
+  }, [events, eventsReady, supabaseDisabled, userId, workspaceId]);
+
+  // ── Calendar drawer plumbing ────────────────────────────────────────────
+  // Color resolution for an event's task — uses the live taxonomy so user
+  // edits to project colors flow through.
+  const calProjectColor = useCallback((task) => {
+    if (!task) return '#5eead4';
+    const ctx = (taxonomy?.contexts || []).find(c => c.id === task.project);
+    return ctx?.color || '#a5b4fc';
+  }, [taxonomy]);
+
+  // setEvents wrapper that lets the drawer treat the visible day's events
+  // as its full list. Adds/updates/deletes against the visible slice get
+  // re-merged with the rest of the workspace's events.
+  const visibleEvents = useMemo(
+    () => events.filter(e => e.date === calendarDateStr),
+    [events, calendarDateStr]
+  );
+  const setVisibleEvents = useCallback((updater) => {
+    setEvents(prev => {
+      const visibleNow = prev.filter(e => e.date === calendarDateStr);
+      const visibleNext = typeof updater === 'function' ? updater(visibleNow) : updater;
+      const others = prev.filter(e => e.date !== calendarDateStr);
+      return [...others, ...visibleNext];
+    });
+  }, [calendarDateStr]);
+
+  // Inbox card → calendar drag — prototype's external-drag mechanism.
+  // Bail if the target is an interactive child (chip, popover, checkbox)
+  // so users can still tag / set priority / mark done with the drawer open.
+  const onTaskMouseDown = useCallback((e, task) => {
+    if (e.button !== 0) return;
+    if (e.target.closest('button, input, textarea, .card-meta-btn, .card-popover, .card-del, .bulk-check, .card-chk')) return;
+    e.preventDefault();
+    extDragRef.current = {
+      taskId: task.id,
+      title: task.title,
+      est: parseTimeEst(task.timeEstimate) || 30,
+      project: task.project,
+    };
+    setExtDrag({ taskId: task.id, clientX: e.clientX, clientY: e.clientY });
+  }, []);
+
+  useEffect(() => {
+    if (!extDrag) return;
+    const onMove = (ev) => {
+      if (!extDragRef.current) return;
+      setExtDrag({ taskId: extDragRef.current.taskId, clientX: ev.clientX, clientY: ev.clientY });
+    };
+    const onUp = () => setExtDrag(null);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [!!extDrag]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-plan: greedy pack of unscheduled tasks into open slots between now
+  // and 6pm. Mirrors the prototype's algorithm; only enabled when the
+  // visible day is today.
+  const autoPlan = useCallback(() => {
+    const today = D.str(D.today());
+    if (calendarDateStr !== today) return;
+    const NOW = currentMinOfDay();
+    const startFloor = Math.ceil(NOW / 15) * 15;
+    const visible = events.filter(e => e.date === today);
+    const scheduledIds = new Set(visible.map(e => e.taskId).filter(Boolean));
+    const queue = tasks
+      .filter(t => !t.done && !t.archived && t.cardType !== 'project'
+        && !scheduledIds.has(t.id) && parseTimeEst(t.timeEstimate) > 0)
+      .sort((a, b) => (a.priority || 'p3').localeCompare(b.priority || 'p3'));
+    const busy = visible
+      .map(e => [e.startMin, e.startMin + e.durationMin])
+      .sort((a, b) => a[0] - b[0]);
+    const fits = (s, len) => {
+      if (s + len > 18 * 60) return false;
+      return busy.every(([a, b]) => s + len <= a || s >= b);
+    };
+    let cursor = Math.max(startFloor, busy.length ? busy[busy.length - 1][1] : startFloor);
+    const additions = [];
+    for (const t of queue) {
+      const len = parseTimeEst(t.timeEstimate);
+      let s = cursor;
+      while (!fits(s, len) && s < 18 * 60) s += 15;
+      if (s + len > 18 * 60) break;
+      const id = 'e' + Math.random().toString(36).slice(2, 8);
+      additions.push({ id, taskId: t.id, date: today, startMin: s, durationMin: len });
+      busy.push([s, s + len]);
+      busy.sort((a, b) => a[0] - b[0]);
+      cursor = s + len;
+    }
+    if (additions.length) setEvents(prev => [...prev, ...additions]);
+  }, [calendarDateStr, events, tasks]);
 
   useEffect(() => {
     const now = new Date();
@@ -1816,6 +2001,7 @@ function App() {
   const completeTask = (id, colKey, checkInMode) => {
     const task=taskById(id); if(!task) return;
     const nowDone=!task.done;
+    if (nowDone) haptics.tap();
     // Project with at least one incomplete child → confirm dialog before cascading.
     if(task.cardType==='project') {
       const kids = tasks.filter(t=>t.parentId===id);
@@ -2006,7 +2192,9 @@ function App() {
   // (Stack, Timeline, Projects, Groups). Each draggable's data.current.kind
   // tells onDragEnd how to route.
   const dndSensors = useDndSensors();
+  const dragPointerY = useRef(null);
   const dndOnDragStart = (event) => {
+    haptics.pickup();
     const data = event.active.data.current || {};
     const srcId = String(event.active.id);
     // Capture the source card's HTML so the DragOverlay can render an identical
@@ -2016,14 +2204,78 @@ function App() {
     try {
       const el = document.querySelector(`[data-card-id="${srcId}"]`);
       if (el) {
+        // Measure the source card so the destination gap is exactly its height.
+        document.body.style.setProperty('--drag-card-h', el.offsetHeight + 'px');
         const clone = el.cloneNode(true);
         clone.removeAttribute('style');
         clone.classList.remove('is-dragging','dragging','focused','selected','spawning','card-drop-target');
         srcHTML = clone.outerHTML;
       }
     } catch {}
-    setActiveDrag({ id: srcId, kind: data.kind || 'task', fromCol: data.fromCol, srcHTML });
+    // fromCol mirrors the card's column for the §09 cross-column arming check.
+    // null date → inbox; 'stack-task' source has no date so we fall back to inbox.
+    const fromCol = data.date != null ? data.date : 'inbox';
+    setActiveDrag({ id: srcId, kind: data.kind || 'task', fromCol, srcHTML });
     document.body.dataset.dndActive = 'true';
+    document.body.dataset.fromCol = fromCol;
+    // Pointer-Y tracker: keeps dragPointerY fresh between dndOnDragOver fires.
+    // Also re-evaluates the drop-line direction on every mouse move so the
+    // line updates smoothly as the cursor crosses a card's midpoint.
+    const onPointer = (e) => {
+      dragPointerY.current = e.clientY;
+      // Refresh drop-line on the current over-card based on cursor position.
+      const lined = document.querySelector('[data-drop-line]');
+      if (lined) {
+        const r = lined.getBoundingClientRect();
+        const dir = e.clientY < r.top + r.height / 2 ? 'before' : 'after';
+        if (lined.getAttribute('data-drop-line') !== dir) lined.setAttribute('data-drop-line', dir);
+      }
+    };
+    window.addEventListener('pointermove', onPointer);
+    dragPointerY._cleanup = () => window.removeEventListener('pointermove', onPointer);
+  };
+  // Track the column the cursor is currently over so we can arm it. dnd-kit's
+  // collision detection resolves over→card when the column has cards in it,
+  // so the column-level droppable's `isOver` is false in that case. We climb
+  // back up via the card's own data.current.date and toggle .col-armed on the
+  // matching wrapper. Skip arming when the over-column is the source column
+  // (within-column reorder doesn't need cross-column highlight).
+  //
+  // Also: stamp data-drop-line="before"/"after" on the card under the cursor
+  // so the destination shows a clear insertion line between cards. dnd-kit's
+  // per-column SortableContext doesn't auto-render a placeholder in the
+  // destination during cross-column drags; this fills that gap.
+  const dndOnDragOver = (event) => {
+    const data = event.over?.data?.current;
+    let overCol = null;
+    if (data) {
+      if (data.kind === 'task' || data.kind === 'stack-task') overCol = data.date != null ? data.date : 'inbox';
+      else if (data.kind === 'column') overCol = data.date != null ? data.date : 'inbox';
+    }
+    const fromCol = document.body.dataset.fromCol;
+    // Clear all current armed wrappers first
+    document.querySelectorAll('.col-armed').forEach(el => el.classList.remove('col-armed'));
+    if (overCol && overCol !== fromCol) {
+      document.body.dataset.armedCol = overCol;
+      const sel = overCol === 'inbox'
+        ? '.side-panel.inbox-col[data-col-key="inbox"]'
+        : `.col[data-col-key="${CSS.escape(overCol)}"]`;
+      document.querySelector(sel)?.classList.add('col-armed');
+    } else {
+      delete document.body.dataset.armedCol;
+    }
+    // Drop-line on the over-card. The pointer-Y tracker (installed in
+    // dndOnDragStart) keeps `dragPointerY.current` fresh between fires.
+    document.querySelectorAll('[data-drop-line]').forEach(el => el.removeAttribute('data-drop-line'));
+    if (data && (data.kind === 'task' || data.kind === 'stack-task')) {
+      const overEl = document.querySelector(`[data-card-id="${CSS.escape(String(event.over.id))}"]`);
+      const y = dragPointerY.current;
+      if (overEl && y != null) {
+        const r = overEl.getBoundingClientRect();
+        const dir = y < r.top + r.height / 2 ? 'before' : 'after';
+        overEl.setAttribute('data-drop-line', dir);
+      }
+    }
   };
   const dndOnDragEnd = (event) => {
     const { active, over } = event;
@@ -2032,6 +2284,7 @@ function App() {
     const activeId = String(active.id);
     try {
       if (!over) return;
+      haptics.drop();
 
       // Stack reorder — both source and target are stack tasks.
       if (aData.kind === 'stack-task' && oData.kind === 'stack-task') {
@@ -2123,6 +2376,12 @@ function App() {
     } finally {
       setActiveDrag(null);
       delete document.body.dataset.dndActive;
+      delete document.body.dataset.armedCol;
+      delete document.body.dataset.fromCol;
+      document.body.style.removeProperty('--drag-card-h');
+      document.querySelectorAll('.col-armed').forEach(el => el.classList.remove('col-armed'));
+      document.querySelectorAll('[data-drop-line]').forEach(el => el.removeAttribute('data-drop-line'));
+      dragPointerY._cleanup?.(); dragPointerY._cleanup = null; dragPointerY.current = null;
     }
   };
   const dndOnDragCancel = () => {
@@ -2238,9 +2497,10 @@ function App() {
     const fn=e=>{
       const inInput=['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName);
       if((e.metaKey||e.ctrlKey)&&e.key==='k'){ e.preventDefault(); setPalette(p=>!p); return; }
+      if((e.metaKey||e.ctrlKey)&&e.key===' '){ e.preventDefault(); setQuickEntry(q=>!q); return; }
       if((e.metaKey||e.ctrlKey)&&e.key==='\\'){ e.preventDefault(); setNavCollapsed(n=>!n); return; }
       if((e.metaKey||e.ctrlKey)&&(e.key==='z'||e.key==='Z')){ e.preventDefault(); undo(); return; }
-      if(e.key==='Escape'){ setRenamingId(null); setDrawerId(null); setSettingsOpen(false); setFocusedId(null); setPalette(false); setShortcuts(false); setAddModal(null); setFilterOpen(false); clearSelection(); return; }
+      if(e.key==='Escape'){ setRenamingId(null); setDrawerId(null); setSettingsOpen(false); setFocusedId(null); setPalette(false); setShortcuts(false); setQuickEntry(false); setAddModal(null); setFilterOpen(false); clearSelection(); return; }
       if(inInput) return;
       if(e.key==='?'){ setShortcuts(s=>!s); return; }
       const flatNav = view==='stack' || view==='list' || view==='inbox' || view==='upcoming' || view==='backlog' || view==='snoozed' || view==='someday' || view==='blocked' || view==='completed' || view==='archived' || view?.type==='project' || view?.type==='tag' || view?.type==='lifeArea';
@@ -2495,17 +2755,28 @@ function App() {
 
   const bulkDelete = () => {
     if(!selectedIds.size) return;
-    if(!window.confirm(`Delete ${selectedIds.size} selected task${selectedIds.size===1?'':'s'}?`)) return;
     const ids = new Set(selectedIds);
-    setUndoStack(s=>[...s.slice(-9),{bulk:true,before:tasks,beforeGroups:tweaks.customGroups||[]}]);
-    const nextTasks = tasks.filter(t=>!ids.has(t.id));
-    setTasks(nextTasks);
-    pruneEmptyGroups(nextTasks);
-    setSelectedIds(new Set());
-    setDrawerId(id=>ids.has(id)?null:id);
-    setFocusedId(id=>ids.has(id)?null:id);
-    setToast('Deleted');
-    setTimeout(()=>setToast(null),1400);
+    const count = ids.size;
+    const doDelete = () => {
+      setUndoStack(s=>[...s.slice(-9),{bulk:true,before:tasks,beforeGroups:tweaks.customGroups||[]}]);
+      const nextTasks = tasks.filter(t=>!ids.has(t.id));
+      setTasks(nextTasks);
+      pruneEmptyGroups(nextTasks);
+      setSelectedIds(new Set());
+      setDrawerId(id=>ids.has(id)?null:id);
+      setFocusedId(id=>ids.has(id)?null:id);
+      setToast('Deleted');
+      setTimeout(()=>setToast(null),1400);
+      setConfirmDialog(null);
+    };
+    setConfirmDialog({
+      message: `Delete ${count} selected task${count===1?'':'s'}? Hold to confirm.`,
+      hold: true,
+      destructive: true,
+      confirmLabel: 'Hold to delete',
+      onConfirm: doDelete,
+      onCancel: () => setConfirmDialog(null),
+    });
   };
 
   // ---- Custom groups (user-created, persistent multi-card clusters) ----
@@ -2690,6 +2961,10 @@ function App() {
     onStartGroupRename: (id) => setRenamingGroupId(id),
     onGroupRenameDone: () => setRenamingGroupId(null),
     onRenameGroup: renameGroup,
+    // When the calendar drawer is open, inbox cards initiate the prototype's
+    // external-drag system instead of @dnd-kit's pointer sensor. TaskCard
+    // checks for this prop and swaps listeners accordingly.
+    onExternalDrag: tweaks.calendarOpen ? onTaskMouseDown : null,
   };
   const renderTimelineColumn = (date, keyPrefix='') => {
     const colKey=D.str(date);
@@ -2749,10 +3024,12 @@ function App() {
       {label:'Delete',  onClick:()=>deleteTask(t.id), danger:true, kbd:'⌫'},
     ];
   })() : [];
+
   return <DndContext
     sensors={dndSensors}
     collisionDetection={compositeCollisionDetection}
     onDragStart={dndOnDragStart}
+    onDragOver={dndOnDragOver}
     onDragEnd={dndOnDragEnd}
     onDragCancel={dndOnDragCancel}
   >
@@ -2777,6 +3054,12 @@ function App() {
           <button className={`tb-btn${view==='list'?' active':''}`} onClick={()=>setView('list')} title="List"><I.List/></button>
           <button className={`tb-btn${view==='stack'?' active':''}`} onClick={()=>setView('stack')} title="Stack"><I.Stack/></button>
         </div>
+        <button
+          className={`tb-btn cal-toggle${tweaks.calendarOpen?' active':''}`}
+          onClick={()=>setTweak('calendarOpen', !tweaks.calendarOpen)}
+          title={tweaks.calendarOpen ? 'Close calendar' : 'Open day calendar'}
+          aria-pressed={!!tweaks.calendarOpen}
+        ><I.Cal/></button>
         {view==='week' && <>
           <div className="tb-sep"/>
           <button className="tb-btn" onClick={()=>setWeekOff(o=>o-30)}><I.Chv d="l"/></button>
@@ -3169,16 +3452,67 @@ function App() {
     {!drawerTask && !settingsOpen && <div className="drawer"/>}
     <SettingsDrawer open={settingsOpen} tweaks={tweaks} setTweak={setTweak} taxonomy={taxonomy} taxonomyActions={taxonomyActions} onClose={()=>setSettingsOpen(false)}/>
 
+    {/* CALENDAR DRAWER — toggleable right-edge overlay */}
+    {tweaks.calendarOpen && (
+      <CalendarDrawer
+        dateStr={calendarDateStr}
+        events={visibleEvents}
+        setEvents={setVisibleEvents}
+        tasks={tasks}
+        projectColor={calProjectColor}
+        pxh={pxh} setPxh={setPxh}
+        snapOn={snapOn} setSnapOn={setSnapOn}
+        externalDrag={extDrag}
+        onConsumeExternal={()=>{ extDragRef.current = null; }}
+        onCancelExternal={()=>{ extDragRef.current = null; }}
+        onAutoPlan={autoPlan}
+        onPrev={()=>setCalendarDateStr(D.str(D.add(D.parse(calendarDateStr) || D.today(), -1)))}
+        onNext={()=>setCalendarDateStr(D.str(D.add(D.parse(calendarDateStr) || D.today(), 1)))}
+        onToday={()=>setCalendarDateStr(D.str(D.today()))}
+        onClose={()=>setTweak('calendarOpen', false)}
+      />
+    )}
+    {extDrag && extDragRef.current && (
+      <div
+        className="drag-ghost"
+        style={{ left: extDrag.clientX + 14, top: extDrag.clientY + 8 }}
+      >
+        <span
+          className="drag-ghost-dot"
+          style={{ background: calProjectColor(taskById(extDragRef.current.taskId)) }}
+        />
+        <span className="drag-ghost-title">{extDragRef.current.title}</span>
+        <span className="drag-ghost-est">{fmtTimeEst(extDragRef.current.est)}</span>
+      </div>
+    )}
+
     {/* MODALS */}
     {palette && <CommandPalette onClose={()=>setPalette(false)} onCmd={onPaletteCmd}/>}
     {shortcuts && <ShortcutsOverlay onClose={()=>setShortcuts(false)}/>}
+    <QuickEntry
+      open={quickEntry}
+      onClose={()=>setQuickEntry(false)}
+      onSubmit={({date, title}) => {
+        const colKey = date ? D.str(date) : 'inbox';
+        addTask(colKey, date, title);
+      }}
+    />
+
     {confirmDialog && (
       <div className="overlay-bg" onClick={e=>{ if(e.target===e.currentTarget) confirmDialog.onCancel?.(); }}>
         <div className="confirm-dialog">
           <div className="confirm-msg">{confirmDialog.message}</div>
           <div className="confirm-acts">
             <button className="tb-btn" onClick={confirmDialog.onCancel}>Cancel</button>
-            <button className="tb-btn primary" onClick={confirmDialog.onConfirm}>Confirm</button>
+            {confirmDialog.hold ? (
+              <HoldButton onCommit={confirmDialog.onConfirm} ms={900}>
+                {confirmDialog.confirmLabel || 'Hold to confirm'}
+              </HoldButton>
+            ) : (
+              <button className="tb-btn primary" onClick={confirmDialog.onConfirm}>
+                {confirmDialog.confirmLabel || 'Confirm'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -3201,7 +3535,7 @@ function App() {
         cursor (Trello-style smooth FLIP) is not what dnd-kit's strategies do;
         the standard pattern across Linear / Notion / etc is faded source +
         floating ghost, and that's what we ship here. */}
-    <DragOverlay zIndex={9999} dropAnimation={{ duration: 180, easing: 'cubic-bezier(.2,.8,.2,1)' }}>
+    <DragOverlay zIndex={9999} dropAnimation={{ duration: 280, easing: 'cubic-bezier(.2,.7,.2,1)' }}>
       {activeDrag?.srcHTML ? (
         <div className="dnd-overlay-ghost" dangerouslySetInnerHTML={{ __html: activeDrag.srcHTML }} />
       ) : null}
