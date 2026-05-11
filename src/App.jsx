@@ -2834,11 +2834,30 @@ function App() {
           ? [...selectedIds]
           : [activeId];
         const anchorId = oData.kind === 'task' ? String(over.id) : null;
-        // Read drop-line direction stamped by dndOnDragOver — cursor in the
-        // lower half of the over-card (or below the last card in a column)
-        // means "drop after", which advances the slot one past the anchor.
-        const anchorEl = anchorId ? document.querySelector(`.card[data-card-id="${anchorId}"]`) : null;
-        const insertAfter = anchorEl?.getAttribute('data-drop-line') === 'after';
+        // Determine "drop after" direction. Two paths:
+        // 1. Cross-context drops (different column/group): dndOnDragOver
+        //    stamps data-drop-line on the over-card based on cursor-Y vs
+        //    midpoint. Read it directly.
+        // 2. Same-context drops (within the same column+group): dnd-kit's
+        //    sortable doesn't stamp data-drop-line (it relies on transform
+        //    shifts instead). Infer direction from the active item's current
+        //    position vs the anchor's — if active is above anchor and the user
+        //    dragged down onto it, that's "drop after". Without this, every
+        //    in-column reorder inserts before the over-card, so dragging a
+        //    top card to the bottom lands second-to-last (felt like snap-back).
+        let insertAfter = false;
+        if (anchorId) {
+          const anchorEl = document.querySelector(`.card[data-card-id="${anchorId}"]`);
+          const stamped = anchorEl?.getAttribute('data-drop-line');
+          if (stamped === 'after') insertAfter = true;
+          else if (stamped !== 'before') {
+            const activeTask = taskById(activeId);
+            const anchorTask = taskById(anchorId);
+            const aPos = Number.isFinite(activeTask?.position) ? activeTask.position : null;
+            const oPos = Number.isFinite(anchorTask?.position) ? anchorTask.position : null;
+            if (aPos != null && oPos != null && aPos < oPos) insertAfter = true;
+          }
+        }
         if (targetDate == null) {
           reorderManyToInbox(srcIds, anchorId, insertAfter);
         } else {
