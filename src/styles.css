@@ -1980,6 +1980,21 @@ button:active:not(:disabled):not(.no-press),
 }
 /* Press compress (hover lift removed — cards tint instead). */
 .card:hover:active{transform: scale(.97)}
+/* Toolbar buttons are small (~32px) — the universal scale(.96) on
+   button:active reads as nothing on a ~58px pill, and --shadow-press
+   (8% white inset, 1px) is invisible on a dark surface. Bump the press
+   to scale(.93) + a theme-neutral bg shift (color-mix toward --t1 so
+   dark themes lighten, light themes darken — --surface-3 can't be used
+   because it equals --surface-2 in the default dark theme) + a clear
+   inset shadow. Specificity (0,3,1) matches button:active:not(...)
+   above and wins by source order. Covers .tb-btn (Today, week arrows,
+   day-window) and .tb-icon-btn (toolbar icons). */
+.tb-btn:active:not(:disabled):not(.no-press),
+.tb-icon-btn:active:not(:disabled):not(.no-press){
+  transform: scale(.93);
+  background: color-mix(in srgb, var(--surface) 70%, var(--t1) 30%);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.22);
+}
 
 /* ── 2 · easing & motion polish (re-declare existing keyframes) ─────── */
 
