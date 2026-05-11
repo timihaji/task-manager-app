@@ -225,7 +225,7 @@ function App() {
   const TM_DEFAULTS = {
     look:'glass', density:'airy', font:'geist', theme:'light',
     accentColor:'#0f766e', showWeekend:true, showProjectPanel:false, inboxCollapsed:false, projectPanelCollapsed:false,
-    inboxWidth:178, projectPanelWidth:190, dayWindow:'auto', cardRadius:10, groupRadius:4, cardGap:3, shadowIntensity:.35,
+    inboxWidth:340, projectPanelWidth:190, dayWindow:'auto', cardRadius:10, groupRadius:4, cardGap:3, shadowIntensity:.35,
     dark_bg:'#071512', dark_surface:'#10201d', dark_sidebar:'#06110f', dark_border:'#1d342f', dark_text:'#e6fffb',
     light_bg:'#f3f7f4', light_surface:'#fffdfa', light_sidebar:'#e7efe9', light_border:'#d5ded7', light_text:'#17211d',
   stackSort:'smart', stackShowCompleted:true, stackGroupByDate:false, stackCompactBelowDeck:true, stackShowSpine:true, stackOrder:[], stackFilterOpen:false, stackFilters:{},
@@ -883,7 +883,7 @@ function App() {
     R.style.setProperty('--card-tint-pct', tintPct);
   },[tweaks]);
 
-  const stickyW = (tweaks.inboxCollapsed?34:(Number(tweaks.inboxWidth)||178)) +
+  const stickyW = (tweaks.inboxCollapsed?34:(Number(tweaks.inboxWidth)||340)) +
     (tweaks.showProjectPanel ? (tweaks.projectPanelCollapsed?34:(Number(tweaks.projectPanelWidth)||190)) : 0);
   const rawDayWindow = tweaks.dayWindow ?? 'auto';
   const dayWindowSetting = [4,5,7].includes(Number(rawDayWindow)) ? Number(rawDayWindow) : 'auto';
@@ -2112,7 +2112,7 @@ function App() {
     e.stopPropagation();
     const key = panel==='inbox' ? 'inboxWidth' : 'projectPanelWidth';
     const startX = e.clientX;
-    const startWidth = Number(tweaks[key]) || (panel==='inbox'?178:190);
+    const startWidth = Number(tweaks[key]) || (panel==='inbox'?340:190);
     const min = panel==='inbox'?132:140;
     const max = panel==='inbox'?340:360;
     const onMove = ev => setTweak(key, Math.max(min, Math.min(max, startWidth + ev.clientX - startX)));
@@ -3329,7 +3329,7 @@ function App() {
           <InboxCol tasks={sidePanelCurrentTasks} theme={theme} tweaks={tweaks} focusedCardId={focusedId} spawning={spawning}
             selectedIds={selectedIds}
             renamingId={renamingId}
-            width={Number(tweaks.inboxWidth)||178}
+            width={Number(tweaks.inboxWidth)||340}
             collapsed={!!tweaks.inboxCollapsed}
             panelView={sidePanelView}
             onPanelView={v=>{setSidePanelView(v);setSettingsOpen(false);setFilterOpen(false);}}
@@ -3355,7 +3355,7 @@ function App() {
             activeProjects={filters.projects}
             width={Number(tweaks.projectPanelWidth)||190}
             collapsed={!!tweaks.projectPanelCollapsed}
-            stickyLeft={tweaks.inboxCollapsed?34:(Number(tweaks.inboxWidth)||178)}
+            stickyLeft={tweaks.inboxCollapsed?34:(Number(tweaks.inboxWidth)||340)}
             onCollapse={()=>setTweak('projectPanelCollapsed',!tweaks.projectPanelCollapsed)}
             onResizeStart={resizeSidePanel}
             onProjectToggle={id=>toggleFilter('projects',id)}/>}
