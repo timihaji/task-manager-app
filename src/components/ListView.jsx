@@ -6,7 +6,7 @@ import { PRI_INFO } from '../utils/constants.js';
 import { CheckGlyph } from './CheckGlyph.jsx';
 import { EmptyState } from './EmptyState.jsx';
 
-function ListTaskItem({ task, focused, selected, renaming, onOpen, onFocus, onSelect, onRename, onRenameDone }) {
+function ListTaskItem({ task, focused, selected, renaming, onOpen, onFocus, onSelect, onRename, onRenameDone, onContextMenu }) {
   const [draft,setDraft] = useState(task.title || '');
   const ref = useRef(null);
   useEffect(()=>setDraft(task.title || ''),[task.id,task.title]);
@@ -17,7 +17,11 @@ function ListTaskItem({ task, focused, selected, renaming, onOpen, onFocus, onSe
     onRenameDone();
   };
   return (
-    <div className={`list-item${focused?' focused':''}${selected?' selected':''}`} data-list-id={task.id} onMouseEnter={()=>onFocus(task.id)} onClick={()=>!renaming&&onFocus(task.id)} onDoubleClick={()=>!renaming&&onOpen(task.id)}>
+    <div className={`list-item${focused?' focused':''}${selected?' selected':''}`} data-list-id={task.id}
+      onMouseEnter={()=>onFocus(task.id)}
+      onClick={()=>!renaming&&onFocus(task.id)}
+      onDoubleClick={()=>!renaming&&onOpen(task.id)}
+      onContextMenu={e=>{ if(onContextMenu){ e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}>
       <button className={`bulk-check${selected?' on':''}`} title={selected?'Deselect task':'Select task'}
         onClick={e=>{e.stopPropagation();onSelect(task.id);}}>{selected?'✓':''}</button>
       <CheckGlyph done={!!task.done} size={13} interactive={false}/>
@@ -45,7 +49,7 @@ function ListTaskItem({ task, focused, selected, renaming, onOpen, onFocus, onSe
   );
 }
 
-function ListView({ title, tasks, onOpen, onFocus, onSelect, selectedIds, focusedCardId, renamingId, onRename, onRenameDone }) {
+function ListView({ title, tasks, onOpen, onFocus, onSelect, selectedIds, focusedCardId, renamingId, onRename, onRenameDone, onContextMenu }) {
   const renderLimit = 500;
   const shownTasks = tasks.slice(0, renderLimit);
   return <div className="list-view">
@@ -53,7 +57,8 @@ function ListView({ title, tasks, onOpen, onFocus, onSelect, selectedIds, focuse
     {tasks.length===0 && <EmptyState kind="list" title="Nothing here yet" hint="Switch to Calendar or Inbox to capture something."/>}
     {shownTasks.map(t=>(
       <ListTaskItem key={t.id} task={t} focused={focusedCardId===t.id} selected={selectedIds?.has(t.id)} renaming={renamingId===t.id}
-        onOpen={onOpen} onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}/>
+        onOpen={onOpen} onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
+        onContextMenu={onContextMenu}/>
     ))}
     {tasks.length>renderLimit && <div className="list-note">Showing first {renderLimit} of {tasks.length}. Search or filter to narrow this list.</div>}
   </div>;
