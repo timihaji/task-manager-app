@@ -816,16 +816,33 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
               return (
                 <>
                   <DRow label="Delegated to">
-                    <input className="dr-inp" list="dr-people-list" placeholder="Type a name…"
-                      value={delegateName}
-                      onChange={e=>setDelegateName(e.target.value)}
-                      onBlur={()=>{
+                    {(() => {
+                      const commitDelegate = () => {
                         const v = delegateName.trim();
                         if (v !== (task.delegatedTo || '')) upd({delegatedTo: v || null});
-                      }}/>
-                    <datalist id="dr-people-list">
-                      {peopleNames.map(n => <option key={n} value={n}/>)}
-                    </datalist>
+                      };
+                      const dirty = delegateName.trim() !== (task.delegatedTo || '');
+                      return (
+                        <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                          <input className="dr-inp" list="dr-people-list" placeholder="Type a name…"
+                            value={delegateName}
+                            onChange={e=>setDelegateName(e.target.value)}
+                            onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); commitDelegate(); } }}
+                            onBlur={commitDelegate}/>
+                          {dirty && (
+                            <button className="dr-pick"
+                              style={{borderColor:'var(--accent)',color:'var(--accent)',background:'var(--accent-dim)'}}
+                              onMouseDown={e=>e.preventDefault()}
+                              onClick={commitDelegate}>
+                              {task.delegatedTo ? 'Update' : 'Add'}
+                            </button>
+                          )}
+                          <datalist id="dr-people-list">
+                            {peopleNames.map(n => <option key={n} value={n}/>)}
+                          </datalist>
+                        </div>
+                      );
+                    })()}
                   </DRow>
                   {task.delegatedTo && (
                     <>
