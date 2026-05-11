@@ -87,7 +87,7 @@ import { Column, InboxCol } from './components/Column.jsx';
 // ── extracted view components ────────────────────────────────────────────
 import { ProjectSidePanel, LeftNav } from './components/sidebar.jsx';
 import { CMDS, CommandPalette, SC_ROWS, ShortcutsOverlay } from './components/modals.jsx';
-import { SwatchPicker, SettingsScrollPane, TaxonomyManager, PRESETS_DATA, SettingsView, SettingsDrawer } from './components/settings.jsx';
+import { SwatchPicker, CardColorPopover, SettingsScrollPane, TaxonomyManager, PRESETS_DATA, SettingsView, SettingsDrawer } from './components/settings.jsx';
 import { ListTaskItem, ListView } from './components/ListView.jsx';
 import { StackView } from './components/StackView.jsx';
 import { AddModal } from './components/AddModal.jsx';
@@ -230,6 +230,11 @@ function App() {
     light_bg:'#f3f7f4', light_surface:'#fffdfa', light_sidebar:'#e7efe9', light_border:'#d5ded7', light_text:'#17211d',
   stackSort:'smart', stackShowCompleted:true, stackGroupByDate:false, stackCompactBelowDeck:true, stackShowSpine:true, stackOrder:[], stackFilterOpen:false, stackFilters:{},
     newTaskPosition:'top',
+    // Per-card colour wash (right-click → Card colour…). Sat / lightShift / pct
+    // are tuned per-theme since the same hex needs different treatment on dark vs light surfaces.
+    cardColorPalette:'Sunset', cardColorMethod:'srgb',
+    cardColorDarkPct:20,  cardColorDarkSat:110, cardColorDarkLightShift:0,
+    cardColorLightPct:50, cardColorLightSat:70, cardColorLightLightShift:0,
     // Bundled UI prefs that used to live in their own localStorage keys.
     filterPrefs: { mode: 'and' },
     groupPrefs: { global: 'project', inbox: 'none' },
@@ -508,6 +513,7 @@ function App() {
   const [tbOverflowOpen,setTbOverflowOpen]=useState(false);
   const [recents,setRecents] = useState({tags:[], projects:[]});
   const [contextMenu,setContextMenu] = useState(null); // {task, x, y}
+  const [cardColorPickerFor,setCardColorPickerFor] = useState(null); // {id, x, y}
   const [popRequest,setPopRequest] = useState(null); // {id, field}
   const [renamingGroupId,setRenamingGroupId] = useState(null);
   const [marquee,setMarquee] = useState(null); // {x0,y0,x1,y1} viewport coords
@@ -869,6 +875,10 @@ function App() {
       R.style.setProperty('--border-s', tweaks.light_border);
       R.style.setProperty('--t1',       tweaks.light_text);
     }
+    // Card-colour wash: method (data-attr) + active per-theme tint percentage
+    R.setAttribute('data-color-style', tweaks.cardColorMethod || 'srgb');
+    const tintPct = t === 'light' ? (tweaks.cardColorLightPct ?? 50) : (tweaks.cardColorDarkPct ?? 20);
+    R.style.setProperty('--card-tint-pct', tintPct);
   },[tweaks]);
 
   const stickyW = (tweaks.inboxCollapsed?34:(Number(tweaks.inboxWidth)||178)) +
@@ -2344,10 +2354,20 @@ function App() {
 
       // Timeline / Inbox / Project reorder + cross-column move.
       if (aData.kind === 'task') {
-        // Drop on a project card (not on a child) → nest into project.
-        if (oData.kind === 'project-target') {
+        // Drop on a project body — only reached when compositeCollisionDetection
+        // routed to the body itself (cursor in top/bottom 8px edge zone, or an
+        // empty body). The middle of the body resolves to a subtask, handled
+        // in the oData.kind === 'task' branch below.
+        if (oData.kind === 'project-body') {
           const srcIds = selectedIds.has(activeId) && selectedIds.size > 1 ? [...selectedIds] : [activeId];
-          handleCardDrop(srcIds, oData.targetId);
+          // Cursor-Y in body's top 8px → nest as first child. Otherwise append.
+          const bodyEl = document.querySelector(`.card[data-card-id="${oData.targetId}"] .card-project-body`);
+          let dropIndex;
+          if (bodyEl && dragPointerY.current != null) {
+            const r = bodyEl.getBoundingClientRect();
+            if (dragPointerY.current - r.top <= 8) dropIndex = 0;
+          }
+          handleCardDrop(srcIds, oData.targetId, dropIndex);
           return;
         }
         // Drop on a custom-group box → join group, optionally move date.
@@ -2382,9 +2402,24 @@ function App() {
         if (oData.kind === 'task') {
           const overTask = taskById(String(over.id));
           if (overTask) {
-            // If we're hovering over a child of a project, nest into that project at the child's slot.
+            // Positional subtask drop: cursor over a subtask → nest at that
+            // subtask's slot, before/after based on cursor-Y vs midpoint
+            // (read from data-drop-line stamped in dndOnDragOver).
             if (overTask.parentId) {
+              const parent = taskById(overTask.parentId);
               const srcIds = selectedIds.has(activeId) && selectedIds.size > 1 ? [...selectedIds] : [activeId];
+              if (parent) {
+                const order = parent.childOrder || [];
+                const idx = order.indexOf(overTask.id);
+                const overEl = document.querySelector(`.card[data-card-id="${overTask.id}"]`);
+                const dir = overEl?.getAttribute('data-drop-line') || 'before';
+                const dropIndex = idx >= 0 ? idx + (dir === 'after' ? 1 : 0) : undefined;
+                // Pass parent.id (not overTask.id) so handleCardDrop's
+                // child→parent re-route doesn't clobber our before/after index
+                // (it would overwrite with `idx`, i.e. always insert-before).
+                handleCardDrop(srcIds, parent.id, dropIndex);
+                return;
+              }
               handleCardDrop(srcIds, overTask.id);
               return;
             }
@@ -3037,7 +3072,7 @@ function App() {
     const colTasks=tasksForCol(colKey);
     const pinClass = colKey===todayStr && todayPin ? `today-pinned pin-${todayPin}` : '';
     return <Column key={`${keyPrefix}${colKey}`} className={pinClass} date={date} tasks={colTasks}
-      focusedCardId={focusedId} selectedIds={selectedIds} spawning={spawning} theme={theme}
+      focusedCardId={focusedId} selectedIds={selectedIds} spawning={spawning} theme={theme} tweaks={tweaks}
       renamingId={renamingId}
       groupBy={globalGroupBy}
       collapsedGrps={collapsedGrps}
@@ -3070,6 +3105,7 @@ function App() {
       {label:'Start Date…', onClick:()=>open('date'),   kbd:'⇧D'},
       {label:'Priority…', onClick:()=>open('pri'),    kbd:'⇧R'},
       {label:'Snooze…',   onClick:()=>open('snooze'), kbd:'S'},
+      {label:'Card colour…', onClick:()=>setCardColorPickerFor({id:t.id, x:contextMenu.x, y:contextMenu.y}), kbd:'⇧C'},
       {type:'sep'},
       {label:'Open in drawer', onClick:()=>openTask(t.id), kbd:'↵'},
       {label:'Rename',         onClick:()=>setRenamingId(t.id), kbd:'E'},
@@ -3288,7 +3324,7 @@ function App() {
       )}
       {view==='week' ? (
         <div className="board-area" ref={boardShellRef} style={{'--col-w':`${COL_W}px`}}>
-          <InboxCol tasks={sidePanelCurrentTasks} theme={theme} focusedCardId={focusedId} spawning={spawning}
+          <InboxCol tasks={sidePanelCurrentTasks} theme={theme} tweaks={tweaks} focusedCardId={focusedId} spawning={spawning}
             selectedIds={selectedIds}
             renamingId={renamingId}
             width={Number(tweaks.inboxWidth)||178}
@@ -3594,6 +3630,18 @@ function App() {
     {contextMenu && (
       <ContextMenu x={contextMenu.x} y={contextMenu.y} items={ctxItems} onClose={()=>setContextMenu(null)}/>
     )}
+    {cardColorPickerFor && (() => {
+      const tk = tasks.find(t => t.id === cardColorPickerFor.id);
+      return (
+        <CardColorPopover
+          x={cardColorPickerFor.x} y={cardColorPickerFor.y}
+          value={tk?.cardColor}
+          palette={tweaks.cardColorPalette || 'Sunset'}
+          onChange={hex => updateTask(cardColorPickerFor.id, { cardColor: hex })}
+          onClear={() => updateTask(cardColorPickerFor.id, { cardColor: null })}
+          onClose={() => setCardColorPickerFor(null)}/>
+      );
+    })()}
     {/* DragOverlay renders the floating ghost that tracks the cursor. dnd-kit's
         sortable strategy keeps the source card in its grid slot (snapping
         between slot positions as you drag past midpoints) — the overlay is

@@ -3,6 +3,7 @@ import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_N
 import { I } from '../utils/icons.jsx';
 import { PRI_INFO } from '../utils/constants.js';
 import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from '../utils/colors.js';
+import { cardColorVars } from '../utils/cardColor.js';
 import { groupTasksBy, getGLabel, getGColor } from '../utils/grouping.js';
 import { CardPopover } from './CardPopover.jsx';
 import { TagPicker, ProjPicker, TimePicker, DatePicker, PriPicker, SnoozePicker } from './pickers.jsx';
@@ -35,7 +36,7 @@ const fmtDueDate = (s) => {
 };
 
 // ── TaskCard ─────────────────────────────────────────────────────────────
-function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, onOpen, onToggle, onDelete, onFocus, onSelect, onRename, onRenameDone,
+function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, spawning, onOpen, onToggle, onDelete, onFocus, onSelect, onRename, onRenameDone,
   sortableData,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
   selectedIds, renamingId, spawningSet, focusedId, onAdd, depth=0, blockingCountFor, taskTitleById,
@@ -106,7 +107,7 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
   });
   const projectDrop = useDroppable({
     id: 'proj:' + task.id,
-    data: { kind: 'project-target', targetId: task.id },
+    data: { kind: 'project-body', targetId: task.id },
     disabled: !renderAsProject,
   });
   const isSortable = !!sortableData && !renaming;
@@ -126,7 +127,7 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
   return (
     <div className={`card${focused?' focused':''}${selected?' selected':''}${isDragging?' dragging':''}${spawning?' spawning':''}${renderAsProject?' card-project':''}${isProjectDropTarget?' card-drop-target':''}${task.blocked?' blocked':''}${isStaleCard?' card-stale':''}${task.checkInOf?' card-checkin':''}`}
       ref={isSortable ? sortable.setNodeRef : undefined}
-      style={dragStyle}
+      style={{...dragStyle, ...cardColorVars(task.cardColor, tweaks, theme)}}
       data-card-id={task.id}
       title={task.blocked ? (task.blockedReason || 'Blocked') + ((task.blockedBy||[]).length && taskTitleById ? '\nWaiting on: ' + (task.blockedBy||[]).map(id=>taskTitleById(id)).filter(Boolean).join(', ') : '') : undefined}
       onClick={()=>!renaming&&onFocus(task.id)}
@@ -323,7 +324,7 @@ function TaskCard({ task, colKey, theme, focused, selected, renaming, spawning, 
                   onClick={e=>{e.stopPropagation();onAdd?.(task.id,null,{beforeId:child.id, parentId:task.id});}}>
                   <button tabIndex={-1}>+</button>
                 </div>
-                <TaskCard task={child} colKey={task.id} theme={theme}
+                <TaskCard task={child} colKey={task.id} theme={theme} tweaks={tweaks}
                   focused={focusedId===child.id}
                   selected={selectedIds?.has(child.id)}
                   renaming={renamingId===child.id}

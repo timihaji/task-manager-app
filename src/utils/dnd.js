@@ -17,25 +17,87 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 
 // Composite collision detection used by every drag in the app.
 //
-// The challenge: dnd-kit's verticalListSortingStrategy only animates the
-// other items shifting (and the active source snapping into a slot) when
-// `over` is itself a sortable item. If `over` is the column-level
-// droppable (cursor in a gap between cards, or in empty column space),
-// transforms reset to identity → the source flickers back to its
-// original position between every gap.
-//
 // Resolution order:
-//   1. Cursor INSIDE a card/project-target → that wins (most specific).
-//   2. Cursor INSIDE a column or group container but not a card → resolve
-//      to the closest card *within that container*. Sortable then
-//      transforms cards in that column smoothly across gaps. If the
-//      container is empty, return the container itself (drop at end).
-//   3. Cursor outside everything → closestCenter / rectIntersection
-//      fallback.
-const SPECIFIC_KINDS = new Set(['task', 'stack-task', 'project-target']);
-const CONTAINER_KINDS = new Set(['column', 'group-target']);
+//   0. Cursor inside an EXPANDED project body — cursor X decides depth:
+//      • Right ~55% of the project card → over = closest subtask by cursor Y
+//        (positional nest). Top/bottom 8px of body → over = body itself
+//        (nest-first / nest-last).
+//      • Left ~45% → over = the project card itself (drop = column sibling).
+//      For internal drags (a subtask reordering within its own body), this
+//      step is skipped so the standard sortable resolution kicks in.
+//      Rects are read via getBoundingClientRect directly (the MeasuringStrategy
+//      cache goes stale after sortable shifts — see CLAUDE.md).
+//   1. Cursor inside a specific (card-level) droppable → that wins.
+//   2. Cursor inside a container (column, group, or project-body for internal
+//      drags) → resolve to the closest card in that container so the sortable
+//      strategy can shift items smoothly across gaps.
+//   3. Outside everything → closestCenter / rectIntersection fallback.
+const SPECIFIC_KINDS = new Set(['task', 'stack-task']);
+const CONTAINER_KINDS = new Set(['column', 'group-target', 'project-body']);
+const NEST_X_FRAC = 0.45;   // cursor X right of this fraction of the card = nest
+const NEST_EDGE_PX = 8;     // top/bottom strip inside body → nest-first/-last
 
 export function compositeCollisionDetection(args) {
+  const pointer = args.pointerCoordinates;
+
+  // Step 0: cursor-X depth resolution for project bodies.
+  if (pointer) {
+    const activeParentId = args.active?.data?.current?.parentId || null;
+    for (const cont of args.droppableContainers) {
+      const d = cont.data?.current;
+      if (d?.kind !== 'project-body') continue;
+      const bodyNode = cont.node?.current;
+      if (!bodyNode) continue;
+      const bodyRect = bodyNode.getBoundingClientRect();
+      if (pointer.x < bodyRect.left || pointer.x > bodyRect.right) continue;
+      if (pointer.y < bodyRect.top || pointer.y > bodyRect.bottom) continue;
+      const targetId = d.targetId;
+      // Internal drag (subtask reordering inside its own body): skip this step
+      // so the standard sortable strategy handles the shift.
+      if (activeParentId === targetId) break;
+      // External drag: cursor X picks depth.
+      const projectCard = typeof document !== 'undefined'
+        ? document.querySelector(`.card[data-card-id="${targetId}"]`)
+        : null;
+      if (!projectCard) break;
+      const pr = projectCard.getBoundingClientRect();
+      const isNest = pointer.x >= pr.left + pr.width * NEST_X_FRAC;
+      if (isNest) {
+        // Edge zones → over = body itself (drop = nest as first/last).
+        const offTop = pointer.y - bodyRect.top;
+        const offBot = bodyRect.bottom - pointer.y;
+        if (offTop <= NEST_EDGE_PX || offBot <= NEST_EDGE_PX) {
+          return [{ id: cont.id, data: { droppableContainer: cont, value: 0 } }];
+        }
+        // Middle of body → closest subtask by cursor Y (direct DOM measure).
+        let closest = null;
+        let minDist = Infinity;
+        for (const c of args.droppableContainers) {
+          const cd = c.data?.current;
+          if (cd?.kind !== 'task' || cd.parentId !== targetId) continue;
+          const n = c.node?.current;
+          if (!n) continue;
+          const r = n.getBoundingClientRect();
+          const mid = r.top + r.height / 2;
+          const dist = Math.abs(pointer.y - mid);
+          if (dist < minDist) { minDist = dist; closest = c; }
+        }
+        if (closest) return [{ id: closest.id, data: { droppableContainer: closest, value: minDist } }];
+        // Empty body — fall through to the body container itself.
+        return [{ id: cont.id, data: { droppableContainer: cont, value: 0 } }];
+      }
+      // Sibling mode: over = the project card itself, so the existing
+      // sibling-reorder path stamps a drop-line on it.
+      const projCont = args.droppableContainers.find(
+        c => c.data?.current?.kind === 'task' && String(c.id) === String(targetId),
+      );
+      if (projCont) {
+        return [{ id: projCont.id, data: { droppableContainer: projCont, value: 0 } }];
+      }
+      break;
+    }
+  }
+
   const pointerCollisions = pointerWithin(args);
 
   // 1. Cursor inside a specific (card-level) droppable
@@ -43,36 +105,23 @@ export function compositeCollisionDetection(args) {
     const k = c.data?.droppableContainer?.data?.current?.kind;
     return SPECIFIC_KINDS.has(k);
   });
-  if (specific.length > 0) {
-    // If multiple specifics, prefer task over project-target (drop on a
-    // card to nest is wide; drop on a child reorders directly).
-    return [...specific].sort((a, b) => {
-      const aK = a.data?.droppableContainer?.data?.current?.kind;
-      const bK = b.data?.droppableContainer?.data?.current?.kind;
-      const order = { 'task': 0, 'stack-task': 0, 'project-target': 1 };
-      return (order[aK] ?? 2) - (order[bK] ?? 2);
-    });
-  }
+  if (specific.length > 0) return specific;
 
-  // 2. Cursor inside a container (column or group). Find the closest card
-  //    in the same column so the active item gets a transform (no flicker
-  //    in column gaps). If the container is empty (no matching cards), the
-  //    container itself is the over-target so onDragEnd can drop at end.
+  // 2. Cursor inside a container (column, group, or project-body for internal
+  //    drags). Find the closest card *in that container* so sortable can
+  //    transform without flicker.
   const container = pointerCollisions.find(c => {
     const k = c.data?.droppableContainer?.data?.current?.kind;
     return CONTAINER_KINDS.has(k);
   });
   if (container) {
     const cd = container.data.droppableContainer.data.current;
-    // Run closestCenter across ALL droppables (not a filtered subset — that
-    // path froze the renderer because dnd-kit's closestCenter expected the
-    // full collection identity), then pick the first match that lives in
-    // the same column as the cursor.
     const allClosest = closestCenter(args);
     const sameCol = allClosest.find(c2 => {
       const dd = c2.data?.droppableContainer?.data?.current;
       if (!dd) return false;
       if (dd.kind !== 'task' && dd.kind !== 'stack-task') return false;
+      if (cd.kind === 'project-body') return dd.parentId === cd.targetId;
       if (cd.kind === 'column') return (dd.date ?? null) === (cd.date ?? null);
       return true; // group: any matching card
     });
