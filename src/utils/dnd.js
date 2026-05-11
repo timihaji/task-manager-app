@@ -118,7 +118,15 @@ export function compositeCollisionDetection(args) {
       if (!dd) return false;
       if (dd.kind !== 'task' && dd.kind !== 'stack-task') return false;
       if (cd.kind === 'project-body') return dd.parentId === cd.targetId;
-      if (cd.kind === 'column') return (dd.date ?? null) === (cd.date ?? null);
+      if (cd.kind === 'column') {
+        // Top-level cards only. Subtasks of an expanded project also live in
+        // the same column-date "namespace", but routing to one via the column
+        // fall-through would re-nest an internal drag (a subtask trying to
+        // escape its parent) because dndOnDragEnd's subtask branch always
+        // re-anchors to the parent. Subtasks are still reachable via Step 0
+        // (project-body) when the cursor is actually inside a body.
+        return (dd.date ?? null) === (cd.date ?? null) && !dd.parentId;
+      }
       return true; // group: any matching card
     });
     if (sameCol) return [sameCol];
