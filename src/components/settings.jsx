@@ -526,6 +526,7 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
             </Card>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,marginTop:24,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Stack view</div>
             <Card>
+              <SRow label="Card density" desc="Vertical padding and gap between cards. Compact fits more on screen; Comfortable gives each card more breathing room."><Seg id="stackCardDensity" opts={['compact','cozy','comfortable']}/></SRow>
               <SRow label="Compact below deck" desc="Cards in positions 4+ render in a denser style to keep focus on the top three."><Tog id="stackCompactBelowDeck"/></SRow>
               <SRow label="Show completed today" desc="Expandable footer listing tasks you ticked off today, with a one-click restore."><Tog id="stackShowCompleted"/></SRow>
               <SRow label="Group by start date" desc="Insert sticky section headers (Overdue, Today, Tomorrow, This week, Later, No start date) between cards. Only takes effect when sort is set to Start."><Tog id="stackGroupByDate"/></SRow>

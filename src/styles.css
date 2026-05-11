@@ -54,6 +54,7 @@ body[data-look="sharp"]{--rk:0px;--shadow:none}
 body[data-look="sharp"] .card,body[data-look="sharp"] .tb-btn,body[data-look="sharp"] .col{border-color:var(--t1)!important}
 body[data-look="glass"]{--rk:8px;--shadow:0 8px 32px rgba(0,0,0,.25)}
 body[data-look="glass"] .card,body[data-look="glass"] .topbar,body[data-look="glass"] .lnav,body[data-look="glass"] .side-panel{backdrop-filter:blur(12px) saturate(140%);background:color-mix(in srgb,var(--surface) 70%,transparent)!important}
+body[data-look="glass"] .card:hover,body[data-look="glass"] .card.focused,body[data-look="glass"] .card.selected{background:color-mix(in srgb,var(--surface-2) 78%,transparent)!important}
 body[data-density="compact"] .card{padding:5px 7px;font-size:11.5px}
 body[data-density="compact"] .col-body{gap:2px}
 body[data-density="airy"] .card{padding:11px 12px}
@@ -266,7 +267,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);display:flex;f
 }
 .stack-grp-box.is-later{opacity:.82}
 .stack-grp-box.is-later .scard.is-later{opacity:1}
-.scard.selected{box-shadow:inset 0 0 0 2px var(--accent), var(--shadow)}
+.scard.selected{background:var(--surface-2)}
 
 /* Marquee selection rectangle (Shift+drag on board / stack) */
 .marquee-rect{position:fixed;border:1px dashed var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);pointer-events:none;z-index:200;border-radius:2px}
@@ -274,17 +275,17 @@ body.marquee-active{cursor:crosshair !important}
 body.marquee-active *{user-select:none !important}
 
 /* cards */
-.card{background:var(--surface);border:1px solid var(--border-s);border-radius:var(--radius-card,2px);padding:7px 8px;cursor:pointer;box-shadow:var(--shadow);transition:box-shadow .12s,transform .12s;user-select:none;position:relative}
-.card:hover{box-shadow:var(--shadow-hover);transform:translateY(-1px)}
+.card{background:var(--surface);border:1px solid var(--border-s);border-radius:var(--radius-card,2px);padding:7px 8px;cursor:pointer;box-shadow:var(--shadow);transition:background-color .12s;user-select:none;position:relative}
+.card:hover{background:var(--surface-2)}
 .card:hover .card-del{opacity:1}
-.card.focused{outline:1px solid var(--accent);outline-offset:-1px}
+.card.focused{background:var(--surface-2)}
 .card-locate-glow,.list-item.card-locate-glow{animation:card-locate-glow 2.2s ease-out forwards;position:relative;z-index:5}
 @keyframes card-locate-glow{
   0%{box-shadow:inset 0 0 0 2px var(--accent),inset 0 0 18px 4px var(--accent),0 0 14px 2px var(--accent);background:var(--accent-dim,rgba(99,102,241,.12))}
   35%{box-shadow:inset 0 0 0 2px var(--accent),inset 0 0 14px 3px var(--accent),0 0 10px 1px var(--accent)}
   100%{box-shadow:inset 0 0 0 0 transparent,inset 0 0 0 0 transparent,0 0 0 0 transparent;background:initial}
 }
-.card.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-border),var(--shadow)}
+.card.selected{background:var(--surface-2)}
 /* Source card during drag — empty placeholder (dashed slot) while the
    DragOverlay ghost tracks the cursor. Matches Linear/Notion pattern. */
 .card.dragging{
@@ -361,7 +362,7 @@ body.marquee-active *{user-select:none !important}
 @keyframes drop-ph-in{from{height:0;opacity:0;margin-top:0;margin-bottom:0}to{height:44px;opacity:1}}
 @keyframes drop-ph-in-sm{from{height:0;opacity:0}to{height:8px;opacity:1}}
 @keyframes drop-ph-preview-in{from{opacity:0;transform:scaleY(.85)}to{opacity:1;transform:scaleY(1)}}
-.card{transition:box-shadow .12s,transform .18s cubic-bezier(.2,.8,.2,1),opacity .12s}
+.card{transition:background-color .12s,box-shadow .12s,opacity .12s}
 
 /* project cards */
 .card.card-project{border-color:color-mix(in srgb,var(--accent) 38%,var(--border-s));box-shadow:var(--shadow)}
@@ -377,6 +378,11 @@ body.marquee-active *{user-select:none !important}
 .card-project-body{margin-top:8px;padding-top:8px;padding-left:10px;border-top:1px dashed var(--border);display:flex;flex-direction:column;gap:var(--card-gap,3px)}
 .card-project-body > .card{cursor:pointer}
 .card-proj-empty{font-size:11px;color:var(--t4);font-style:italic;padding:6px 4px}
+/* During an active drag, the inline +Add zones between subtasks must not
+   intercept pointer events — they sit inside the project body but outside
+   the SortableContext, and their 22px hit box was causing dnd-kit's `over`
+   to oscillate between task and project-body across subtask gaps. */
+body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 
 /* confirm dialog */
 .confirm-dialog{background:var(--surface);border:1px solid var(--border-s);border-radius:4px;box-shadow:var(--shadow-lg);padding:18px 20px;min-width:320px;max-width:480px;animation:su .15s ease}
@@ -515,8 +521,8 @@ body.marquee-active *{user-select:none !important}
 .list-view-title{font-size:18px;font-weight:600;color:var(--t1);margin-bottom:16px;letter-spacing:-.3px}
 .list-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:2px;border:1px solid var(--border-s);background:var(--surface);margin-bottom:5px;cursor:pointer;transition:background .1s}
 .list-item:hover{background:var(--surface-2)}
-.list-item.focused{outline:1px solid var(--accent);outline-offset:-1px}
-.list-item.selected{background:var(--accent-dim);outline:1px solid var(--accent-border);outline-offset:-1px}
+.list-item.focused{background:var(--surface-2)}
+.list-item.selected{background:var(--surface-2)}
 .list-item-title{flex:1;font-size:13px;color:var(--t1)}
 .list-item-title.done{color:var(--t4)}
 .list-item-date{font:11px var(--mono);color:var(--t4)}
@@ -671,14 +677,16 @@ body.marquee-active *{user-select:none !important}
 .stack-body{flex:1;overflow-y:auto;padding:18px 0 200px}
 .stack-inner{max-width:780px;margin:0 auto;padding:0 24px;display:flex;flex-direction:column;gap:8px;position:relative}
 
-/* spine line */
+/* spine line — truly dotted, sits in the gutter to the left of cards */
 .stack-inner::before{
   content:'';
   position:absolute;
   left:42px;top:18px;bottom:8px;
   width:2px;
-  background:linear-gradient(to bottom,var(--accent) 0%,var(--accent) 8%,var(--border) 60%,transparent 100%);
-  opacity:.55;
+  background:repeating-linear-gradient(to bottom,
+    color-mix(in srgb,var(--accent) 65%,var(--t3)) 0 3px,
+    transparent 3px 7px);
+  opacity:.9;
   border-radius:2px;
   pointer-events:none;
   z-index:0;
@@ -703,102 +711,50 @@ body.marquee-active *{user-select:none !important}
 .stack-divider .label{flex-shrink:0}
 .stack-divider .rule{flex:1;height:1px;background:var(--border-s)}
 
-/* cards in the stack */
+/* cards in the stack — Approach 3: compact, Timeline density, inline-prefix tier signal */
 .scard{
   position:relative;
+  margin-left:22px;
   background:var(--surface);
   border:1px solid var(--border-s);
-  border-radius:6px;
-  padding:14px 16px 14px 60px;
+  border-radius:var(--radius-card,var(--rk,2px));
+  padding:7px 8px 7px 8px;
   display:flex;
   flex-direction:column;
-  gap:8px;
+  gap:4px;
   cursor:pointer;
   box-shadow:var(--shadow);
-  transition:transform .18s cubic-bezier(.2,.8,.2,1),box-shadow .15s,opacity .2s,border-color .15s;
+  transition:background-color .15s,opacity .2s;
   z-index:1;
 }
-.scard:hover{transform:translateX(2px);box-shadow:var(--shadow-lg);border-color:var(--accent-border)}
+.scard:hover{background:var(--surface-2)}
 
-/* index column on left of card */
-.scard-idx{
-  position:absolute;
-  left:24px;top:14px;
-  width:30px;height:30px;
-  border-radius:50%;
-  background:var(--surface-2);
-  border:1.5px solid var(--border-s);
-  display:flex;align-items:center;justify-content:center;
-  font:600 12px var(--mono);
-  color:var(--t3);
-  z-index:2;
-}
-
-/* highlight the top card (NOW) */
-.scard.is-now{
-  border:1.5px solid var(--accent);
-  box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 28%, transparent),var(--shadow-lg);
-  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,var(--surface)),var(--surface));
-}
-.scard.is-now .scard-idx{
-  background:var(--accent);
-  border-color:var(--accent);
-  color:#fff;
-  box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 28%, transparent);
-}
-.scard-now-tag{
-  display:inline-flex;
-  align-items:center;gap:4px;
-  margin-left:10px;vertical-align:middle;
-  font:700 9.5px var(--font);
-  letter-spacing:.08em;text-transform:uppercase;
-  color:var(--accent);
-  background:var(--accent-dim);
-  border:1px solid var(--accent-border);
-  padding:2px 7px;border-radius:99px;
-}
-.scard-now-tag::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);animation:scard-pulse 1.6s ease-in-out infinite;display:inline-block}
-@keyframes scard-pulse{0%,100%{opacity:1}50%{opacity:.4}}
-
-/* on-deck (positions 2-3) — second-priority tier.
-   Differentiated from Later via a 3px accent-tinted left stripe and an outlined
-   index circle. Background stays at --surface so reading rhythm is consistent. */
-.scard.is-deck{
-  border:1px solid color-mix(in srgb,var(--accent) 28%,var(--border-s));
-  border-left:3px solid color-mix(in srgb,var(--accent) 45%,var(--border-s));
-}
-.scard.is-deck .scard-idx{
-  background:transparent;
-  color:var(--accent);
-  border:1.5px solid color-mix(in srgb,var(--accent) 55%,var(--border-s));
-}
-
-/* later (4+) — third tier: dimmed, minimal index treatment.
-   The opacity dim plus the dropped circle (text-only number) reads as
-   "tail of the queue" and frees Now/Deck to carry visual weight. */
-.scard.is-later{opacity:.82;border-width:1px}
-.scard.is-later:hover{opacity:1}
-.scard.is-later .scard-idx{
-  background:transparent;
-  border:none;
+/* Tier signal — the inline mono prefix on the title row. Number colour carries
+   the entire Now/Deck/Later hierarchy. No box-styled differences between tiers. */
+.scard-prefix{
+  font-family:var(--mono);
+  font-size:9px;font-weight:700;
+  letter-spacing:.02em;
   color:var(--t4);
-  width:auto;height:auto;
-  font:600 11px var(--mono);
-  top:18px;left:30px;
+  flex-shrink:0;
+  align-self:baseline;
 }
+.scard.is-now .scard-prefix{color:var(--accent-bright,var(--accent))}
+.scard.is-deck .scard-prefix{color:var(--t3)}
+.scard.is-later .scard-prefix{color:var(--t4);opacity:.75}
+.scard.is-later{opacity:.78}
+.scard.is-later:hover{opacity:1}
 
 /* row 1 */
-.scard-r1{display:flex;align-items:flex-start;gap:10px}
+.scard-r1{display:flex;align-items:flex-start;gap:6px}
 .scard-chk{
-  /* Visual size stays 18×18 desktop / 24×24 mobile. Hit-target floor is enforced
-     by the ::before pseudo-element so the visual rhythm doesn't change. */
-  width:18px;height:18px;
+  width:13px;height:13px;
   border-radius:50%;
   border:1.5px solid var(--border-s);
   background:transparent;
   flex-shrink:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
-  margin-top:1px;
+  margin-top:2px;
   padding:0;
   position:relative;
   transition:all .12s;
@@ -811,45 +767,39 @@ body.marquee-active *{user-select:none !important}
 }
 .scard-chk:hover{border-color:var(--accent);background:var(--accent-dim)}
 
-.scard-title{flex:1;font-size:14px;font-weight:500;line-height:1.4;color:var(--t1)}
-.scard-title-text{cursor:text}
-.scard.focused{outline:1px solid var(--accent);outline-offset:-1px}
+.scard-title{flex:1;font-size:12px;font-weight:400;line-height:1.4;color:var(--t1);display:flex;align-items:baseline;gap:6px;min-width:0}
+.scard-title-text{cursor:text;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scard.is-now .scard-title-text{font-weight:500}
+.scard.focused{background:var(--surface-2)}
 .scard.renaming{outline:1px solid var(--accent);outline-offset:-1px}
-.scard-title-input{flex:1;min-width:0;border:1px solid var(--accent);border-radius:2px;background:var(--surface-2);color:var(--t1);font:14px/1.4 var(--font);font-weight:500;padding:2px 6px;outline:none}
-.scard.is-now .scard-title-input{font-size:16px;font-weight:600;letter-spacing:-.2px}
-.scard.is-now .scard-title{font-size:16px;font-weight:600;letter-spacing:-.2px}
-/* Now card has no .scard-chk. To keep titles aligned across all tiers, indent
-   the title row by the same 28px (checkbox 18px + gap 10px) that cards 2+ get
-   from the checkbox itself. .scard-r2 already has padding-left:28px natively. */
-.scard.is-now .scard-r1{padding-left:28px}
+.scard-title-input{flex:1;min-width:0;border:1px solid var(--accent);border-radius:2px;background:var(--surface-2);color:var(--t1);font:12px/1.4 var(--font);font-weight:400;padding:1px 5px;outline:none}
 
-.scard .pri-bars{flex-shrink:0;margin-top:3px}
+.scard .pri-bars{flex-shrink:0;margin-top:0}
 
 /* row 2 — meta chips */
-.scard-r2{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-left:28px}
-.schip{display:inline-flex;align-items:center;gap:4px;font:10.5px var(--font);padding:2px 7px;border-radius:2px;border:1px solid var(--border-s);background:var(--surface-2);color:var(--t3)}
+.scard-r2{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding-left:19px}
+.schip{display:inline-flex;align-items:center;gap:3px;font:9.5px var(--font);padding:1.5px 5px;border-radius:2px;border:1px solid var(--border-s);background:var(--surface-2);color:var(--t3)}
 .schip svg{width:9px;height:9px;opacity:.9}
-.schip-proj{font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.04em}
-.schip-tag{padding-left:5px;border-left-width:2px}
+.schip-proj{font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.04em}
+.schip-tag{padding-left:4px;border-left-width:2px}
 .schip-life{font-weight:500}
 .schip-delegated{background:color-mix(in srgb, var(--accent) 12%, transparent);color:var(--accent);border-color:var(--accent-border)}
 .schip-blocked{background:var(--warning-bg);color:var(--warning-fg);border-color:var(--warning-border)}
 .schip-due-today{background:var(--accent-dim);color:var(--accent);border-color:var(--accent-border);font-weight:600}
 .schip-due-overdue{background:var(--danger-bg);color:var(--danger-fg);border-color:var(--danger-border);font-weight:600}
 .schip-recurring{background:var(--recurring-bg);color:var(--recurring-fg);border-color:var(--recurring-border)}
-.schip-time{font-family:var(--mono);font-size:10px;font-weight:500;color:var(--t2);margin-left:auto;display:inline-flex;align-items:center;gap:3px}
-.scard.is-now .schip-time{color:var(--t1);font-weight:600}
+.schip-time{font-family:var(--mono);font-size:9.5px;font-weight:500;color:var(--t2);margin-left:auto;display:inline-flex;align-items:center;gap:3px}
 
 /* project subtask progress + expander */
 .scard.is-project::after{
   content:'';
   position:absolute;
-  left:39px;top:46px;bottom:14px;
+  left:13px;top:30px;bottom:10px;
   width:2px;
   background:repeating-linear-gradient(to bottom,var(--border-s) 0 4px,transparent 4px 8px);
   z-index:1;
 }
-.scard-proj-prog{padding-left:28px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--t3)}
+.scard-proj-prog{padding-left:19px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--t3)}
 .scard-proj-prog .bar{flex:1;max-width:200px;height:5px;background:var(--surface-3);border-radius:99px;overflow:hidden}
 .scard-proj-prog .bar-fill{height:100%;background:var(--accent);border-radius:99px}
 .scard-proj-prog .num{font-family:var(--mono);font-size:10px;color:var(--t4)}
@@ -863,7 +813,7 @@ body.marquee-active *{user-select:none !important}
 .scard-toggle .chev{display:inline-block;font-size:11px;transition:transform .15s}
 .scard-toggle.open .chev{transform:rotate(90deg)}
 
-.scard-subs{margin-top:6px;margin-left:28px;border-left:1.5px solid var(--accent-border);padding-left:14px;display:flex;flex-direction:column;gap:6px}
+.scard-subs{margin-top:6px;margin-left:19px;border-left:1.5px solid var(--accent-border);padding-left:14px;display:flex;flex-direction:column;gap:6px}
 .scard-sub{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;background:var(--surface-2);border:1px solid transparent;cursor:pointer;transition:background .1s,border-color .1s}
 .scard-sub:hover{background:var(--surface-3);border-color:var(--border-s)}
 .scard-sub-chk{
@@ -920,49 +870,102 @@ body[data-dnd-active="true"]{cursor:grabbing;user-select:none}
    inline transform on whichever card the cursor passes over, snapping the
    card back to its un-shifted position and producing the flicker. */
 body[data-dnd-active="true"] .scard-subs{pointer-events:none}
-body[data-dnd-active="true"] .scard:hover{transform:none;box-shadow:var(--shadow);border-color:var(--border-s)}
-body[data-dnd-active="true"] .card:hover{transform:none;box-shadow:var(--shadow);border-color:var(--border-s)}
+body[data-dnd-active="true"] .scard:hover{background:var(--surface);box-shadow:var(--shadow);border-color:var(--border-s)}
+body[data-dnd-active="true"] .card:hover{background:var(--surface);box-shadow:var(--shadow);border-color:var(--border-s)}
 
-/* density variants */
-body[data-density="compact"] .scard{padding:10px 12px 10px 54px}
-body[data-density="compact"] .scard-idx{left:20px;top:10px;width:26px;height:26px;font-size:11px}
-body[data-density="compact"] .scard-r2{padding-left:24px}
-body[data-density="compact"] .scard-proj-prog{padding-left:24px}
-body[data-density="airy"] .scard{padding:18px 18px 18px 64px}
-body[data-density="airy"] .scard-idx{left:26px;top:18px;width:32px;height:32px}
+/* density variants — use longhand so the rail's padding-right (below) survives */
+body[data-density="compact"] .scard{padding-top:5px;padding-bottom:5px;padding-left:8px}
+body[data-density="compact"] .scard-r2{padding-left:17px}
+body[data-density="compact"] .scard-proj-prog{padding-left:17px}
+body[data-density="airy"] .scard{padding-top:10px;padding-bottom:10px;padding-left:12px}
+body[data-density="airy"] .scard-r2{padding-left:23px}
 
-/* === STACK PHASE 3: actions, complete-fade, done-today === */
-.scard-actions{
-  position:absolute;top:10px;right:10px;
-  display:flex;gap:6px;
-  opacity:0;transform:translateY(-2px);
-  transition:opacity .15s ease,transform .15s ease;
-  pointer-events:none;
-  z-index:3;
+/* Stack-specific card density — overrides global data-density for Stack view.
+   stackCardDensity tweak: compact | cozy (default) | comfortable */
+body[data-stack-density="compact"] .scard{padding-top:4px;padding-bottom:4px;gap:3px}
+body[data-stack-density="compact"] .stack-inner{gap:4px}
+body[data-stack-density="cozy"] .scard{padding-top:7px;padding-bottom:7px;gap:4px}
+body[data-stack-density="cozy"] .stack-inner{gap:8px}
+body[data-stack-density="comfortable"] .scard{padding-top:11px;padding-bottom:11px;gap:7px}
+body[data-stack-density="comfortable"] .stack-inner{gap:14px}
+body[data-stack-density="comfortable"] .scard-title-text{font-size:13px}
+body[data-stack-density="comfortable"] .scard-chk{width:15px;height:15px}
+body[data-stack-density="comfortable"] .scard-rail button{width:20px;height:20px;font-size:12px}
+
+/* === STACK rail (Approach 3 + controls): inline horizontal rail at right
+   end of the title row. 4 buttons: move-up, move-down, kebab menu, edit.
+   ⋯ opens .scard-menu (long-tail actions). ✎ opens the existing TaskDrawer
+   via onOpen(task.id) — no inline panel. */
+.scard-rail{
+  display:inline-flex;
+  flex-shrink:0;
+  gap:2px;
+  align-self:flex-start;
+  margin-top:-1px;
 }
-.scard:hover .scard-actions{opacity:1;transform:translateY(0);pointer-events:auto}
-.scard.is-now .scard-actions{opacity:1;transform:translateY(0);pointer-events:auto}
-.scard-act-btn{
-  font:600 11px var(--font);
-  padding:6px 12px;border-radius:99px;cursor:pointer;
-  background:var(--surface-2);color:var(--t2);
-  border:1px solid var(--border-s);
-  min-height:28px;
-  transition:background .12s,color .12s,border-color .12s;
-}
-.scard-act-btn:hover{background:var(--surface-3);color:var(--t1);border-color:var(--accent-border)}
-.scard-act-done{
-  background:var(--accent);color:#fff;border-color:var(--accent);
-  box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
-}
-.scard-act-done:hover{background:var(--accent);color:#fff;border-color:var(--accent);filter:brightness(1.08)}
-.scard-act-icon{
+.scard-rail button{
+  width:20px;height:20px;padding:0;
+  background:transparent;color:var(--t4);
+  border:1px solid transparent;border-radius:2px;
+  cursor:pointer;opacity:.6;
   display:inline-flex;align-items:center;justify-content:center;
-  width:28px;height:28px;padding:0;
+  font:600 12px var(--font);line-height:1;
+  transition:opacity .12s,background .12s,color .12s,border-color .12s;
+  position:relative;
 }
-.scard-act-icon svg{width:13px;height:13px}
-.scard-act-icon:disabled{opacity:.35;cursor:not-allowed}
-.scard-act-icon:disabled:hover{background:var(--surface-2);color:var(--t2);border-color:var(--border-s)}
+/* Invisible 28×28 hit area centred on each rail button so off-by-a-pixel clicks still land. */
+.scard-rail button::before{
+  content:'';position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:28px;height:28px;
+}
+.scard-rail button:hover{
+  background:var(--surface-2);border-color:var(--border-s);
+  color:var(--accent-bright,var(--accent));opacity:1;
+}
+.scard-rail button.act{opacity:1;color:var(--accent-bright,var(--accent));background:var(--surface-2);border-color:var(--border-s)}
+.scard-rail button:disabled{opacity:.25;cursor:not-allowed}
+.scard-rail button:disabled:hover{background:transparent;border-color:transparent;color:var(--t4)}
+.scard-rail button svg{width:11px;height:11px}
+.scard-rail .kebab{font-size:14px;letter-spacing:-1px}
+.scard-rail .edit{font-size:11px}
+.scard:hover .scard-rail button{opacity:.95}
+.scard:hover .scard-rail button:disabled{opacity:.25}
+
+/* Always-uniform priority bars: pinned to the right of the meta row
+   regardless of which chips are present. Neutralise schip-time's auto-margin
+   inside the stack context so the two don't fight for the free space. */
+.scard .pri-bars{margin-left:auto;flex-shrink:0;margin-top:0;height:10px;align-items:flex-end}
+.scard-r2 .schip-time{margin-left:0}
+
+/* kebab menu — drops down from below the rail */
+.scard-menu{
+  position:absolute;top:28px;right:6px;
+  min-width:164px;
+  background:var(--surface-2);
+  border:1px solid var(--border-s);border-radius:2px;
+  padding:3px;
+  box-shadow:var(--shadow-lg);
+  z-index:20;
+  display:flex;flex-direction:column;
+  animation:scard-menu-in .12s ease;
+}
+@keyframes scard-menu-in{from{opacity:0;transform:translateY(-2px)}to{opacity:1;transform:none}}
+.scard-menu button{
+  background:transparent;border:none;
+  color:var(--t2);font:500 11px var(--font);
+  padding:5px 9px 5px 7px;text-align:left;
+  cursor:pointer;border-radius:2px;
+  display:flex;align-items:center;gap:7px;
+}
+.scard-menu button:hover{background:var(--surface-3);color:var(--t1)}
+.scard-menu button.danger{color:#fca5a5}
+.scard-menu .glyph{
+  display:inline-block;width:11px;text-align:center;
+  color:var(--t3);font-size:10px;flex-shrink:0;
+}
+.scard-menu button.danger .glyph{color:#fca5a5}
+.scard-menu .sep{height:1px;background:var(--border-s);margin:3px 6px}
 
 /* "+ New task" button at top of stack — secondary (topbar primary owns the global CTA) */
 .stack-add-top{
@@ -1013,13 +1016,14 @@ body[data-density="airy"] .scard-idx{left:26px;top:18px;width:32px;height:32px}
 .stack-done-list{display:flex;flex-direction:column;gap:6px;width:100%;animation:toast-in .18s ease}
 .scard.completed{
   opacity:.55;
-  padding:8px 14px 8px 50px;
+  margin-left:0;
+  padding:5px 8px;
   cursor:default;
   background:var(--surface-2);
   box-shadow:none;
 }
 .scard.completed:hover{transform:none;opacity:.85;box-shadow:none;border-color:var(--border-s)}
-.scard.completed .scard-title{font-size:12.5px;font-weight:500;color:var(--t3)}
+.scard.completed .scard-title{font-size:11px;font-weight:400;color:var(--t3)}
 .scard.completed .scard-chk.done{
   background:var(--accent);border-color:var(--accent);
   display:flex;align-items:center;justify-content:center;
@@ -1972,8 +1976,8 @@ button:active:not(:disabled):not(.no-press),
 .del-card-hdr:active,.del-task-title:active{
   transform: scale(.97);
 }
-/* Combine the existing card hover lift with the press compress. */
-.card:hover:active{transform: translateY(-1px) scale(.97)}
+/* Press compress (hover lift removed — cards tint instead). */
+.card:hover:active{transform: scale(.97)}
 
 /* ── 2 · easing & motion polish (re-declare existing keyframes) ─────── */
 
@@ -2054,8 +2058,8 @@ body[data-theme="dark"]{
 /* (Reverted: 18 px checkbox upsize + fill/tick keyframes — user prefers
    the existing CheckGlyph spring at original sizes.) */
 
-/* 5c · Focus ring sits OUTSIDE the card border (was inset → muddy). */
-.card.focused{outline: 2px solid var(--accent); outline-offset: 2px}
+/* 5c · Focus state: subtle surface tint (replaces outline ring). */
+.card.focused{background: var(--surface-2)}
 
 /* 5d · Done-state title transitions softly (paired with strike-draw in §2). */
 .card-title{transition: color .25s var(--ease-out)}
@@ -2089,16 +2093,9 @@ body[data-theme="dark"]{
 .side-panel .es-icon svg{width: 24px; height: 24px}
 .side-panel .es .es-hint{font-size: 11px; max-width: 180px}
 
-/* ── 7 · Hover anticipation: neighbours subtly lean away ─────────────── */
+/* ── 7 · Hover anticipation removed — cards tint in place, no movement ── */
 .col-body .card,.col-body .scard,.list-view .card{
-  transition: transform .18s var(--ease-out), box-shadow .18s var(--ease-out);
-}
-.col-body .card:hover,.col-body .card:has(+ .card:hover),
-.list-view .card:hover,.list-view .card:has(+ .card:hover){
-  transform: translateY(-1px);
-}
-.col-body .card:hover + .card,.list-view .card:hover + .card{
-  transform: translateY(1px);
+  transition: background-color .18s var(--ease-out), box-shadow .18s var(--ease-out);
 }
 
 /* ── 7 · Ambient breathing on the Today badge ────────────────────────── */
@@ -2277,6 +2274,7 @@ body .scard[data-drop-line="after"]{
   transition:
     margin-top 240ms cubic-bezier(.2,.7,.2,1),
     margin-bottom 240ms cubic-bezier(.2,.7,.2,1),
+    background-color .12s var(--ease-out),
     box-shadow .14s var(--ease-out),
     opacity .12s var(--ease-out) !important;
 }
@@ -2352,10 +2350,12 @@ body[data-armed-col="2000-01-01"] { /* dummy keep-rule to anchor attr selector *
    !important is required to beat existing forced-background rules:
      - body[data-look="glass"] .card { background: ... !important }   (line ~56)
      - .col.is-today .card { background: var(--surface) !important } (line ~213)
+   These would otherwise wipe out the wash entirely on glass-look or today's column.
    The glass-look composition rules below mix the wash into the same 70%-transparent
    base used by the bare glass rule, so the glass blur stays intact under the tint.
    ============================================================================ */
 
+/* Method: sRGB mix (linear) — default */
 body[data-color-style="srgb"] .card[style*="--card-color"],
 body[data-color-style="srgb"] .scard[style*="--card-color"]{
   background: color-mix(in srgb, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface)) !important;
@@ -2365,6 +2365,7 @@ body[data-color-style="srgb"] .scard.selected[style*="--card-color"]{
   background: color-mix(in srgb, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface-2)) !important;
 }
 
+/* Method: OKLCH mix (perceptually uniform) */
 body[data-color-style="oklch"] .card[style*="--card-color"],
 body[data-color-style="oklch"] .scard[style*="--card-color"]{
   background: color-mix(in oklch, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface)) !important;
@@ -2374,6 +2375,7 @@ body[data-color-style="oklch"] .scard.selected[style*="--card-color"]{
   background: color-mix(in oklch, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface-2)) !important;
 }
 
+/* Method: HSL mix (vivid intermediates) */
 body[data-color-style="hsl"] .card[style*="--card-color"],
 body[data-color-style="hsl"] .scard[style*="--card-color"]{
   background: color-mix(in hsl, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface)) !important;
@@ -2383,11 +2385,13 @@ body[data-color-style="hsl"] .scard.selected[style*="--card-color"]{
   background: color-mix(in hsl, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface-2)) !important;
 }
 
+/* Method: Pure colour (no surface bleed-through). Strength is ignored. */
 body[data-color-style="solid"] .card[style*="--card-color"],
 body[data-color-style="solid"] .scard[style*="--card-color"]{
   background: var(--eff-color, var(--card-color)) !important;
 }
 
+/* Method: Translucent overlay (colour layer ON TOP of surface, alpha-composited) */
 body[data-color-style="overlay"] .card[style*="--card-color"],
 body[data-color-style="overlay"] .scard[style*="--card-color"]{
   background-color: var(--surface) !important;
@@ -2399,6 +2403,9 @@ body[data-color-style="overlay"] .scard.selected[style*="--card-color"]{
   background-image: linear-gradient(var(--overlay-rgba, transparent), var(--overlay-rgba, transparent)) !important;
 }
 
+/* Glass-look composition: when look=glass, the bare card uses backdrop-filter blur
+   over a 70%-opaque surface. Re-mix the wash into that same translucent base so the
+   glass feel stays intact rather than going flat-opaque under the tint. */
 body[data-look="glass"][data-color-style="srgb"] .card[style*="--card-color"],
 body[data-look="glass"][data-color-style="srgb"] .scard[style*="--card-color"]{
   background: color-mix(in srgb,

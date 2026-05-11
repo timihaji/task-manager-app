@@ -837,6 +837,7 @@ function App() {
     document.body.setAttribute('data-theme', t);
     document.body.setAttribute('data-look', tweaks.look||'minimal');
     document.body.setAttribute('data-density', tweaks.density||'normal');
+    document.body.setAttribute('data-stack-density', tweaks.stackCardDensity||'cozy');
     const R = document.body;
     R.style.setProperty('--font', tweaks.font==='serif'?"'DM Serif Display',serif":tweaks.font==='mono'?"'Geist Mono',monospace":"'Geist',sans-serif");
     R.style.setProperty('--accent', tweaks.accentColor);

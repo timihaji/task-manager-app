@@ -7,7 +7,6 @@ import { PriBars } from './PriBars.jsx';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useTapSpring } from '../hooks/useTapSpring.js';
-import { SPRING } from '../hooks/springs.js';
 import { useMagnet } from '../hooks/useMagnet.js';
 import { CheckGlyph } from './CheckGlyph.jsx';
 
@@ -195,13 +194,22 @@ function ChipRow({ task, isProject, allTasks, theme }) {
 }
 
 function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing, allTasks, theme, tweaks, isFirst, isLast,
-                    expanded, onToggleExpand, onOpen, onComplete, onSendToTop, onSendToBottom, onSubToggle,
+                    expanded, onToggleExpand, onOpen, onComplete, onMoveUp, onMoveDown,
+                    onSendToTop, onSendToBottom, onSubToggle,
                     sortableIds,
                     focused, renaming, onFocus, onContextMenu, onRename, onStartRename, onRenameDone,
                     selected, onSelect }) {
-  const doneTap = useTapSpring({ pressedScale: 0.9, releaseKick: 3.0, spring: SPRING.bounce });
-  const upTap = useTapSpring();
-  const downTap = useTapSpring();
+  // Shared rail-button pointerdown handler.
+  // setPointerCapture redirects subsequent pointer events for this pointer to
+  // the button, which prevents dnd-kit's PointerSensor on .scard from ever
+  // seeing pointermove → drag never activates → click survives. This is the
+  // same protection useTapSpring gave move-up/down; here it's free-standing
+  // so kebab and edit get it too, without the scale animation.
+  const railPointerDown = (e) => {
+    e.stopPropagation();
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+  };
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
   } = useSortable({
@@ -214,11 +222,24 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
     transition,
   };
   const [draft, setDraft] = useState(task.title || '');
+  const [menuOpen, setMenuOpen] = useState(false);
   const inputRef = useRef(null);
   useEffect(()=>{ setDraft(task.title || ''); }, [task.id, task.title]);
   useEffect(()=>{
     if (renaming) requestAnimationFrame(()=>{ inputRef.current?.focus(); inputRef.current?.select(); });
   }, [renaming]);
+  // Close menu on outside click. Scoped to this card via data-card-id
+  // so clicks on another card's rail still close ours first.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const fn = (e) => {
+      if (!e.target?.closest) return;
+      if (e.target.closest(`[data-card-id="${task.id}"]`)) return;
+      setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
+  }, [menuOpen, task.id]);
   const finishRename = (save=true) => {
     if (save && draft.trim() && draft.trim() !== task.title) onRename?.(task.id, { title: draft.trim() });
     else setDraft(task.title || '');
@@ -229,6 +250,10 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
   const openSubs = kids.filter(c => !c.done);
   const doneSubs = kids.filter(c => c.done);
   const projectPct = kids.length ? Math.round((doneSubs.length / kids.length) * 100) : 0;
+  const tomorrowStr = () => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  };
 
   const klass = [
     'scard',
@@ -241,6 +266,7 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
     focused && 'focused',
     renaming && 'renaming',
     selected && 'selected',
+    menuOpen && 'menu-open',
   ].filter(Boolean).join(' ');
 
   const isCardSurface = (e) => {
@@ -249,6 +275,7 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
     if (e.target.closest('input')) return false;
     if (e.target.closest('.scard-subs')) return false;
     if (e.target.closest('.scard-sub-chk')) return false;
+    if (e.target.closest('.scard-menu')) return false;
     return true;
   };
   const handleCardClick = (e) => {
@@ -270,44 +297,42 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
          onDoubleClick={handleCardDoubleClick}
          onMouseEnter={()=>!renaming && onFocus?.(task.id)}
          onContextMenu={(e)=>{ if (onContextMenu) { e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}>
-      <div className="scard-idx">{showIdx ? (idx+1) : ''}</div>
 
-      <div className="scard-actions" onClick={e=>e.stopPropagation()}>
-        {isNow && (
-          <button className="scard-act-btn scard-act-done no-press" title="Mark done (Enter)"
-                  {...doneTap.props}
-                  style={{ transform: `scale(${doneTap.scale})` }}
-                  onClick={()=>onComplete?.(task.id)}>
-            ✓ Done
+      {menuOpen && (
+        <div className="scard-menu"
+             onPointerDown={e=>e.stopPropagation()}
+             onClick={e=>e.stopPropagation()}>
+          <button onClick={()=>{ setMenuOpen(false); onComplete?.(task.id); }}>
+            <span className="glyph">✓</span>Mark done
           </button>
-        )}
-        <button className="scard-act-btn scard-act-icon no-press" title="Send to top"
-                disabled={isFirst}
-                {...upTap.props}
-                style={{ transform: `scale(${upTap.scale})` }}
-                onClick={()=>onSendToTop?.(task.id)} aria-label="Send to top">
-          <I.ArrUp/>
-        </button>
-        <button className="scard-act-btn scard-act-icon no-press" title="Send to bottom"
-                disabled={isLast}
-                {...downTap.props}
-                style={{ transform: `scale(${downTap.scale})` }}
-                onClick={()=>onSendToBottom?.(task.id)} aria-label="Send to bottom">
-          <I.ArrDown/>
-        </button>
-      </div>
+          <button onClick={()=>{ setMenuOpen(false); onRename?.(task.id, { date: tomorrowStr() }); }}>
+            <span className="glyph">→</span>Defer to tomorrow
+          </button>
+          <div className="sep"/>
+          <button disabled={isFirst}
+                  onClick={()=>{ setMenuOpen(false); onSendToTop?.(task.id); }}>
+            <span className="glyph">⇈</span>Send to top
+          </button>
+          <button disabled={isLast}
+                  onClick={()=>{ setMenuOpen(false); onSendToBottom?.(task.id); }}>
+            <span className="glyph">⇊</span>Send to bottom
+          </button>
+          <div className="sep"/>
+          <button onClick={()=>{ setMenuOpen(false); onStartRename?.(task.id); }}>
+            <span className="glyph">✎</span>Rename
+          </button>
+          <button onClick={()=>{ setMenuOpen(false); onOpen?.(task.id); }}>
+            <span className="glyph">↗</span>Open details…
+          </button>
+        </div>
+      )}
 
       <div className="scard-r1">
-        {/* Now card has the prominent "✓ Done" button in .scard-actions; the
-            checkbox here would be a third complete affordance for the same task
-            (button + checkbox + Enter). Hide it on Now to keep the gesture
-            unambiguous; cards 2+ still show the checkbox. */}
-        {!isNow && (
-          <button className="scard-chk cg-host no-press" title="Mark complete"
-                  onClick={(e)=>{e.stopPropagation(); onComplete?.(task.id);}}>
-            <CheckGlyph done={!!task.done} size={16}/>
-          </button>
-        )}
+        <button className="scard-chk cg-host no-press" title="Mark complete"
+                onPointerDown={e=>e.stopPropagation()}
+                onClick={(e)=>{e.stopPropagation(); onComplete?.(task.id);}}>
+          <CheckGlyph done={!!task.done} size={11}/>
+        </button>
         {renaming ? (
           <input ref={inputRef} className="scard-title-input" value={draft}
                  onClick={e=>e.stopPropagation()}
@@ -320,13 +345,46 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
                  }}/>
         ) : (
           <div className="scard-title">
+            {showIdx && (
+              <span className="scard-prefix">
+                {String(idx+1).padStart(2,'0')}
+              </span>
+            )}
             <span className="scard-title-text"
                   onDoubleClick={(e)=>{ e.stopPropagation(); onStartRename?.(task.id); }}>
               {task.title}
             </span>
-            {isNow && <span className="scard-now-tag">Now</span>}
           </div>
         )}
+        <div className="scard-rail"
+             onPointerDown={e=>e.stopPropagation()}
+             onMouseDown={e=>e.stopPropagation()}
+             onClick={e=>e.stopPropagation()}>
+          <button className="no-press" title="Move up"
+                  disabled={isFirst}
+                  onPointerDown={railPointerDown}
+                  onClick={(e)=>{e.stopPropagation(); onMoveUp?.(task.id);}}
+                  aria-label="Move up">
+            <I.ArrUp/>
+          </button>
+          <button className="no-press" title="Move down"
+                  disabled={isLast}
+                  onPointerDown={railPointerDown}
+                  onClick={(e)=>{e.stopPropagation(); onMoveDown?.(task.id);}}
+                  aria-label="Move down">
+            <I.ArrDown/>
+          </button>
+          <button className={`kebab${menuOpen?' act':''}`}
+                  title="More actions"
+                  onPointerDown={railPointerDown}
+                  onClick={(e)=>{e.stopPropagation(); setMenuOpen(o=>!o);}}
+                  aria-label="More actions">⋯</button>
+          <button className="edit"
+                  title="Edit details"
+                  onPointerDown={railPointerDown}
+                  onClick={(e)=>{e.stopPropagation(); setMenuOpen(false); onOpen?.(task.id);}}
+                  aria-label="Edit details">✎</button>
+        </div>
       </div>
 
       <ChipRow task={task} isProject={isProject} allTasks={allTasks} theme={theme}/>
@@ -454,6 +512,26 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
         const n = new Set(prev); n.delete(id); return n;
       });
     }, COMPLETE_ANIM_MS);
+  };
+
+  const handleMoveUp = (id) => {
+    const ids = sorted.map(t => t.id);
+    const i = ids.indexOf(id);
+    if (i <= 0) return;
+    const reordered = [...ids];
+    [reordered[i-1], reordered[i]] = [reordered[i], reordered[i-1]];
+    setTweak('stackOrder', reordered);
+    if (sortMode !== 'manual') setTweak('stackSort', 'manual');
+  };
+
+  const handleMoveDown = (id) => {
+    const ids = sorted.map(t => t.id);
+    const i = ids.indexOf(id);
+    if (i < 0 || i === ids.length - 1) return;
+    const reordered = [...ids];
+    [reordered[i], reordered[i+1]] = [reordered[i+1], reordered[i]];
+    setTweak('stackOrder', reordered);
+    if (sortMode !== 'manual') setTweak('stackSort', 'manual');
   };
 
   const handleSendToTop = (id) => {
@@ -648,6 +726,8 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
                   onToggleExpand={toggleExpand}
                   onOpen={onOpen}
                   onComplete={handleComplete}
+                  onMoveUp={handleMoveUp}
+                  onMoveDown={handleMoveDown}
                   onSendToTop={handleSendToTop}
                   onSendToBottom={handleSendToBottom}
                   onSubToggle={handleSubToggle}
