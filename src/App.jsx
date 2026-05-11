@@ -2479,13 +2479,17 @@ function App() {
     return out;
   };
 
-  const reorderManyInDate = (taskIds, dateKey, anchorId) => {
+  // insertAfter=true means "drop after the anchor card" (cursor in the lower
+  // half of the anchor, or below the last card). Without this branch, the
+  // dnd-kit collision detection always picks the closest card as anchor and
+  // we'd insert before it — so dropping below the last card in a column
+  // landed second-to-last instead of last, which feels like a snap-back.
+  const reorderManyInDate = (taskIds, dateKey, anchorId, insertAfter = false) => {
     if (!taskIds || !taskIds.length) return;
-    console.log('[DIAG reorderManyInDate] taskIds=%o, dateKey=%s, anchorId=%s', taskIds, dateKey, anchorId);
     setTasks(prev => {
       const idSet = new Set(taskIds);
       const movedOrdered = prev.filter(t => idSet.has(t.id));
-      if (!movedOrdered.length) { console.log('[DIAG reorderManyInDate] no movedOrdered, returning prev'); return prev; }
+      if (!movedOrdered.length) return prev;
       const remaining = prev.filter(t => !idSet.has(t.id));
       const inCol = remaining.filter(t => t.date===dateKey && !t.done && !t.parentId && !t.archived && !t.snoozedUntil && !t.someday);
       let anchorTask = anchorId ? inCol.find(t => t.id === anchorId) : null;
@@ -2498,15 +2502,20 @@ function App() {
           }
         }
       }
-      const anchorIdxInCol = anchorTask ? inCol.indexOf(anchorTask) : inCol.length;
-      const above = anchorIdxInCol > 0 ? inCol[anchorIdxInCol - 1] : null;
-      const below = anchorTask;
+      // Slot index: where the moved card(s) will sit in the column. For an
+      // "after" drop, advance one past the anchor — that may push us past the
+      // last index, which legitimately means "drop at end" (below = null).
+      let slotIdx = anchorTask ? inCol.indexOf(anchorTask) : inCol.length;
+      if (anchorTask && insertAfter) slotIdx += 1;
+      const above = slotIdx > 0 ? inCol[slotIdx - 1] : null;
+      const below = slotIdx < inCol.length ? inCol[slotIdx] : null;
       const positions = computeGroupPositions(above, below, movedOrdered.length);
-      console.log('[DIAG reorderManyInDate] above=%o below=%o newPositions=%o oldPositions=%o', above && {id:above.id, pos:above.position}, below && {id:below.id, pos:below.position}, positions, movedOrdered.map(t=>({id:t.id, pos:t.position})));
       const patched = movedOrdered.map((t, i) => ({...t, date: dateKey, parentId: null, position: positions[i]}));
-      const insertAt = anchorTask
-        ? remaining.indexOf(anchorTask)
-        : (inCol.length ? remaining.indexOf(inCol[inCol.length - 1]) + 1 : remaining.length);
+      // Array insert index mirrors the column slot.
+      let insertAt;
+      if (below) insertAt = remaining.indexOf(below);
+      else if (above) insertAt = remaining.indexOf(above) + 1;
+      else insertAt = remaining.length;
       const result = [...remaining];
       result.splice(insertAt, 0, ...patched);
       const parentIds = new Set(movedOrdered.filter(t => t.parentId).map(t => t.parentId));
@@ -2519,7 +2528,7 @@ function App() {
     });
   };
 
-  const reorderManyToInbox = (taskIds, anchorId) => {
+  const reorderManyToInbox = (taskIds, anchorId, insertAfter = false) => {
     if (!taskIds || !taskIds.length) return;
     setTasks(prev => {
       const idSet = new Set(taskIds);
@@ -2536,14 +2545,16 @@ function App() {
           }
         }
       }
-      const anchorIdxInInbox = anchorTask ? inbox.indexOf(anchorTask) : inbox.length;
-      const above = anchorIdxInInbox > 0 ? inbox[anchorIdxInInbox - 1] : null;
-      const below = anchorTask;
+      let slotIdx = anchorTask ? inbox.indexOf(anchorTask) : inbox.length;
+      if (anchorTask && insertAfter) slotIdx += 1;
+      const above = slotIdx > 0 ? inbox[slotIdx - 1] : null;
+      const below = slotIdx < inbox.length ? inbox[slotIdx] : null;
       const positions = computeGroupPositions(above, below, movedOrdered.length);
       const patched = movedOrdered.map((t, i) => ({...t, date: null, parentId: null, position: positions[i]}));
-      const insertAt = anchorTask
-        ? remaining.indexOf(anchorTask)
-        : (inbox.length ? remaining.indexOf(inbox[inbox.length - 1]) + 1 : remaining.length);
+      let insertAt;
+      if (below) insertAt = remaining.indexOf(below);
+      else if (above) insertAt = remaining.indexOf(above) + 1;
+      else insertAt = remaining.length;
       const result = [...remaining];
       result.splice(insertAt, 0, ...patched);
       const parentIds = new Set(movedOrdered.filter(t => t.parentId).map(t => t.parentId));
@@ -2680,9 +2691,8 @@ function App() {
     const aData = active.data.current || {};
     const oData = over?.data.current || {};
     const activeId = String(active.id);
-    console.log('[DIAG dragEnd]', { activeId, overId: over?.id || null, aKind: aData.kind, oKind: oData.kind, aDate: aData.date, oDate: oData.date });
     try {
-      if (!over) { console.log('[DIAG dragEnd] EARLY RETURN: no over target'); return; }
+      if (!over) return;
       haptics.drop();
 
       // Stack reorder — both source and target are stack tasks.
@@ -2824,13 +2834,18 @@ function App() {
           ? [...selectedIds]
           : [activeId];
         const anchorId = oData.kind === 'task' ? String(over.id) : null;
+        // Read drop-line direction stamped by dndOnDragOver — cursor in the
+        // lower half of the over-card (or below the last card in a column)
+        // means "drop after", which advances the slot one past the anchor.
+        const anchorEl = anchorId ? document.querySelector(`.card[data-card-id="${anchorId}"]`) : null;
+        const insertAfter = anchorEl?.getAttribute('data-drop-line') === 'after';
         if (targetDate == null) {
-          reorderManyToInbox(srcIds, anchorId);
+          reorderManyToInbox(srcIds, anchorId, insertAfter);
         } else {
           // Detect drag-into-past BEFORE reorder so we read pre-move task state.
           // Skip projects with open kids — completeTask would pop a confirm modal mid-drag.
           const past = D.isPast(targetDate);
-          reorderManyInDate(srcIds, targetDate, anchorId);
+          reorderManyInDate(srcIds, targetDate, anchorId, insertAfter);
           if (past) {
             for (const id of srcIds) {
               const t = taskById(id);
