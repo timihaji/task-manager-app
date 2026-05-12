@@ -72,6 +72,18 @@ export function compositeCollisionDetection(args) {
         return cd?.kind === 'task' && cd?.parentId === targetId;
       });
       if (subtaskHit) return [subtaskHit];
+      // b2) Fresh / empty project — body has no subtask droppables. The
+      //     fall-through "closest sibling" path below would route the drop to
+      //     the project's neighbour instead of into the project, making it
+      //     impossible to drop into a newly-created project except by hitting
+      //     the 8px nest edge. Return the body itself so the drop nests.
+      const hasSubtaskDroppable = args.droppableContainers.some(c => {
+        const cd = c.data?.current;
+        return cd?.kind === 'task' && cd?.parentId === targetId;
+      });
+      if (!hasSubtaskDroppable) {
+        return [{ id: cont.id, data: { droppableContainer: cont, value: 0 } }];
+      }
       // c) Cursor in body padding/gap (not on a subtask) → fall through to the
       //    closest top-level sibling so "drop under the project" becomes a
       //    sibling reorder. Same path lets an internal drag escape the body
