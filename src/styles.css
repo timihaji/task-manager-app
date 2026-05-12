@@ -1101,13 +1101,14 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 .blocked-grp-hdr:hover{color:#fde68a}
 .blocked-grp-hdr .grp-name{color:#fcd34d}
 .blocked-grp-hdr::before{content:'';width:6px;height:6px;border-radius:50%;background:#f59e0b;margin-right:2px;flex-shrink:0}
-/* Timeline per-day routines strip — header on its own row, then items flow
-   horizontally with flex-wrap. Items naturally re-flow as the column width
-   changes (Tim resizes columns via the timelineDays/sidePanelWidth toggles).
-   Long routine names ellipsis at max-width so they never blow out the layout.
-   Margin: 0 so the strip's top edge aligns with where the first regular card
-   would sit in a routine-free column. col-body's existing gap handles the
-   space between the strip and the next card. */
+/* Timeline per-day routines strip — wrapped in .grp-free + phantom
+   .card-add-zone (see Column.jsx) so its top edge sits at the same y as a
+   regular first card in adjacent columns. The spacer reuses card-add-zone's
+   negative-margin trick to inherit the same vertical offset without
+   duplicating geometry constants here. */
+.col-routines-grp{display:block}
+.col-routines-spacer{pointer-events:none;cursor:default}
+.col-routines-spacer::before,.col-routines-spacer button{display:none!important}
 .col-routines-strip{margin:0;padding:6px 8px;
   background:var(--routine-bg);border:1px solid var(--routine-border);
   border-radius:4px;display:flex;flex-direction:column;gap:6px;min-width:0}

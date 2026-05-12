@@ -92,27 +92,31 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
       <div className="col-divider"/>
       <ColDroppable id={`col:${colKey}`} data={{ kind: 'column', date: colKey }} className="col-body"
         onDoubleClick={e=>{ if(!e.target.closest('.card,.grp-hdr,.done-grp-hdr,.routines-grp-hdr,.card-add-zone')) onAdd(colKey,date); }}>
-        {/* Routines strip — pinned at the top of each day column, vertical
-            stack of tick-circles. Same pattern as the Stack pinned strip but
-            laid out vertically to fit narrow Timeline columns. Routines never
-            participate in drag/FLIP or the normal card flow — they're chrome,
-            not priority work. */}
+        {/* Routines strip — pinned at the top of each day column. Wrapped in
+            a .grp-free + phantom .card-add-zone so its TOP sits at the same
+            y as a regular first card in adjacent columns (the card-add-zone
+            contributes ~17px of vertical offset that an unwrapped strip
+            would otherwise miss). Strip is chrome — it never participates in
+            drag/FLIP and is filtered out of the priority/active card list. */}
         {routines.length > 0 && (
-          <div className="col-routines-strip" role="group" aria-label="Routines for this day">
-            <div className="crs-hdr">
-              <span className="crs-label">ROUTINES</span>
-              <span className="crs-count">{routinesDone}/{routines.length}</span>
-            </div>
-            <div className="crs-items">
-              {routines.map(t => (
-                <button key={t.id}
-                  className={`crs-item${t.done ? ' done' : ''}`}
-                  onClick={(e) => { e.stopPropagation(); onToggle?.(t.id); }}
-                  title={t.done ? `${t.title} — done, tap to undo` : `${t.title} — tap to complete`}>
-                  <span className="crs-dot" aria-hidden="true"/>
-                  <span className="crs-name">{t.title}</span>
-                </button>
-              ))}
+          <div className="grp-free col-routines-grp">
+            <div className="card-add-zone col-routines-spacer" aria-hidden="true"/>
+            <div className="col-routines-strip" role="group" aria-label="Routines for this day">
+              <div className="crs-hdr">
+                <span className="crs-label">ROUTINES</span>
+                <span className="crs-count">{routinesDone}/{routines.length}</span>
+              </div>
+              <div className="crs-items">
+                {routines.map(t => (
+                  <button key={t.id}
+                    className={`crs-item${t.done ? ' done' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); onToggle?.(t.id); }}
+                    title={t.done ? `${t.title} — done, tap to undo` : `${t.title} — tap to complete`}>
+                    <span className="crs-dot" aria-hidden="true"/>
+                    <span className="crs-name">{t.title}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
