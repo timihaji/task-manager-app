@@ -415,6 +415,10 @@ const makeTask = (overrides={}) => syncTaskSnooze({
   checkInSchedule:null, checkInTaskIds:[], checkInOf:null, checkInDayOffset:null,
   expiryDate:null, expiryTaskId:null, expiryOf:null,
   lastContactAt:null, delegationHistory:[],
+  // Personal follow-up reminder for the delegator. Surfaces the card in the
+  // user's own inbox on this date even if the cadence is silent. Separate from
+  // expiryDate (which is the delegate's deadline).
+  personalReminderDate:null,
   cardColor:null,
   ...overrides,
 });
@@ -447,6 +451,7 @@ const migrateTasks = (tasks=[]) => tasks.map(t => ({
   expiryOf: t.expiryOf === undefined ? null : t.expiryOf,
   lastContactAt: t.lastContactAt === undefined ? null : t.lastContactAt,
   delegationHistory: t.delegationHistory === undefined ? [] : t.delegationHistory,
+  personalReminderDate: t.personalReminderDate === undefined ? null : t.personalReminderDate,
   ...t,
 })).map(syncTaskSnooze);
 
@@ -476,6 +481,23 @@ const fmtTimeEst = (mins) => {
   if (h && m) return `${h}h ${m}m`;
   if (h) return `${h}h`;
   return `${m}m`;
+};
+
+// Helper: ISO timestamp / date string offset from today. Used in the
+// curated demo delegations so the seeded ages stay coherent regardless of
+// when the dev-bypass page is opened (otherwise activity ages drift and the
+// "stale 14d ago" entry becomes stale-2-months-ago after a while).
+const __nowMs = Date.now();
+const __today00 = (() => { const d = new Date(__nowMs); d.setHours(0,0,0,0); return d.getTime(); })();
+const __agoIso  = (daysAgo, hour=9, minute=0) => {
+  const d = new Date(__today00 - daysAgo * 86400000);
+  d.setHours(hour, minute, 0, 0);
+  return d.toISOString();
+};
+const __relDate = (daysFromToday) => {
+  const d = new Date(__today00 + daysFromToday * 86400000);
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
 };
 
 // Curated demo dataset. Persona: solo founder running a small consulting
@@ -618,6 +640,130 @@ const INIT_TASKS = [
       {type:'delegated', to:'Sam', at:'2026-04-28T11:00:00.000Z'},
       {type:'cadence-changed', schedule:[2,5,10], at:'2026-04-28T11:00:30.000Z'},
     ]}),
+
+  // dl4 — Priya, vendor contract, 4d ago, waiting, promise next week.
+  makeTask({id:'dl4', title:'Vendor contract — Northwind annual renewal review', project:'ADMIN',
+    tags:['admin','focus'], priority:'p1', lifeArea:'finance', timeEstimate:'45m',
+    delegatedTo:'Priya', delegatedAt:__agoIso(4),
+    delegationStatus:'waiting', checkInSchedule:[3,7],
+    expiryDate:__relDate(3),
+    description:'Priya (legal) to flag any clause changes vs last year. Needs to be signed Friday.',
+    activity:[
+      {type:'created', at:__agoIso(4)},
+      {type:'delegated', to:'Priya', at:__agoIso(4)},
+      {type:'cadence-changed', schedule:[3,7], at:__agoIso(4, 9, 1)},
+      {type:'note', text:'Priya agreed to review by Thursday — confirmed Slack', at:__agoIso(4, 13, 0)},
+    ],
+    lastContactAt:__agoIso(4, 13, 0)}),
+
+  // dl5 — Marcus, design system audit, STALE (14d ago, no contact in ~12d).
+  makeTask({id:'dl5', title:'Design system audit — color tokens + typography', project:'WORK',
+    tags:['focus','docs'], priority:'p2', lifeArea:'career', timeEstimate:'3h',
+    delegatedTo:'Marcus', delegatedAt:__agoIso(14),
+    delegationStatus:'waiting', checkInSchedule:[3,7,14],
+    description:'Audit the existing tokens, flag duplicates, propose consolidation. Worried this fell off his radar.',
+    activity:[
+      {type:'created', at:__agoIso(14)},
+      {type:'delegated', to:'Marcus', at:__agoIso(14)},
+      {type:'cadence-changed', schedule:[3,7,14], at:__agoIso(14, 9, 1)},
+      {type:'nudge-sent', day:3, at:__agoIso(11, 9, 0)},
+      {type:'note', text:'no reply since the chase last week', at:__agoIso(11, 9, 1)},
+    ],
+    lastContactAt:__agoIso(11, 9, 0)}),
+
+  // dl6 — Jordan, onboarding flow, due TODAY (promise is today).
+  makeTask({id:'dl6', title:'Customer onboarding flow — wireframes v2', project:'WORK',
+    tags:['focus','docs'], priority:'p1', lifeArea:'career', timeEstimate:'2h',
+    delegatedTo:'Jordan', delegatedAt:__agoIso(6),
+    delegationStatus:'sent', checkInSchedule:[3,7],
+    expiryDate:__relDate(0),
+    description:'Updates from the user-research synthesis. Hand off to Sam for production after sign-off.',
+    activity:[
+      {type:'created', at:__agoIso(6)},
+      {type:'delegated', to:'Jordan', at:__agoIso(6)},
+      {type:'cadence-changed', schedule:[3,7], at:__agoIso(6, 9, 1)},
+      {type:'nudge-sent', day:3, at:__agoIso(3, 9, 0)},
+      {type:'note', text:'draft sent for review — said morning Tuesday', at:__agoIso(1, 18, 0)},
+    ],
+    lastContactAt:__agoIso(1, 18, 0)}),
+
+  // dl7 — Riley, annual report, HEARD BACK recently.
+  makeTask({id:'dl7', title:'Annual report PDF — pages 12-24 layout', project:'WORK',
+    tags:['focus','docs'], priority:'p2', lifeArea:'career', timeEstimate:'2h',
+    delegatedTo:'Riley', delegatedAt:__agoIso(2),
+    delegationStatus:'heard-back', checkInSchedule:[5],
+    expiryDate:__relDate(5),
+    description:'Riley owns layout from page 12 onward. First pass back to me by Friday.',
+    activity:[
+      {type:'created', at:__agoIso(2)},
+      {type:'delegated', to:'Riley', at:__agoIso(2)},
+      {type:'cadence-changed', schedule:[5], at:__agoIso(2, 9, 1)},
+      {type:'note', text:'first pass done, sending Friday morning', at:__agoIso(0, 8, 30)},
+      {type:'heard-back', day:2, at:__agoIso(0, 8, 30)},
+    ],
+    lastContactAt:__agoIso(0, 8, 30)}),
+
+  // dl8 — Devon, Slack export, HEARD BACK days ago (slow burn).
+  makeTask({id:'dl8', title:'Slack export — Q1 archive', project:'ADMIN',
+    tags:['admin'], priority:'p3', timeEstimate:'30m', lifeArea:'career',
+    delegatedTo:'Devon', delegatedAt:__agoIso(5),
+    delegationStatus:'heard-back', checkInSchedule:[3,10],
+    description:"Devon's exporting the Q1 channels for archival. Low priority — no rush.",
+    activity:[
+      {type:'created', at:__agoIso(5)},
+      {type:'delegated', to:'Devon', at:__agoIso(5)},
+      {type:'cadence-changed', schedule:[3,10], at:__agoIso(5, 9, 1)},
+      {type:'note', text:'will dump to Drive Friday', at:__agoIso(4, 14, 0)},
+      {type:'heard-back', day:1, at:__agoIso(4, 14, 0)},
+    ],
+    lastContactAt:__agoIso(4, 14, 0)}),
+
+  // dl9 — Priya again, just-delegated yesterday (no schedule, no notes yet).
+  makeTask({id:'dl9', title:'Site privacy policy — update for CCPA changes', project:'ADMIN',
+    tags:['admin','focus'], priority:'p2', lifeArea:'finance', timeEstimate:'1h',
+    delegatedTo:'Priya', delegatedAt:__agoIso(1, 10, 0),
+    delegationStatus:'waiting', checkInSchedule:[2,7],
+    description:'Quick turn — Priya knows the previous version. Just needs the diff and a sign-off.',
+    activity:[
+      {type:'created', at:__agoIso(1, 10, 0)},
+      {type:'delegated', to:'Priya', at:__agoIso(1, 10, 0)},
+      {type:'cadence-changed', schedule:[2,7], at:__agoIso(1, 10, 1)},
+    ]}),
+
+  // dl10 — Sam, Q2 marketing budget, OVERDUE (promise was 2 days ago).
+  makeTask({id:'dl10', title:'Q2 marketing budget breakdown — by channel', project:'WORK',
+    tags:['focus','docs'], priority:'p1', lifeArea:'career', timeEstimate:'2h',
+    delegatedTo:'Sam', delegatedAt:__agoIso(8),
+    delegationStatus:'sent', checkInSchedule:[2,5,10],
+    expiryDate:__relDate(-2),
+    description:"Sam to pull the Q1 actuals from Stripe and project Q2 by channel. Was supposed to be done Monday.",
+    activity:[
+      {type:'created', at:__agoIso(8)},
+      {type:'delegated', to:'Sam', at:__agoIso(8)},
+      {type:'cadence-changed', schedule:[2,5,10], at:__agoIso(8, 9, 1)},
+      {type:'nudge-sent', day:2, at:__agoIso(6, 9, 0)},
+      {type:'note', text:'working on it, will send Friday', at:__agoIso(5, 15, 0)},
+      {type:'nudge-sent', day:5, at:__agoIso(3, 10, 0)},
+      {type:'chased', text:'pinged on Slack again — said next week', at:__agoIso(1, 11, 0)},
+    ],
+    lastContactAt:__agoIso(1, 11, 0)}),
+
+  // dl11 — Re-delegated from Alex to Riley, with personal reminder set.
+  makeTask({id:'dl11', title:'Weekly investor update — draft', project:'WORK',
+    tags:['focus','docs'], priority:'p2', lifeArea:'career', timeEstimate:'1h',
+    delegatedTo:'Riley', delegatedAt:__agoIso(6, 14, 0),
+    delegationStatus:'waiting', checkInSchedule:[3,7],
+    delegationHistory:[{to:'Alex', at:__agoIso(12, 9, 0)}],
+    personalReminderDate:__relDate(4),
+    description:'Originally with Alex — moved to Riley after Alex got pulled into Q1 close.',
+    activity:[
+      {type:'created', at:__agoIso(12, 9, 0)},
+      {type:'delegated', to:'Alex', at:__agoIso(12, 9, 0)},
+      {type:'re-delegated', from:'Alex', to:'Riley', at:__agoIso(6, 14, 0)},
+      {type:'cadence-changed', schedule:[3,7], at:__agoIso(6, 14, 1)},
+      {type:'note', text:'Riley confirmed Monday morning send', at:__agoIso(6, 15, 0)},
+    ],
+    lastContactAt:__agoIso(6, 15, 0)}),
 
   // === Blocked task ===
   makeTask({id:'bl1', title:'Acme — flip launch page DNS to live', project:'WORK',

@@ -257,9 +257,14 @@ function App() {
     calendarSnapOn: true,           // calendar drawer snap-to-grid
     navUserCollapsed: null,         // null = follow window-width default; true/false = explicit override
     settingsTab: 'appearance',      // last tab visited in Settings drawer
-    delegationsFilter: 'all',       // Delegations view: all|stale|overdue|quiet
-    delegationsSort: 'oldest',      // Delegations view: oldest|overdue|name
-    delegationsExpanded: [],        // Delegations view: array of expanded person names
+    // Delegations view state — selected task in right pane, status/person chip filters.
+    // (Legacy delegationsFilter / delegationsSort / delegationsExpanded were used
+    // by the old per-person rollup; safe to delete after a few weeks of migration.)
+    delegationsSelectedId: null,
+    delegationsStatusFilter: 'all', // all | overdue | waiting | heard | stale
+    delegationsPersonFilter: [],    // array of person names
+    showDelegationsOnTimeline: false, // top-nav toggle: surface delegated cards on stack/timeline
+    showCheckInsOnTimeline: false,    // top-nav toggle: surface synthetic check-in reminders too
   };
   const defaultTaxonomy = () => ({
     contexts: PROJ.map(p=>({...p})),
@@ -518,6 +523,10 @@ function App() {
   const sidePanelView = tweaks.sidePanelView || 'inbox';
   const setSidePanelView = (v) => setTweak('sidePanelView', v);
   const [drawerId,setDrawerId]= useState(null);
+  // Transient: when set, the drawer should expand and scroll to this section on
+  // next open. Consumed and cleared by drawer.jsx. Used by the "Delegate to…"
+  // context menu entry to jump straight to the delegation section.
+  const [drawerInitialFocus,setDrawerInitialFocus] = useState(null);
   const [settingsOpen,setSettingsOpen]= useState(false);
   const [addModal,setAddModal]= useState(null); // {date,label}
   const [palette,setPalette] = useState(false);
@@ -1322,9 +1331,11 @@ function App() {
   };
   // Auto-snooze: hide a delegation parent from columns while it has pending check-ins.
   // The check-ins themselves still appear, so the user always has something actionable.
-  // Disabled when `showWaitingOn` is on.
+  // Disabled when `showWaitingOn` (legacy) or new per-axis show-delegations toggle is on.
+  const showDelegationsOnTimeline = !!tweaks.showDelegationsOnTimeline;
+  const showCheckInsOnTimeline = !!tweaks.showCheckInsOnTimeline;
   const isAutoSnoozedDelegation = (t) => {
-    if (showWaitingOn) return false;
+    if (showWaitingOn || showDelegationsOnTimeline) return false;
     if (!t || !t.delegatedTo || t.done) return false;
     const ids = t.checkInTaskIds || [];
     if (!ids.length) return false;
@@ -1340,11 +1351,19 @@ function App() {
       if(t.someday) return;
       if(t.parentId) return; // children render inside their project, not in a column
       if(isAutoSnoozedDelegation(t)) return;
-      // Hide delegated tasks from the main board unless the user has explicitly
-      // toggled the "Waiting on" filter to surface them. They live in the
-      // Delegations view until undelegated.
-      if(t.delegatedTo && !showWaitingOn) return;
-      if(showWaitingOn && !t.delegatedTo && !t.checkInOf) return;
+      // Two-toggle model: delegated tasks are hidden unless `showDelegationsOnTimeline`
+      // is on; check-in (synthetic reminder) tasks hidden unless `showCheckInsOnTimeline`.
+      // Legacy `showWaitingOn`: when on, surface BOTH and *only* delegated/check-in.
+      // Personal-reminder override: when a delegation's `personalReminderDate`
+      // has arrived, the card surfaces regardless of the show-delegations toggle.
+      const todayStr = D.str(D.today());
+      const reminderDue = t.delegatedTo && t.personalReminderDate && t.personalReminderDate <= todayStr;
+      if (showWaitingOn) {
+        if (!t.delegatedTo && !t.checkInOf) return;
+      } else {
+        if (t.delegatedTo && !showDelegationsOnTimeline && !reminderDue) return;
+        if (t.checkInOf && !showCheckInsOnTimeline) return;
+      }
       if(showStaleOnly && !isStale(t)) return;
       const key = t.date || 'inbox';
       if(!map.has(key)) map.set(key, []);
@@ -1352,7 +1371,7 @@ function App() {
     });
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTasks, showWaitingOn, showStaleOnly]);
+  }, [activeTasks, showWaitingOn, showStaleOnly, showDelegationsOnTimeline, showCheckInsOnTimeline]);
   const taxonomyActions = {
     add(kind,label) {
       const trimmed = String(label||'').trim();
@@ -1678,6 +1697,12 @@ function App() {
         checkInTaskIds: [],
         expiryDate: null,
         expiryTaskId: null,
+        // Take-back lands the task on today's column so the user actually sees it
+        // again. Leaving date unchanged would leave it where it was at delegation,
+        // potentially in the past.
+        date: D.str(D.today()),
+        someday: false,
+        snoozedUntil: null,
         activity,
       });
       adjustOpenCount(nameBefore, -1);
@@ -1715,10 +1740,22 @@ function App() {
     const before = tasks.find(t=>t.id===id);
     if(!before) return;
     // Delegation transitions: spawn/clean check-in tasks and expiry tasks.
-    const delegationOutcome = applyDelegationChanges(tasks, before, changes);
-    if (delegationOutcome.tasks) {
+    // Probe once to detect whether this update will cause a delegation transition.
+    const probe = applyDelegationChanges(tasks, before, changes);
+    if (probe.tasks) {
       setUndoStack(s=>[...s.slice(-9),{id,before}]);
-      setTasks(prev => delegationOutcome.tasks.map(t => t.id===id ? applyTaskPatch(t, delegationOutcome.mergedChanges) : t));
+      // Re-run applyDelegationChanges against the LATEST state inside the
+      // setter so we don't clobber concurrent edits (realtime echoes, snooze
+      // ticks, other updateTask calls in the same batch). Using the probe's
+      // snapshot directly was the source of "delegations not saving on refresh"
+      // — when something else mutated tasks between the probe and the commit,
+      // the probe overwrote the new state with stale data.
+      setTasks(prev => {
+        const latestBefore = prev.find(t => t.id === id) || before;
+        const out = applyDelegationChanges(prev, latestBefore, changes);
+        const base = out.tasks || prev;
+        return base.map(t => t.id === id ? applyTaskPatch(t, out.mergedChanges) : t);
+      });
       return;
     }
     // Convert project → task: promote children up to parent's column.
@@ -3576,6 +3613,14 @@ function App() {
       {label:'Start Date…', onClick:()=>open('date'),   kbd:'⇧D'},
       {label:'Priority…', onClick:()=>open('pri'),    kbd:'⇧R'},
       {label:'Snooze…',   onClick:()=>open('snooze'), kbd:'S'},
+      {label: t.delegatedTo ? 'Re-delegate / edit…' : 'Delegate to…',
+        onClick: () => {
+          // Open the card in the drawer; drawer.jsx auto-expands the Delegation
+          // section when delegatedTo is set, and we'll nudge it open via the
+          // drawerInitialFocus state below for a fresh delegation.
+          setDrawerInitialFocus('delegation');
+          openTask(t.id);
+        }},
       {label:'Card colour…', onClick:()=>setCardColorPickerFor({id:t.id, x:contextMenu.x, y:contextMenu.y}), kbd:'⇧C'},
       {type:'sep'},
       {label:'Open in drawer', onClick:()=>openTask(t.id), kbd:'↵'},
@@ -3714,16 +3759,6 @@ function App() {
         )}
       </div>
       <div className="tb-btn-group" title="Delegations">
-        <button className="tb-btn" onClick={()=>setShowWaitingOn(v=>!v)}
-          title="Show only delegated tasks"
-          aria-pressed={showWaitingOn}
-          aria-label="Show only delegated tasks (Waiting)"
-          style={showWaitingOn?{color:'var(--accent)'}:undefined}><I.Clock/>Waiting</button>
-        <button className="tb-btn" onClick={()=>setShowStaleOnly(v=>!v)}
-          title="Show only stale delegations"
-          aria-pressed={showStaleOnly}
-          aria-label="Show only stale delegations"
-          style={showStaleOnly?{color:'var(--danger)'}:undefined}><I.Warn/>Stale</button>
         <button className="tb-btn" onClick={()=>setView('delegations')}
           title="Delegations dashboard"
           aria-pressed={view==='delegations'}
@@ -3763,8 +3798,14 @@ function App() {
             </div>
             <div className="fdd-sep"/>
             <div className="fdd-section">
-              <div className="fdd-item" onClick={()=>{setShowWaitingOn(v=>!v);setTbOverflowOpen(false);}}>
-                <input type="checkbox" readOnly checked={showWaitingOn}/>Waiting on others
+              <div className="fdd-label">Timeline filters</div>
+              <div className="fdd-item" onClick={()=>setTweak('showDelegationsOnTimeline', !tweaks.showDelegationsOnTimeline)}
+                title="When off, delegated cards live only in the Delegations view">
+                <input type="checkbox" readOnly checked={!!tweaks.showDelegationsOnTimeline}/>Show delegations on timeline
+              </div>
+              <div className="fdd-item" onClick={()=>setTweak('showCheckInsOnTimeline', !tweaks.showCheckInsOnTimeline)}
+                title="When off, synthetic 'Check in with X' reminders stay hidden until their day">
+                <input type="checkbox" readOnly checked={!!tweaks.showCheckInsOnTimeline}/>Show check-in reminders on timeline
               </div>
               <div className="fdd-item" onClick={()=>{setShowStaleOnly(v=>!v);setTbOverflowOpen(false);}}>
                 <input type="checkbox" readOnly checked={showStaleOnly}/>Stale only
@@ -3786,7 +3827,7 @@ function App() {
 
     {/* BODY */}
     <div className="app-shell">
-    <div className={`app-body${isNarrowScreen?' is-mobile':''}${filtersActive?' chk-mode':''}${selectedIds.size?' chk-mode':''}`} onClick={e=>{ setFilterOpen(false); setGroupOpen(false); setTbOverflowOpen(false); if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); } }}>
+    <div className={`app-body${isNarrowScreen?' is-mobile':''}${filtersActive?' chk-mode':''}${selectedIds.size?' chk-mode':''}`} onClick={e=>{ setFilterOpen(false); setGroupOpen(false); setTbOverflowOpen(false); if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar,.dvv')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); } }}>
       <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false); if (isNarrowScreen) setNavCollapsed(true);}} collapsed={navCollapsed} theme={theme}
         activeLifeAreas={filters.lifeAreas}
         onLifeAreaToggle={id=>toggleFilter('lifeAreas',id)}/>
@@ -3844,20 +3885,49 @@ function App() {
         <div className="board-area" style={{padding:'18px 24px'}}>
           <DelegationsView
             tasks={tasks}
-            onJumpTo={(id)=>{ setView('week'); setDrawerId(id); setFocusedId(id); }}
+            onJumpTo={(id)=>{ setDrawerInitialFocus('delegation'); setDrawerId(id); setFocusedId(id); }}
             onUpdate={updateTask}
             onDelete={deleteTask}
             onCheckIn={(id, mode)=>{ const t=taskById(id); if(t && !t.done) completeTask(id, t.date||'inbox', mode); }}
-            filter={tweaks.delegationsFilter}
-            onFilterChange={(v)=>setTweak('delegationsFilter', v)}
-            sort={tweaks.delegationsSort}
-            onSortChange={(v)=>setTweak('delegationsSort', v)}
-            expandedNames={tweaks.delegationsExpanded}
-            onToggleExpanded={(name)=>setTweakState(prev=>{
-              const cur = Array.isArray(prev.delegationsExpanded) ? prev.delegationsExpanded : [];
-              const next = cur.includes(name) ? cur.filter(n=>n!==name) : [...cur, name];
-              return { ...prev, delegationsExpanded: next };
-            })}/>
+            onChase={(id, text)=>{
+              const t = taskById(id);
+              if (!t) return;
+              // Push to undo so a misfire is recoverable from the toast.
+              setUndoStack(s=>[...s.slice(-9),{id,before:t}]);
+              const now = new Date().toISOString();
+              const activity = [...(t.activity||[]), { type:'chased', text: (text||'').trim() || undefined, at: now }];
+              updateTask(id, { lastContactAt: now, activity });
+            }}
+            onTakeBack={(id)=>{
+              // applyDelegationChanges fires when delegatedTo flips to null and
+              // handles cleanup + date=today. Already pushes to undo stack.
+              updateTask(id, { delegatedTo: null });
+            }}
+            onAddNote={(id, text)=>{
+              const t = taskById(id);
+              if (!t || !text || !text.trim()) return;
+              setUndoStack(s=>[...s.slice(-9),{id,before:t}]);
+              const activity = [...(t.activity||[]), { type:'note', text: text.trim(), at: new Date().toISOString() }];
+              updateTask(id, { activity });
+            }}
+            onShowOnTimeline={()=>{
+              setTweak('showDelegationsOnTimeline', true);
+            }}
+            showToast={showToast}
+            onAddDelegation={()=>{
+              const nt = makeTask({ title: '', date: D.str(D.today()) });
+              setTasks(prev => [nt, ...prev]);
+              setDrawerInitialFocus('delegation');
+              setDrawerId(nt.id);
+              setFocusedId(nt.id);
+              setRenamingId(nt.id);
+            }}
+            statusFilter={tweaks.delegationsStatusFilter}
+            onStatusFilterChange={(v)=>setTweak('delegationsStatusFilter', v)}
+            personFilter={tweaks.delegationsPersonFilter}
+            onPersonFilterChange={(v)=>setTweak('delegationsPersonFilter', v)}
+            selectedId={tweaks.delegationsSelectedId}
+            onSelectId={(v)=>setTweak('delegationsSelectedId', v)}/>
         </div>
       ) : view==='stack' ? (
         <StackView
@@ -4039,6 +4109,8 @@ function App() {
           setGoToSeq(n => n + 1);
         }
       }}
+      initialFocus={drawerInitialFocus}
+      onInitialFocusConsumed={()=>setDrawerInitialFocus(null)}
       fromLeft={drawerFromLeft}/>}
     {!drawerTask && !settingsOpen && <div className="drawer"/>}
     <SettingsDrawer open={settingsOpen} tweaks={tweaks} setTweak={setTweak} taxonomy={taxonomy} taxonomyActions={taxonomyActions} onClose={()=>setSettingsOpen(false)}/>

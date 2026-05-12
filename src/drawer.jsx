@@ -7,6 +7,7 @@ import {
   buildCheckInTasks, buildExpiryTask, stretchSchedule,
 } from './data.js';
 import { CheckGlyph } from './components/CheckGlyph.jsx';
+import { ActivityLog } from './components/ActivityLog.jsx';
 
 // Task Manager — right drawer task editor (560px)
 // Requires: tm-data.jsx loaded first (PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_NAMES, LIFE_AREA_DARK, LIFE_AREA_LIGHT, D on window)
@@ -66,7 +67,7 @@ function AddTaxonomyChip({ kind, onAdd }) {
   );
 }
 
-function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDelete, onDuplicate, onMoveToInbox, fromLeft, onSetBlocked, onClearBlocked, recentBlockReasons, blockingCountFor, onJumpTo, onCheckIn, onGoToCard, secs: secsProp, onSecsChange }) {
+function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDelete, onDuplicate, onMoveToInbox, fromLeft, onSetBlocked, onClearBlocked, recentBlockReasons, blockingCountFor, onJumpTo, onCheckIn, onGoToCard, secs: secsProp, onSecsChange, initialFocus, onInitialFocusConsumed }) {
   const [localTitle, setLocalTitle] = useState('');
   const [localDesc,  setLocalDesc]  = useState('');
   const [localReason,setLocalReason]= useState('');
@@ -120,8 +121,17 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
       setLocalReason(task.blockedReason||'');
       setDelegateName(task.delegatedTo || '');
       setCadenceCustom('');
-      // Auto-open Delegation section if delegated
-      if (task.delegatedTo || task.checkInOf) setSecs(s => ({...s, dele:true}));
+      // Auto-open Delegation + Activity sections if delegated — keep parity with the
+      // Delegations view, where both are visible by default.
+      if (task.delegatedTo || task.checkInOf) {
+        setSecs(s => ({...s, dele:true, log:true}));
+      }
+      // Honor explicit caller request to focus a section on open (e.g. ctx menu
+      // "Delegate to…" wants the Delegation section expanded even on a fresh task).
+      if (initialFocus === 'delegation') {
+        setSecs(s => ({...s, dele:true, log:true}));
+        onInitialFocusConsumed?.();
+      }
     }
   }, [task?.id]);
   useEffect(() => {
@@ -790,8 +800,9 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                   <DRow label="Action">
                     <div className="dr-pickrow">
                       <button className="dr-pick" style={{borderColor:'#f59e0b66',color:'#f59e0b',background:'rgba(245,158,11,.10)'}}
-                        onClick={()=>onCheckIn?.(task.id, 'sent-nudge')}>
-                        Sent nudge
+                        onClick={()=>onCheckIn?.(task.id, 'sent-nudge')}
+                        title="Log that you chased them on this check-in day">
+                        Chased
                       </button>
                       <button className="dr-pick" style={{borderColor:'#22c55e66',color:'#22c55e',background:'rgba(34,197,94,.10)'}}
                         onClick={()=>onCheckIn?.(task.id, 'heard-back')}>
@@ -874,13 +885,19 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                             }}/>
                         </div>
                       </DRow>
-                      <DRow label="Expiry">
+                      <DRow label="Promised by">
                         <input type="date" className="dr-inp" value={task.expiryDate||''}
-                          onChange={e=>upd({expiryDate: e.target.value || null})}/>
+                          onChange={e=>upd({expiryDate: e.target.value || null})}
+                          title="What they said by — surfaces the card if the date slips"/>
+                      </DRow>
+                      <DRow label="Remind me">
+                        <input type="date" className="dr-inp" value={task.personalReminderDate||''}
+                          onChange={e=>upd({personalReminderDate: e.target.value || null})}
+                          title="Your own follow-up reminder — surfaces the card on this date regardless of cadence"/>
                       </DRow>
                       <DRow label="Status">
                         <span className="dr-pick" style={{cursor:'default',color:statusColor||'var(--t3)',borderColor:(statusColor||'#71717a')+'66',background:(statusColor||'#71717a')+'18'}}>
-                          {status || 'waiting'} · {lastContact}
+                          {status === 'sent' ? 'nudged' : (status || 'waiting')} · {lastContact}
                         </span>
                       </DRow>
                       <DRow label="Upcoming">
@@ -899,8 +916,9 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                       </DRow>
                       <DRow label="Take back">
                         <button className="dr-pick" style={{borderColor:'#ef444466',color:'#ef4444'}}
-                          onClick={()=>{ if(confirm(`Take back from ${task.delegatedTo}? Pending check-ins will be removed.`)) upd({delegatedTo:null}); }}>
-                          ↶ Reclaim
+                          onClick={()=>{ if(confirm(`Take back from ${task.delegatedTo}? The task lands on today's list and pending check-ins are removed.`)) upd({delegatedTo:null}); }}
+                          title="Move this task back to today's list">
+                          ↶ Take back to today
                         </button>
                       </DRow>
                       {(task.delegationHistory||[]).length > 0 && (
@@ -942,26 +960,17 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
           </div>
         </DrSection>}
 
-        {/* ACTIVITY */}
+        {/* ACTIVITY — shared component, same UX as the Delegations view */}
         <DrSection title="Activity" open={secs.log} onToggle={()=>tog('log')}>
-          {!(task.activity?.length) && <div className="dr-empty">No activity yet</div>}
-          {(task.activity||[]).map((a,i)=>{
-            const detail = a.type === 'delegated' ? ` · to ${a.to}`
-              : a.type === 're-delegated' ? ` · ${a.from} → ${a.to}`
-              : a.type === 'nudge-sent' ? ` · day ${a.day}`
-              : a.type === 'heard-back' ? ` · day ${a.day}`
-              : a.type === 'cadence-stretched' ? ` · ×${a.factor}`
-              : a.type === 'cadence-changed' ? ` · ${(a.schedule||[]).join('/')}`
-              : a.type === 'check-in-skipped' ? ` · day ${a.day}`
-              : a.type === 'expiry-set' ? (a.date ? ` · ${a.date}` : ' · cleared')
-              : '';
-            return (
-              <div key={i} className="dr-log-item">
-                <span className="dr-log-type">{a.type}{detail}</span>
-                <span className="dr-log-time">{new Date(a.at).toLocaleDateString()}</span>
-              </div>
-            );
-          })}
+          <div className="dr-act-wrap">
+            <ActivityLog
+              task={task}
+              allTasks={tasks}
+              onUpdate={(id, changes) => onUpdate?.(id, changes)}
+              onCheckIn={onCheckIn}
+              variant="full"
+            />
+          </div>
         </DrSection>
       </div>
 
