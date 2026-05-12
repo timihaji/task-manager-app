@@ -280,6 +280,7 @@ function App() {
     showDelegationsOnTimeline: false, // top-nav toggle: surface delegated cards on stack/timeline
     showCheckInsOnTimeline: false,    // top-nav toggle: surface synthetic check-in reminders too
     showRoutinesOnTimeline: true,     // top-nav toggle: show/hide routine strips on each day column
+    todayPinned: true,                // today-column sticky pin on/off
   };
   const defaultTaxonomy = () => ({
     contexts: PROJ.map(p=>({...p})),
@@ -1070,6 +1071,7 @@ function App() {
   const todayPin = todayIdx >= 0
     ? (todayLeft < colScrollLeft ? 'left' : todayLeft > viewportRight - COL_W ? 'right' : null)
     : (weekDates.length && D.parse(todayStr) < weekDates[0] ? 'left' : 'right');
+  const todayPinEnabled = tweaks.todayPinned !== false;
   // When today is OUT of the timeline range (e.g. the user clicked the
   // ◂/▸ arrows enough times to push weekOff past today), todayIdx is -1
   // and the natural-position trick can't be used. Still render today as a
@@ -1079,7 +1081,7 @@ function App() {
   // Decoupled from todayPin so virtualization doesn't drop the today column
   // from the DOM while React state catches up — sticky resolution is CSS-only
   // now (both left:0 and right:0 set on .today-pinned).
-  const renderTodaySeparately = todayOutOfRange || (todayIdx >= 0 && (todayIdx < firstRenderCol || todayIdx >= lastRenderCol));
+  const renderTodaySeparately = todayPinEnabled && (todayOutOfRange || (todayIdx >= 0 && (todayIdx < firstRenderCol || todayIdx >= lastRenderCol)));
   const renderTodayBefore = renderTodaySeparately && (todayOutOfRange ? todayPin === 'left' : todayIdx < firstRenderCol);
   const renderTodayAfter = renderTodaySeparately && (todayOutOfRange ? todayPin === 'right' : todayIdx >= lastRenderCol);
   const beforeTimelineSpacerWidth = renderTodayBefore && !todayOutOfRange ? todayIdx * COL_W : beforeColsWidth;
@@ -3954,7 +3956,7 @@ function App() {
     // Always apply today-pinned so sticky is CSS-resolved (no React state
     // race when crossing today's natural position). pin-${dir} is only for
     // the directional shadow + border — lagging that a frame is fine.
-    const pinClass = colKey===todayStr ? `today-pinned${todayPin ? ` pin-${todayPin}` : ''}` : '';
+    const pinClass = colKey===todayStr && todayPinEnabled ? `today-pinned${todayPin ? ` pin-${todayPin}` : ''}` : '';
     return <Column key={`${keyPrefix}${colKey}`} className={pinClass} date={date} tasks={colTasks}
       focusedCardId={focusedId} selectedIds={selectedIds} spawning={spawning} theme={theme} tweaks={tweaks}
       showRoutines={tweaks.showRoutinesOnTimeline !== false}
@@ -3977,6 +3979,8 @@ function App() {
       collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
       forceOpenProjects={forceOpenProjects}
       blockingCountFor={blockingCountFor} taskTitleById={taskTitleById}
+      todayPinned={todayPinEnabled}
+      onToggleTodayPin={()=>setTweak('todayPinned', !todayPinEnabled)}
       cardExtras={cardExtras}/>;
   };
   const ctxItems = contextMenu ? (() => {

@@ -197,6 +197,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);display:flex;f
 .side-panel.inbox-col{transition:background .15s ease}
 .side-panel.inbox-col.drag-over-inbox{background:var(--accent-dim)}
 .col-hdr{padding:10px 10px 0;flex-shrink:0;background:var(--bg)}
+.col.is-today .col-hdr{position:relative}
+.col-today-pin{position:absolute;top:8px;right:8px;width:20px;height:20px;border:none;background:transparent;cursor:pointer;border-radius:3px;padding:0;display:flex;align-items:center;justify-content:center;color:var(--t4);opacity:0;transition:opacity .12s,color .12s,background .1s}
+.col-today-pin svg{width:12px;height:12px}
+.col.is-today .col-hdr:hover .col-today-pin,.col-today-pin.pinned{opacity:1}
+.col-today-pin:hover{background:var(--surface-2);color:var(--t2)}
+.col-today-pin.pinned{color:var(--accent)}
+.col-today-pin.pinned:hover{color:var(--t2)}
 .col-day{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t4);margin-bottom:2px}
 .col.is-today .col-day{color:var(--accent)}
 .col-date-row{display:flex;align-items:baseline;gap:6px;margin-bottom:6px}

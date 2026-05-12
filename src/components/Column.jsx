@@ -104,6 +104,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
   blockingCountFor, taskTitleById,
   showRoutines=true,
+  todayPinned=true, onToggleTodayPin,
   cardExtras, className='', style }) {
   const addTap = useTapSpring();
   const [addBtnRef, addMagnet] = useMagnet({ range: 80, pull: 0.4 });
@@ -151,6 +152,14 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
       data-screen-label={`${DAY_S[dow]} ${date.getDate()}`}>
       <div className="col-hdr">
         <div className="col-day">{DAY_S[dow]}</div>
+        {today && onToggleTodayPin && (
+          <button
+            className={`col-today-pin${todayPinned ? ' pinned' : ''}`}
+            onClick={onToggleTodayPin}
+            title={todayPinned ? 'Unpin today column' : 'Pin today column'}
+            aria-pressed={!!todayPinned}
+          ><I.Tack/></button>
+        )}
         <div className="col-date-row">
           <div className="col-date">{date.getDate()}</div>
           {today && <span className="col-today-badge">Today</span>}
