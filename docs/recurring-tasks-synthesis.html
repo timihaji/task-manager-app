@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tasks vs Routines — the synthesis</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --bg-2: #161922;
+    --card: #1b1f29;
+    --card-2: #232836;
+    --border: #2a3040;
+    --border-2: #3a4156;
+    --text: #e6e8ee;
+    --text-dim: #9aa3b8;
+    --text-faint: #6b7488;
+    --accent: #7aa2ff;
+    --accent-2: #b388ff;
+    --good: #5fd29c;
+    --warn: #f0b35a;
+    --bad: #e88a8a;
+    --chip: #2a3040;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); font: 14.5px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif; margin: 0; }
+  body { padding: 40px 32px 80px; max-width: 1100px; margin: 0 auto; }
+
+  h1 { font-size: 26px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.015em; }
+  h2 { font-size: 17px; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.005em; }
+  h3 { font-size: 13px; font-weight: 600; margin: 0 0 6px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-faint); }
+  p { color: var(--text-dim); margin: 0 0 10px; }
+  p.lead { font-size: 16px; color: var(--text); }
+  strong { color: var(--text); font-weight: 500; }
+  em { color: var(--text); font-style: italic; }
+  code { background: var(--bg-2); border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px; font-size: 12.5px; color: var(--accent); font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+  header { margin-bottom: 36px; }
+  header .kicker { color: var(--accent-2); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 10px; font-weight: 600; }
+
+  section { margin: 36px 0; }
+  .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--card-2); border: 1px solid var(--border-2);
+    color: var(--accent); font-size: 12px; font-weight: 600;
+    margin-right: 10px; vertical-align: -4px;
+  }
+
+  /* The two-extremes panel */
+  .extremes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+  @media (max-width: 760px) { .extremes { grid-template-columns: 1fr; } }
+  .ext {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px;
+  }
+  .ext .ext-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .ext .who { font-size: 12px; color: var(--text-faint); margin-bottom: 12px; }
+  .ext .fail {
+    margin-top: 10px; padding: 10px 12px;
+    background: rgba(232,138,138,0.07); border: 1px solid rgba(232,138,138,0.25);
+    color: var(--bad); border-radius: 6px; font-size: 12.5px;
+  }
+  .ext .fail::before { content: "FAILS WHEN: "; font-weight: 600; letter-spacing: 0.06em; font-size: 10.5px; opacity: 0.85; margin-right: 4px; }
+
+  /* The "real lever" axis */
+  .axis {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 22px; margin-top: 16px;
+  }
+  .axis-bar {
+    position: relative; margin: 18px 8px 6px;
+    height: 6px; background: linear-gradient(90deg, var(--good) 0%, var(--good) 38%, var(--warn) 42%, var(--warn) 100%);
+    border-radius: 3px;
+  }
+  .axis-bar .divider {
+    position: absolute; top: -6px; bottom: -6px; left: 40%;
+    width: 2px; background: var(--text); opacity: 0.6;
+  }
+  .axis-bar .marker {
+    position: absolute; top: -4px; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--bg); border: 2px solid var(--text);
+    transform: translateX(-50%);
+  }
+  .axis-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-faint); margin: 14px 4px 0; }
+  .axis-labels span { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .axis-bands { display: flex; margin-top: 18px; gap: 10px; }
+  .axis-bands .band { flex: 1; padding: 10px 12px; border-radius: 8px; background: var(--card-2); border: 1px solid var(--border); }
+  .axis-bands .band.left { border-color: rgba(95,210,156,0.35); }
+  .axis-bands .band.right { border-color: rgba(240,179,90,0.35); }
+  .axis-bands .band .h { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+  .axis-bands .band.left .h { color: var(--good); }
+  .axis-bands .band.right .h { color: var(--warn); }
+  .axis-bands .band .ex { font-size: 11.5px; color: var(--text-faint); font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+  /* Position callout */
+  .position {
+    background: linear-gradient(180deg, rgba(122,162,255,0.08), rgba(122,162,255,0.02));
+    border: 1px solid rgba(122,162,255,0.35);
+    border-radius: 12px; padding: 22px 24px;
+    position: relative;
+  }
+  .position::before {
+    content: "MY POSITION";
+    position: absolute; top: -10px; left: 16px;
+    background: var(--bg); padding: 0 8px;
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.14em; color: var(--accent);
+  }
+  .position .one-liner { font-size: 17px; color: var(--text); margin: 4px 0 8px; line-height: 1.4; }
+  .position .one-liner b { color: var(--accent); font-weight: 600; }
+
+  /* Behavior table */
+  table.beh { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; background: var(--card); border-radius: 8px; overflow: hidden; }
+  table.beh th, table.beh td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  table.beh thead th { background: var(--card-2); font-weight: 600; font-size: 12px; color: var(--text-faint); letter-spacing: 0.04em; text-transform: uppercase; }
+  table.beh tbody tr:last-child td { border-bottom: none; }
+  table.beh td.axis { font-weight: 500; color: var(--text); width: 30%; }
+  table.beh td.task { color: var(--text-dim); }
+  table.beh td.routine { color: var(--text-dim); background: rgba(122,162,255,0.04); }
+
+  /* Mockups */
+  .mocks { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 12px; }
+  @media (max-width: 760px) { .mocks { grid-template-columns: 1fr; } }
+  .mock-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .mock-wrap .cap { font-size: 11px; color: var(--text-faint); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+  .mock-wrap .note { font-size: 12px; color: var(--text-dim); margin-top: 10px; }
+
+  /* Timeline column mockup */
+  .tl-col {
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    width: 100%; max-width: 220px; margin: 0 auto;
+  }
+  .tl-col .day { font-size: 11px; color: var(--text-faint); margin-bottom: 6px; letter-spacing: 0.08em; }
+  .tl-col .section {
+    background: var(--card-2); border-radius: 5px; padding: 5px 8px;
+    font-size: 11px; color: var(--text-dim); margin: 4px 0;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .tl-col .section.routines { background: rgba(122,162,255,0.10); color: var(--accent); border: 1px solid rgba(122,162,255,0.25); }
+  .tl-col .section .pill { background: var(--bg-2); color: var(--text-dim); padding: 1px 6px; border-radius: 8px; font-size: 10px; }
+  .tl-col .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 5px;
+    padding: 6px 8px; font-size: 11.5px; margin: 4px 0;
+  }
+  .tl-col .card .meta { font-size: 10px; color: var(--text-faint); margin-top: 2px; }
+  .tl-col .card .recur { color: var(--accent-2); font-size: 10px; }
+  .tl-col .section.completed { background: var(--card-2); opacity: 0.65; }
+
+  /* Stack mockup */
+  .stack-mock { background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+  .stack-strip {
+    background: rgba(122,162,255,0.08); border: 1px solid rgba(122,162,255,0.25);
+    border-radius: 6px; padding: 8px 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .stack-strip .lbl { font-size: 10px; color: var(--accent); font-weight: 600; letter-spacing: 0.1em; }
+  .stack-strip .r { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-dim); }
+  .stack-strip .r .dot { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--text-dim); display: inline-block; }
+  .stack-strip .r.done .dot { background: var(--good); border-color: var(--good); }
+  .stack-strip .r.done { color: var(--text-faint); text-decoration: line-through; }
+  .stack-divider { height: 1px; background: var(--border); margin: 10px 0; position: relative; }
+  .stack-divider::after {
+    content: "PRIORITY STACK"; position: absolute; left: 50%; top: -6px;
+    transform: translateX(-50%); background: var(--bg-2); padding: 0 8px;
+    font-size: 9.5px; color: var(--text-faint); letter-spacing: 0.12em;
+  }
+  .stack-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 10px; font-size: 12px; margin: 5px 0;
+  }
+  .stack-card .meta { font-size: 10px; color: var(--text-faint); margin-top: 2px; }
+  .stack-card .recur { color: var(--accent-2); font-size: 10px; }
+
+  /* Input UX */
+  .input-mock {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px;
+  }
+  .input-mock .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 12px; }
+  .input-mock .chip { font-size: 11.5px; padding: 5px 10px; border-radius: 999px; background: var(--card-2); color: var(--text-dim); border: 1px solid transparent; }
+  .input-mock .chip.on { background: rgba(122,162,255,0.14); color: var(--accent); border-color: rgba(122,162,255,0.35); }
+  .input-mock .toggle {
+    display: flex; align-items: center; gap: 10px; margin-top: 4px;
+    padding: 10px 12px; background: var(--card-2); border: 1px solid var(--border-2);
+    border-radius: 8px;
+  }
+  .input-mock .toggle .sw { width: 32px; height: 18px; background: var(--accent); border-radius: 9px; position: relative; flex-shrink: 0; }
+  .input-mock .toggle .sw::after { content: ""; position: absolute; right: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: white; }
+  .input-mock .toggle .text { font-size: 12.5px; }
+  .input-mock .toggle .sub { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+  .input-mock .auto-hint {
+    font-size: 11px; color: var(--text-faint); margin-top: 8px; padding-left: 4px;
+    border-left: 2px solid var(--accent); padding-left: 8px;
+  }
+
+  /* Data model box */
+  .schema {
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px;
+    color: var(--text-dim); line-height: 1.7;
+    margin-top: 10px;
+  }
+  .schema .k { color: var(--accent); }
+  .schema .add { color: var(--good); }
+  .schema .add::before { content: "+ "; }
+  .schema .c { color: var(--text-faint); }
+
+  /* Rollover diagram */
+  .rollover { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+  @media (max-width: 760px) { .rollover { grid-template-columns: 1fr; } }
+  .roll-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .roll-card .h { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .roll-card.task .h { color: var(--warn); }
+  .roll-card.routine .h { color: var(--good); }
+  .roll-strip { display: flex; gap: 4px; margin: 10px 0 6px; }
+  .roll-strip .d {
+    flex: 1; height: 28px; border-radius: 4px; background: var(--card-2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: var(--text-faint); position: relative;
+  }
+  .roll-strip .d.miss { background: rgba(232,138,138,0.20); color: var(--bad); }
+  .roll-strip .d.miss-soft { background: rgba(155,163,184,0.12); color: var(--text-faint); }
+  .roll-strip .d.today { outline: 1.5px solid var(--accent); }
+  .roll-strip .d.overdue { background: rgba(232,138,138,0.35); color: var(--text); font-weight: 600; }
+  .roll-card .desc { font-size: 12px; color: var(--text-dim); }
+
+  /* Dashboard mock */
+  .dash {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-top: 12px;
+  }
+  .dash table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .dash th { font-size: 10.5px; color: var(--text-faint); text-align: left; padding: 6px 8px; letter-spacing: 0.06em; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+  .dash td { padding: 9px 8px; border-bottom: 1px solid var(--border); }
+  .dash tr:last-child td { border-bottom: none; }
+  .dash .title-cell { color: var(--text); }
+  .dash .cadence { color: var(--text-faint); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; }
+  .dash .streak { color: var(--good); font-weight: 600; }
+  .dash .next { color: var(--text-dim); }
+  .dash .rate { color: var(--text-dim); }
+  .dash .bar { display: inline-block; width: 60px; height: 4px; background: var(--card-2); border-radius: 2px; overflow: hidden; vertical-align: middle; margin-left: 6px; }
+  .dash .bar i { display: block; height: 100%; background: var(--good); }
+
+  /* Tradeoff callout */
+  .tradeoff-box {
+    background: rgba(240,179,90,0.06); border: 1px solid rgba(240,179,90,0.3);
+    border-radius: 10px; padding: 18px 22px; margin-top: 12px;
+  }
+  .tradeoff-box h3 { color: var(--warn); margin-bottom: 8px; letter-spacing: 0.06em; }
+  .tradeoff-box p { color: var(--text); font-size: 13.5px; }
+
+  hr.sep { border: 0; height: 1px; background: var(--border); margin: 36px 0 0; }
+  footer { color: var(--text-faint); font-size: 11.5px; margin-top: 32px; text-align: right; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="kicker">Recurring tasks · synthesis</div>
+  <h1>Tasks and Routines: same data model, two UX treatments.</h1>
+  <p class="lead">"Same or different?" hides the real question. The lever isn't task-vs-routine — it's <em>cadence frequency</em>. Build one model, treat it two ways, and never ask the user to choose at creation time.</p>
+</header>
+
+<!-- STEP 1 -->
+<section>
+  <h2><span class="step-num">1</span>The two extremes both fail</h2>
+  <p>Most apps pick one side. Each side has a specific failure mode.</p>
+
+  <div class="extremes">
+    <div class="ext">
+      <div class="ext-title">"They're the same thing"</div>
+      <div class="who">Sunsama · Todoist · Things 3</div>
+      <p>A routine is just a task with a recurrence rule. One concept, one input flow, one view.</p>
+      <div class="fail">you come back from a one-week holiday to 7 overdue dog walks, 5 missed journals, and 14 ghost "stand up at 9am"s clogging your inbox. The signal — real overdue tasks like rent — drowns in routine noise.</div>
+    </div>
+    <div class="ext">
+      <div class="ext-title">"They're different things"</div>
+      <div class="who">Streaks · Habitica · Habit-tracking apps</div>
+      <p>Habits live in their own world with their own UI, their own streaks, their own data store.</p>
+      <div class="fail">you now maintain two task systems. "Was that a habit or a task?" becomes a daily question. Cross-cutting actions (search, filters, projects, tags) don't span both. Migration nightmares.</div>
+    </div>
+  </div>
+</section>
+
+<!-- STEP 2 -->
+<section>
+  <h2><span class="step-num">2</span>The real lever is cadence frequency</h2>
+  <p>Every "real" difference between a task and a routine correlates with one thing: <strong>how often it repeats</strong>.</p>
+
+  <div class="axis">
+    <h3>Cadence frequency</h3>
+    <div class="axis-bar" aria-hidden="true">
+      <span class="divider"></span>
+      <span class="marker" style="left: 40%;"></span>
+    </div>
+    <div class="axis-labels">
+      <span>daily</span><span>weekdays</span><span>3× / wk</span><span>weekly</span><span>monthly</span><span>quarterly</span>
+    </div>
+    <div class="axis-bands">
+      <div class="band left">
+        <div class="h">↻ Routine treatment</div>
+        <div class="ex">walk dog · daily journal · weekly review · stretch</div>
+      </div>
+      <div class="band right">
+        <div class="h">✓ Task-with-cadence treatment</div>
+        <div class="ex">pay rent · submit invoice · quarterly review · car service</div>
+      </div>
+    </div>
+    <p style="margin-top: 16px;">Above the line: the <em>series</em> matters, individual instances don't. Missing one is noise. Streak is the truth.</p>
+    <p>Below the line: each <em>instance</em> matters. Missing one is a real debt. The card stays overdue until handled.</p>
+  </div>
+</section>
+
+<!-- STEP 3 -->
+<section>
+  <div class="position">
+    <h2><span class="step-num">3</span>The position</h2>
+    <p class="one-liner">One <b>data model</b> (tasks with <code>recurrence</code>), one <b>flag</b> (<code>isRoutine</code>, auto-derived from cadence), two <b>UX treatments</b> that diverge at exactly three points: rollover, view treatment, and streaks.</p>
+    <p style="margin-top: 14px;">No new table. No new top-level concept. No "task or routine?" question when you create something. The system makes the call from cadence; you override with one toggle if it's wrong.</p>
+  </div>
+</section>
+
+<!-- STEP 4 -->
+<section>
+  <h2><span class="step-num">4</span>What differs (and only this)</h2>
+  <table class="beh">
+    <thead>
+      <tr><th>Axis</th><th>Task-with-cadence</th><th>Routine</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="axis">Missing an instance</td>
+        <td class="task">Stays overdue. Real debt.</td>
+        <td class="routine">Silently rolls forward at midnight. Streak breaks; no inbox bomb.</td>
+      </tr>
+      <tr>
+        <td class="axis">In Timeline</td>
+        <td class="task">Inline card with ↻ glyph, lives in the day's flow.</td>
+        <td class="routine">Collapsed "Routines 2/5" section at top of each day column.</td>
+      </tr>
+      <tr>
+        <td class="axis">In Stack</td>
+        <td class="task">Normal priority-ranked card.</td>
+        <td class="routine">Pinned strip of small circles above the priority stack. Not chrome.</td>
+      </tr>
+      <tr>
+        <td class="axis">What you review</td>
+        <td class="task">"Did I do it this time?"</td>
+        <td class="routine">"How's my streak?" → dedicated Routines dashboard.</td>
+      </tr>
+      <tr>
+        <td class="axis">Glyph</td>
+        <td class="task">↻ (recurrence indicator)</td>
+        <td class="routine">🔥 streak count + ↻</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- STEP 5 -->
+<section>
+  <h2><span class="step-num">5</span>How it looks in the views</h2>
+
+  <div class="mocks">
+    <!-- Timeline column -->
+    <div class="mock-wrap">
+      <div class="cap">Timeline · one day column</div>
+      <div class="tl-col">
+        <div class="day">TUE · MAY 12</div>
+        <div class="section routines">
+          <span>↻ Routines</span>
+          <span class="pill">2 / 5</span>
+        </div>
+        <div class="card">
+          Submit Q2 invoice
+          <div class="meta"><span class="recur">↻ monthly · 15th</span></div>
+        </div>
+        <div class="card">
+          Reply to Alex re: contract
+        </div>
+        <div class="card">
+          Weekly review
+          <div class="meta"><span class="recur">↻ weekly · Sun</span></div>
+        </div>
+        <div class="section completed">
+          <span>Completed</span>
+          <span class="pill">3</span>
+        </div>
+      </div>
+      <div class="note">Daily routines fold into the collapsed section at the top. Monthly/weekly tasks-with-cadence appear inline like normal cards — they belong in the day's flow. Mirrors the existing Completed-section pattern.</div>
+    </div>
+
+    <!-- Stack -->
+    <div class="mock-wrap">
+      <div class="cap">Stack · prioritisation surface</div>
+      <div class="stack-mock">
+        <div class="stack-strip">
+          <span class="lbl">TODAY</span>
+          <span class="r done"><span class="dot"></span>Walk dog</span>
+          <span class="r done"><span class="dot"></span>Journal</span>
+          <span class="r"><span class="dot"></span>Triage inbox</span>
+          <span class="r"><span class="dot"></span>Stretch</span>
+        </div>
+        <div class="stack-divider"></div>
+        <div class="stack-card">Finish brief for Andrea<div class="meta">work · p1</div></div>
+        <div class="stack-card">Submit Q2 invoice<div class="meta">admin · <span class="recur">↻ monthly</span></div></div>
+        <div class="stack-card">Plan offsite agenda<div class="meta">work</div></div>
+      </div>
+      <div class="note">Routines sit in a pinned strip — small tick-circles, no FLIP, no drag-reorder. They don't compete with priority. Tasks-with-cadence (the invoice) participate normally in Stack with just a ↻ glyph.</div>
+    </div>
+  </div>
+</section>
+
+<!-- STEP 6 -->
+<section>
+  <h2><span class="step-num">6</span>The input flow</h2>
+  <p>One chip row, one auto-toggle. The user never picks "task or routine?" — they pick a cadence; the system picks the treatment.</p>
+
+  <div class="input-mock">
+    <h3>Repeats</h3>
+    <div class="chips">
+      <span class="chip">Daily</span>
+      <span class="chip on">Weekdays</span>
+      <span class="chip">Mon/Wed/Fri</span>
+      <span class="chip">Weekly</span>
+      <span class="chip">Monthly · Nth</span>
+      <span class="chip">Custom…</span>
+    </div>
+    <div class="toggle">
+      <div class="sw"></div>
+      <div>
+        <div class="text"><strong>Treat as routine</strong> — rolls forward silently, tracks streak</div>
+        <div class="sub">Auto-on for daily / weekdays / 3+ days a week. Turn off to keep missed instances as overdue.</div>
+      </div>
+    </div>
+    <div class="auto-hint">If you pick <em>Weekdays</em> → auto-on. If you pick <em>Monthly</em> → auto-off. One click to override.</div>
+  </div>
+</section>
+
+<!-- STEP 7 -->
+<section>
+  <h2><span class="step-num">7</span>The one schema change</h2>
+  <div class="schema">
+    <span class="c">// src/data.js — makeTask</span><br/>
+    <span class="k">recurrence</span>: { freq, interval, <span class="add">byDay</span>, <span class="add">until</span> },<br/>
+    <span class="add"><span class="k">isRoutine</span>: false,        <span class="c">// auto-derived; user can override</span></span><br/>
+    <span class="add"><span class="k">recurrenceId</span>: null,     <span class="c">// shared across all instances of a series</span></span>
+  </div>
+  <p style="margin-top: 10px;"><code>recurrenceId</code> is the only structurally important addition — it makes streak math <code>O(series-length)</code> instead of <code>O(all-tasks)</code>. Assigned when recurrence is first set; copied on every spawn.</p>
+</section>
+
+<!-- STEP 8 -->
+<section>
+  <h2><span class="step-num">8</span>Rollover: the failure mode this fixes</h2>
+
+  <div class="rollover">
+    <div class="roll-card task">
+      <div class="h">Task-with-cadence · "Pay rent" missed</div>
+      <div class="roll-strip" aria-hidden="true">
+        <div class="d">Apr 1</div>
+        <div class="d miss">missed</div>
+        <div class="d">·</div>
+        <div class="d">·</div>
+        <div class="d today overdue">today</div>
+      </div>
+      <div class="desc"><strong>Stays overdue.</strong> Visible debt. You see it every day until handled. This is the right behaviour — rent didn't pay itself.</div>
+    </div>
+    <div class="roll-card routine">
+      <div class="h">Routine · "Walk dog" missed during holiday</div>
+      <div class="roll-strip" aria-hidden="true">
+        <div class="d miss-soft">·</div>
+        <div class="d miss-soft">·</div>
+        <div class="d miss-soft">·</div>
+        <div class="d miss-soft">·</div>
+        <div class="d today">today</div>
+      </div>
+      <div class="desc"><strong>Silently rolls forward.</strong> Streak shows the gap; the inbox does not. No 7-overdue-walks bomb when you come back.</div>
+    </div>
+  </div>
+</section>
+
+<!-- STEP 9 -->
+<section>
+  <h2><span class="step-num">9</span>The Routines dashboard (Sunday-review surface)</h2>
+  <p>A new sidebar entry — but it's just a <em>filter</em> over <code>tasks where isRoutine = true</code>, grouped by <code>recurrenceId</code>. Mirrors the Delegations view's shape. Not a daily-driver; a weekly-review surface.</p>
+
+  <div class="dash">
+    <table>
+      <thead>
+        <tr><th>Routine</th><th>Cadence</th><th>Streak</th><th>Last done</th><th>Next fire</th><th>30-day rate</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="title-cell">🐕 Walk dog</td>
+          <td class="cadence">daily · 7am</td>
+          <td class="streak">🔥 23</td>
+          <td class="next">today</td>
+          <td class="next">tomorrow</td>
+          <td class="rate">93% <span class="bar"><i style="width:93%"></i></span></td>
+        </tr>
+        <tr>
+          <td class="title-cell">📓 Daily journal</td>
+          <td class="cadence">daily · 9pm</td>
+          <td class="streak">🔥 12</td>
+          <td class="next">yesterday</td>
+          <td class="next">tonight</td>
+          <td class="rate">71% <span class="bar"><i style="width:71%"></i></span></td>
+        </tr>
+        <tr>
+          <td class="title-cell">📨 Triage inbox</td>
+          <td class="cadence">weekdays</td>
+          <td class="streak">🔥 7</td>
+          <td class="next">today</td>
+          <td class="next">Wed</td>
+          <td class="rate">88% <span class="bar"><i style="width:88%"></i></span></td>
+        </tr>
+        <tr>
+          <td class="title-cell">🔍 Weekly review</td>
+          <td class="cadence">Sun</td>
+          <td class="streak">🔥 4</td>
+          <td class="next">Sun</td>
+          <td class="next">Sun</td>
+          <td class="rate">100% <span class="bar"><i style="width:100%"></i></span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- STEP 10 -->
+<section>
+  <h2><span class="step-num">10</span>The honest tradeoff</h2>
+  <div class="tradeoff-box">
+    <h3>Where the auto-flag guesses wrong</h3>
+    <p>An auto-derived <code>isRoutine</code> will be wrong ~5% of the time. Someone wants their <em>monthly meditation</em> tracked as a streak. Someone else wants their <em>daily admin review</em> kept as a hard overdue task. The override toggle handles both, but the first time it surprises someone they'll grumble.</p>
+    <p style="margin-top: 8px;">The alternative — asking "is this a task or a routine?" at every creation — surprises them <em>every</em> time. The toggle's the better cost.</p>
+  </div>
+</section>
+
+<hr class="sep" />
+
+<footer>
+  Same data, two treatments — driven by cadence, overridable by toggle · 2026-05-12
+</footer>
+
+</body>
+</html>

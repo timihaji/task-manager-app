@@ -5,9 +5,11 @@ import {
   CHECKIN_PRESETS, CHECKIN_PRESET_LABELS, matchPreset, isStale, daysSince,
   loadPeople, savePeople, getPreferredCadence, recordContact, peopleRollup, personKey,
   buildCheckInTasks, buildExpiryTask, stretchSchedule,
+  recurrenceLabel, ensureRecurrenceFields, deriveIsRoutine, DAY_CODES, DAY_CODE_S, DAY_INDEX,
 } from './data.js';
 import { CheckGlyph } from './components/CheckGlyph.jsx';
 import { ActivityLog } from './components/ActivityLog.jsx';
+import { I } from './utils/icons.jsx';
 
 // Task Manager — right drawer task editor (560px)
 // Requires: tm-data.jsx loaded first (PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_NAMES, LIFE_AREA_DARK, LIFE_AREA_LIGHT, D on window)
@@ -94,6 +96,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
   }, [startOpen]);
   const [menuOpen,   setMenuOpen]   = useState(false);
   const [timeMoreOpen, setTimeMoreOpen] = useState(false);
+  const [customRecurOpen, setCustomRecurOpen] = useState(false);
   const [blockerQuery,setBlockerQuery] = useState('');
   // Section fold state — persisted by App via `secsProp`/`onSecsChange` so it
   // survives refresh and roams across devices. Falls back to a sensible
@@ -275,10 +278,33 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
     { l:'2 weeks before', days:14 },
     { l:'1 month before', days:30 },
   ];
-  const FREQ_OPTS = [
-    {v:'none',l:'Does not repeat'},{v:'daily',l:'Daily'},
-    {v:'weekdays',l:'Every weekday'},{v:'weekly',l:'Weekly'},{v:'monthly',l:'Monthly'},
+  // Recurrence presets — chip row in the drawer. "Custom" surfaces an inline
+  // expander for power patterns (every N units, byDay multi-select, byMonthDay).
+  // Selection logic in matchRecurPreset() — keep these IDs in sync.
+  const RECUR_PRESETS = [
+    { id:'none',     label:'None',         value: null },
+    { id:'daily',    label:'Daily',        value: { freq:'daily',    interval:1 } },
+    { id:'weekdays', label:'Weekdays',     value: { freq:'weekdays', interval:1 } },
+    { id:'mwf',      label:'Mon/Wed/Fri',  value: { freq:'weekly',   interval:1, byDay:['mon','wed','fri'] } },
+    { id:'weekly',   label:'Weekly',       value: { freq:'weekly',   interval:1 } },
+    { id:'monthly',  label:'Monthly',      value: { freq:'monthly',  interval:1 } },
   ];
+
+  const matchRecurPreset = (r) => {
+    if (!r) return 'none';
+    if (r.freq === 'daily' && (r.interval || 1) === 1 && !r.byDay) return 'daily';
+    if (r.freq === 'weekdays') return 'weekdays';
+    if (r.freq === 'weekly' && (r.interval || 1) === 1) {
+      if (Array.isArray(r.byDay)) {
+        const sig = [...r.byDay].sort().join(',');
+        if (sig === 'fri,mon,wed') return 'mwf';
+        return 'custom';
+      }
+      return 'weekly';
+    }
+    if (r.freq === 'monthly' && (r.interval || 1) === 1 && !r.byMonthDay) return 'monthly';
+    return 'custom';
+  };
   const TIME_PRESETS = ['5m','15m','30m','45m','1h','1.5h','2h'];
   const TIME_MORE = ['10m','20m','25m','40m','50m','1h 15m','1h 30m','1h 45m','2h 30m','3h','4h','5h','6h','8h'];
 
@@ -372,7 +398,9 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
           </button>
         </div>
         {task.recurrence && (
-          <div className="dr-chip">↻ {FREQ_OPTS.find(f=>f.v===task.recurrence.freq)?.l||'Recurring'}</div>
+          <div className={`dr-chip ${task.recurrence.isRoutine ? 'routine' : 'recurring'}`}>
+            ↻ {recurrenceLabel(task.recurrence)}
+          </div>
         )}
         {task.snoozedUntil && (
           <div className="dr-chip snooze">⏸ Snoozed · {snoozeSummary}</div>
@@ -760,12 +788,169 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
               )}
             </div>
           </DRow>
-          <DRow label="Recurrence">
-            <select className="dr-sel" value={task.recurrence?.freq||'none'}
-              onChange={e=>{ const v=e.target.value; upd({recurrence:v==='none'?null:{freq:v,interval:1}}); }}>
-              {FREQ_OPTS.map(f=><option key={f.v} value={f.v}>{f.l}</option>)}
-            </select>
+          <DRow label="Repeats">
+            <div className="dr-recur-chips">
+              {RECUR_PRESETS.map(p => {
+                const active = matchRecurPreset(task.recurrence) === p.id && !customRecurOpen;
+                return (
+                  <button key={p.id}
+                    className={`dr-recur-chip${active ? ' act' : ''}`}
+                    onClick={() => {
+                      setCustomRecurOpen(false);
+                      if (!p.value) { upd({ recurrence: null }); return; }
+                      upd({ recurrence: ensureRecurrenceFields(p.value, task.recurrence?.recurrenceId) });
+                    }}>
+                    {p.label}
+                  </button>
+                );
+              })}
+              {(() => {
+                const isCustomMatch = matchRecurPreset(task.recurrence) === 'custom';
+                const active = customRecurOpen || isCustomMatch;
+                return (
+                  <button
+                    className={`dr-recur-chip${active ? ' act' : ''}`}
+                    onClick={() => {
+                      // Open the inline picker. Normalize the current pattern
+                      // into a customizable shape so the day grid / month-day
+                      // input always have something to edit. (Weekdays preset
+                      // becomes weekly + Mon..Fri byDay; weekly w/o byDay
+                      // becomes weekly + empty byDay so the grid renders.)
+                      let cur = task.recurrence;
+                      if (!cur) {
+                        cur = { freq:'weekly', interval:1, byDay:[] };
+                      } else if (cur.freq === 'weekdays') {
+                        cur = { ...cur, freq:'weekly', byDay:['mon','tue','wed','thu','fri'] };
+                      } else if (cur.freq === 'weekly' && !Array.isArray(cur.byDay)) {
+                        cur = { ...cur, byDay: [] };
+                      }
+                      upd({ recurrence: ensureRecurrenceFields(cur, task.recurrence?.recurrenceId) });
+                      setCustomRecurOpen(true);
+                    }}>
+                    {isCustomMatch ? `Custom · ${recurrenceLabel(task.recurrence)}` : 'Custom…'}
+                  </button>
+                );
+              })()}
+            </div>
+
+            {/* Inline custom picker — every-N + day-of-week / day-of-month.
+                Surfaces when the user clicks "Custom…" or when the current
+                recurrence doesn't match any preset (matchRecurPreset → 'custom'). */}
+            {(customRecurOpen || matchRecurPreset(task.recurrence) === 'custom') && task.recurrence && (() => {
+              const r = task.recurrence;
+              const updR = (patch) => upd({ recurrence: ensureRecurrenceFields({ ...r, ...patch }, r.recurrenceId) });
+              return (
+                <div className="dr-recur-custom">
+                  <div className="dr-recur-custom-row">
+                    <span className="dr-recur-custom-lbl">Every</span>
+                    <input type="number" min="1" max="99"
+                      className="dr-recur-custom-num"
+                      value={r.interval || 1}
+                      onChange={e => updR({ interval: Math.max(1, parseInt(e.target.value, 10) || 1) })}/>
+                    <select className="dr-recur-custom-sel" value={r.freq}
+                      onChange={e => {
+                        const f = e.target.value;
+                        // Clean fields that don't apply to the new freq.
+                        const patch = { freq: f };
+                        if (f !== 'weekly') patch.byDay = undefined;
+                        if (f !== 'monthly') patch.byMonthDay = undefined;
+                        updR(patch);
+                      }}>
+                      <option value="daily">day{(r.interval || 1) > 1 ? 's' : ''}</option>
+                      <option value="weekly">week{(r.interval || 1) > 1 ? 's' : ''}</option>
+                      <option value="monthly">month{(r.interval || 1) > 1 ? 's' : ''}</option>
+                    </select>
+                  </div>
+
+                  {r.freq === 'weekly' && (
+                    <div className="dr-recur-custom-row">
+                      <span className="dr-recur-custom-lbl">On</span>
+                      <div className="dr-day-grid">
+                        {DAY_CODES.map(d => {
+                          const on = Array.isArray(r.byDay) && r.byDay.includes(d);
+                          return (
+                            <button key={d}
+                              className={`dr-day-btn${on ? ' on' : ''}`}
+                              title={DAY_CODE_S[d]}
+                              onClick={() => {
+                                const cur = Array.isArray(r.byDay) ? r.byDay : [];
+                                const next = on ? cur.filter(x => x !== d) : [...cur, d];
+                                updR({ byDay: next.length ? next : undefined });
+                              }}>
+                              {DAY_CODE_S[d].slice(0, 1)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {r.freq === 'monthly' && (
+                    <div className="dr-recur-custom-row">
+                      <span className="dr-recur-custom-lbl">On day</span>
+                      <input type="number" min="1" max="31"
+                        className="dr-recur-custom-num"
+                        value={r.byMonthDay || ''}
+                        placeholder="same day"
+                        onChange={e => {
+                          const v = parseInt(e.target.value, 10);
+                          updR({ byMonthDay: Number.isFinite(v) && v >= 1 && v <= 31 ? v : undefined });
+                        }}/>
+                      <span className="dr-recur-custom-lbl">of the month</span>
+                    </div>
+                  )}
+
+                  <div className="dr-recur-custom-row">
+                    <span className="dr-recur-custom-lbl">Until</span>
+                    <input type="date"
+                      className="dr-recur-custom-date"
+                      value={r.until || ''}
+                      onChange={e => updR({ until: e.target.value || undefined })}/>
+                    {r.until && (
+                      <button className="dr-recur-custom-clear"
+                              onClick={() => updR({ until: undefined })}
+                              title="Clear end date">×</button>
+                    )}
+                  </div>
+
+                  <div className="dr-recur-custom-preview">
+                    Repeats {recurrenceLabel(r) || '(set the days above)'}
+                    {r.until ? ` until ${r.until}` : ''}.
+                  </div>
+                </div>
+              );
+            })()}
           </DRow>
+
+          {task.recurrence && (
+            <DRow label="Treat as">
+              {/* Segmented control — both states always visible so it's obvious
+                  what's currently on. Replaces an earlier toggle pill that was
+                  ambiguous about ON / OFF. */}
+              <div className="dr-recur-mode-seg" role="group" aria-label="Routine or recurring task">
+                <button
+                  className={task.recurrence.isRoutine ? 'act' : ''}
+                  onClick={() => upd({ recurrence: { ...task.recurrence, isRoutine: true } })}>
+                  <I.Flame/><span>Routine</span>
+                </button>
+                <button
+                  className={!task.recurrence.isRoutine ? 'act' : ''}
+                  onClick={() => upd({ recurrence: { ...task.recurrence, isRoutine: false } })}>
+                  <I.Recur/><span>Recurring</span>
+                </button>
+              </div>
+              <div className="dr-recur-mode-desc">
+                {task.recurrence.isRoutine
+                  ? <><strong>Rolls forward silently if missed.</strong> Streak tracks consecutive days; missed days break the streak but don't pile up as overdue.</>
+                  : <><strong>Missed instances stay as overdue cards.</strong> Use this for real obligations (rent, taxes) that don't go away when you miss them.</>}
+              </div>
+              {deriveIsRoutine(task.recurrence) !== !!task.recurrence.isRoutine && (
+                <div className="dr-routine-hint">
+                  Default for <em>{recurrenceLabel(task.recurrence)}</em> is <strong>{deriveIsRoutine(task.recurrence) ? 'Routine' : 'Recurring task'}</strong>. You overrode it.
+                </div>
+              )}
+            </DRow>
+          )}
           <DRow label="Someday">
             <button className={`dr-pick${task.someday?' act':''}`}
               style={task.someday?{background:'rgba(139,92,246,.12)',color:'#8b5cf6',borderColor:'rgba(139,92,246,.45)'}:{}}

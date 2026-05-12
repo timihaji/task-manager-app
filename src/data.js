@@ -142,15 +142,287 @@ const fmtWeek = (dates) => {
   return `${MONTH_S[a.getMonth()]} ${a.getDate()} - ${a.getMonth()!==b.getMonth()?MONTH_S[b.getMonth()]+' ':''}${b.getDate()}, ${b.getFullYear()}`;
 };
 
+// Map of day-code -> JS getDay() index for byDay handling. Codes are stored
+// lowercase 3-letter for stability across UI and JSON.
+const DAY_INDEX = { sun:0, mon:1, tue:2, wed:3, thu:4, fri:5, sat:6 };
+const DAY_CODES = ['sun','mon','tue','wed','thu','fri','sat'];
+const DAY_CODE_S = { sun:'Sun', mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat' };
+
+const lastDayOfMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+
+// Decide whether a recurrence pattern should default to routine treatment.
+// Daily/weekdays/3+ days a week ≈ background practice (rolls forward silently);
+// weekly/monthly+ ≈ a task that happens to repeat (stays overdue if missed).
+// User can override via the drawer toggle.
+const ROUTINE_AUTO_FREQ = new Set(['daily', 'weekdays']);
+const deriveIsRoutine = (recurrence) => {
+  if (!recurrence) return false;
+  if (ROUTINE_AUTO_FREQ.has(recurrence.freq)) return true;
+  if (Array.isArray(recurrence.byDay) && recurrence.byDay.length >= 3) return true;
+  return false;
+};
+
+// Stable identifier shared across every instance of a recurring series.
+// Used by streak math (filter by recurrenceId, count consecutive completions)
+// and by the per-series dashboard.
+const mkRecurrenceId = () => `r_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
+
+// Fill in derived fields (isRoutine, recurrenceId) on a recurrence object.
+// Pass the previous recurrenceId to preserve series identity when editing.
+const ensureRecurrenceFields = (recurrence, existingRecurrenceId = null) => {
+  if (!recurrence) return null;
+  const isRoutine = recurrence.isRoutine === undefined
+    ? deriveIsRoutine(recurrence)
+    : !!recurrence.isRoutine;
+  const recurrenceId = recurrence.recurrenceId || existingRecurrenceId || mkRecurrenceId();
+  return { ...recurrence, isRoutine, recurrenceId };
+};
+
+const ORDINAL_SUFFIX = (n) => {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return 'th';
+  const mod10 = n % 10;
+  if (mod10 === 1) return 'st';
+  if (mod10 === 2) return 'nd';
+  if (mod10 === 3) return 'rd';
+  return 'th';
+};
+
+// Compact human label for a recurrence — used in the ↻ pill across every card
+// surface (Stack/.scard, Timeline/.card, List/.list-item) and in the dashboard.
+const recurrenceLabel = (recurrence) => {
+  if (!recurrence) return '';
+  const r = recurrence;
+  const i = r.interval || 1;
+  if (r.freq === 'daily') return i > 1 ? `every ${i} days` : 'daily';
+  if (r.freq === 'weekdays') return 'weekdays';
+  if (r.freq === 'weekly') {
+    if (Array.isArray(r.byDay) && r.byDay.length) {
+      const days = r.byDay
+        .filter(d => DAY_CODE_S[d])
+        .sort((a, b) => DAY_INDEX[a] - DAY_INDEX[b])
+        .map(d => DAY_CODE_S[d])
+        .join('/');
+      return i > 1 ? `every ${i} wks · ${days}` : days;
+    }
+    return i > 1 ? `every ${i} weeks` : 'weekly';
+  }
+  if (r.freq === 'monthly') {
+    if (r.byMonthDay) {
+      const ord = `${r.byMonthDay}${ORDINAL_SUFFIX(r.byMonthDay)}`;
+      return i > 1 ? `every ${i} months · ${ord}` : `monthly · ${ord}`;
+    }
+    return i > 1 ? `every ${i} months` : 'monthly';
+  }
+  return '';
+};
+
 const nextOccurrence = (task, fromDateStr) => {
   if (!task.recurrence) return null;
-  const { freq, interval=1 } = task.recurrence;
+  const { freq, interval=1, byDay, byMonthDay, until } = task.recurrence;
   const from = D.parse(fromDateStr);
-  if (freq==='daily') return D.str(D.add(from, interval));
-  if (freq==='weekdays') { let n=D.add(from,1); while([0,6].includes(n.getDay())) n=D.add(n,1); return D.str(n); }
-  if (freq==='weekly') return D.str(D.add(from, 7*interval));
-  if (freq==='monthly') { const d=new Date(from); d.setMonth(d.getMonth()+interval); return D.str(d); }
+  let next = null;
+
+  if (freq === 'daily') {
+    next = D.add(from, interval);
+  } else if (freq === 'weekdays') {
+    let n = D.add(from, 1);
+    while ([0, 6].includes(n.getDay())) n = D.add(n, 1);
+    next = n;
+  } else if (freq === 'weekly') {
+    if (Array.isArray(byDay) && byDay.length) {
+      const days = byDay.map(d => DAY_INDEX[d]).filter(d => d !== undefined).sort();
+      if (!days.length) return null;
+      // Advance one day at a time within interval-week windows until we hit a
+      // matching weekday. For interval > 1, ensure we skip into the right week.
+      let n = D.add(from, 1);
+      const step = interval > 1 ? interval : 1;
+      const fromWeek = Math.floor(D.parse(fromDateStr).getTime() / (7 * 86400000));
+      for (let safety = 0; safety < 366; safety += 1) {
+        const weekDelta = Math.floor(n.getTime() / (7 * 86400000)) - fromWeek;
+        if (days.includes(n.getDay()) && (step === 1 || weekDelta % step === 0)) {
+          next = n;
+          break;
+        }
+        n = D.add(n, 1);
+      }
+    } else {
+      next = D.add(from, 7 * interval);
+    }
+  } else if (freq === 'monthly') {
+    const d = new Date(from);
+    d.setMonth(d.getMonth() + interval);
+    if (byMonthDay) {
+      const clamped = Math.min(byMonthDay, lastDayOfMonth(d.getFullYear(), d.getMonth()));
+      d.setDate(clamped);
+    }
+    next = d;
+  }
+
+  if (!next) return null;
+  const nextStr = D.str(next);
+  if (until && nextStr > until) return null;
+  return nextStr;
+};
+
+// Inverse of nextOccurrence — given a fire date, what was the previous fire
+// date in the series? Returns null if cadence math can't produce one.
+const prevOccurrence = (task, fromDateStr) => {
+  if (!task.recurrence) return null;
+  const { freq, interval=1, byDay, byMonthDay } = task.recurrence;
+  const from = D.parse(fromDateStr);
+
+  if (freq === 'daily') {
+    return D.str(D.add(from, -interval));
+  }
+  if (freq === 'weekdays') {
+    let n = D.add(from, -1);
+    while ([0, 6].includes(n.getDay())) n = D.add(n, -1);
+    return D.str(n);
+  }
+  if (freq === 'weekly') {
+    if (Array.isArray(byDay) && byDay.length) {
+      const days = byDay.map(d => DAY_INDEX[d]).filter(d => d !== undefined).sort();
+      if (!days.length) return null;
+      let n = D.add(from, -1);
+      for (let safety = 0; safety < 366; safety += 1) {
+        if (days.includes(n.getDay())) return D.str(n);
+        n = D.add(n, -1);
+      }
+      return null;
+    }
+    return D.str(D.add(from, -7 * interval));
+  }
+  if (freq === 'monthly') {
+    const d = new Date(from);
+    d.setMonth(d.getMonth() - interval);
+    if (byMonthDay) {
+      const clamped = Math.min(byMonthDay, lastDayOfMonth(d.getFullYear(), d.getMonth()));
+      d.setDate(clamped);
+    }
+    return D.str(d);
+  }
   return null;
+};
+
+// Compute current streak for a series (consecutive completed instances ending
+// at the most recent expected fire date). Walks backwards through the schedule
+// using nextOccurrence; breaks the first time an instance is missing or
+// uncompleted (or archived). Cheap because we only look at the slice of tasks
+// matching `recurrenceId`. Returns 0 when the series has no completed history.
+const computeStreak = (tasks, recurrenceId, todayStr = D.str(D.today())) => {
+  if (!recurrenceId) return 0;
+  const siblings = (tasks || []).filter(t => t.recurrence?.recurrenceId === recurrenceId);
+  if (!siblings.length) return 0;
+  // Map by date for O(1) lookup; same date can have multiple historical
+  // instances (e.g. user re-spawned manually) — prefer the completed one.
+  const byDate = new Map();
+  for (const t of siblings) {
+    if (!t.date) continue;
+    const prev = byDate.get(t.date);
+    if (!prev || (t.done && !prev.done)) byDate.set(t.date, t);
+  }
+  // Anchor on the latest completed-on-or-before-today instance.
+  const completedDates = siblings
+    .filter(t => t.done && t.date && t.date <= todayStr)
+    .map(t => t.date)
+    .sort();
+  if (!completedDates.length) return 0;
+  let anchor = completedDates[completedDates.length - 1];
+  let streak = 0;
+  // Pick a "template" task to drive nextOccurrence math — any sibling works
+  // because recurrence shape is identical across the series.
+  const template = siblings[0];
+  // Walk backwards via the series' cadence: from anchor, what was the previous
+  // fire date? If that fire date has a completed sibling, extend streak.
+  let cur = anchor;
+  let safety = 0;
+  while (cur && safety < 1000) {
+    const t = byDate.get(cur);
+    if (!t || !t.done || t.archived) break;
+    streak += 1;
+    cur = prevOccurrence({ recurrence: template.recurrence }, cur);
+    safety += 1;
+  }
+  return streak;
+};
+
+// Rollup of tasks → one entry per routine series. Used by the dashboard.
+// Returns { recurrenceId, displayTitle, recurrence, streak, lastDone, nextFire,
+//          completionRate30d, totalInstances, completedInstances }.
+const routinesRollup = (tasks, todayStr = D.str(D.today())) => {
+  const groups = new Map();
+  for (const t of (tasks || [])) {
+    if (!t?.recurrence?.recurrenceId || !t.recurrence.isRoutine) continue;
+    // Archived routine instances DO count for streak / rate math (they represent
+    // missed days that should have been done) — but a series is hidden from the
+    // dashboard only when EVERY instance is archived (user stopped the routine).
+    const id = t.recurrence.recurrenceId;
+    if (!groups.has(id)) {
+      groups.set(id, {
+        recurrenceId: id,
+        recurrence: t.recurrence,
+        displayTitle: t.title,
+        project: t.project,
+        lifeArea: t.lifeArea,
+        tasks: [],
+        anyActive: false,
+      });
+    }
+    const g = groups.get(id);
+    g.tasks.push(t);
+    if (!t.archived) g.anyActive = true;
+  }
+  const rows = [];
+  for (const g of groups.values()) {
+    // Skip series where every instance is archived — that's a stopped routine.
+    if (!g.anyActive) continue;
+    const siblings = g.tasks;
+    // Title from the most recent instance (handles renames over time).
+    const newest = siblings.reduce((a, b) => (a.createdAt > b.createdAt ? a : b), siblings[0]);
+    // Sort by task.date (the scheduled day), then completedAt as tiebreak.
+    // task.date is the authoritative "this is the day it was done" for routines.
+    const lastDoneTask = siblings.filter(t => t.done && t.date)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.completedAt || '').localeCompare(a.completedAt || ''))[0];
+    const nextFireTask = siblings.filter(t => !t.done && t.date && t.date >= todayStr).sort((a, b) => a.date.localeCompare(b.date))[0];
+    const thirtyAgo = D.str(D.add(D.parse(todayStr), -30));
+    // 30-day rate = past 30 days (strictly before today). Today's pending
+    // instance is excluded — the user can still complete it. Archived
+    // (auto-missed) instances count toward the denominator so the rate honestly
+    // reflects "did I do it when I should have".
+    const last30 = siblings.filter(t => t.date && t.date >= thirtyAgo && t.date < todayStr);
+    const last30Done = last30.filter(t => t.done).length;
+    rows.push({
+      recurrenceId: g.recurrenceId,
+      recurrence: g.recurrence,
+      displayTitle: newest.title || g.displayTitle,
+      project: newest.project || g.project,
+      lifeArea: newest.lifeArea || g.lifeArea,
+      streak: computeStreak(tasks, g.recurrenceId, todayStr),
+      lastDone: lastDoneTask?.completedAt || null,
+      lastDoneDate: lastDoneTask?.date || null,
+      nextFireDate: nextFireTask?.date || null,
+      completionRate30d: last30.length ? last30Done / last30.length : null,
+      totalInstances: siblings.length,
+      completedInstances: siblings.filter(t => t.done).length,
+    });
+  }
+  return rows;
+};
+
+// One-time backfill for tasks that pre-date the isRoutine/recurrenceId fields.
+// Idempotent: only touches recurring tasks that are missing either field.
+// Returns the same array reference if no changes were needed (so React's
+// equality check skips the re-render).
+const migrateRecurrence = (tasks = []) => {
+  let changed = false;
+  const next = tasks.map(t => {
+    if (!t?.recurrence) return t;
+    if (t.recurrence.recurrenceId && t.recurrence.isRoutine !== undefined) return t;
+    changed = true;
+    return { ...t, recurrence: ensureRecurrenceFields(t.recurrence) };
+  });
+  return changed ? next : tasks;
 };
 
 const resolveRelativeSnoozeDate = (task) => {
@@ -194,6 +466,10 @@ const rollTaskDateForward = (task, todayStr = D.str(D.today())) => {
   if (!task?.date) return task;
   if (task.done) return task;
   if (!D.isPast(task.date)) return task;
+  // Routines never get rolled forward — a missed instance is a streak break,
+  // not a debt. archiveStaleRoutines handles them separately (auto-archives so
+  // the inbox doesn't pile up with 7 overdue dog walks after a holiday).
+  if (task.recurrence?.isRoutine) return task;
   return { ...task, date: todayStr };
 };
 
@@ -205,6 +481,84 @@ const rollIncompleteTasksToToday = (tasks = [], todayStr = D.str(D.today())) => 
     return rolled;
   });
   return changed ? next : tasks;
+};
+
+// Routines that fired in the past and weren't completed → archive them. The
+// streak math will show the gap; the inbox stays clean. Idempotent.
+const archiveStaleRoutines = (tasks = [], todayStr = D.str(D.today())) => {
+  let changed = false;
+  const next = tasks.map(t => {
+    if (!t?.recurrence?.isRoutine) return t;
+    if (t.archived || t.done) return t;
+    if (!t.date || !D.isPast(t.date)) return t;
+    changed = true;
+    return {
+      ...t,
+      archived: true,
+      activity: [...(t.activity || []), { type: 'auto-archived', reason: 'routine missed', at: new Date().toISOString() }],
+    };
+  });
+  return changed ? next : tasks;
+};
+
+// For each routine series, ensure concrete instances exist for every fire date
+// in [today, today + daysAhead]. Routines (unlike spawn-on-completion tasks)
+// pre-generate so the user can see them on the Timeline and tick them off in
+// the Stack strip. Idempotent — only creates a new task when one doesn't
+// already exist for that date in the series.
+const extendRoutineHorizon = (tasks = [], daysAhead = 14, todayStr = D.str(D.today())) => {
+  const byRecurrence = new Map();
+  for (const t of tasks) {
+    if (!t?.recurrence?.isRoutine) continue;
+    if (!t.recurrence.recurrenceId) continue;
+    if (t.archived) continue;
+    const id = t.recurrence.recurrenceId;
+    if (!byRecurrence.has(id)) byRecurrence.set(id, []);
+    byRecurrence.get(id).push(t);
+  }
+
+  if (byRecurrence.size === 0) return tasks;
+  const horizonStr = D.str(D.add(D.parse(todayStr), daysAhead));
+  const additions = [];
+
+  for (const [, siblings] of byRecurrence) {
+    // Existing dates for this series (so we don't double-create).
+    const existingDates = new Set(siblings.map(t => t.date).filter(Boolean));
+    // Template = the most-recent sibling (carries the latest title/project/tags).
+    const dated = siblings.filter(t => t.date);
+    if (!dated.length) continue;
+    const template = dated.reduce((a, b) => (a.date > b.date ? a : b));
+    // Walk forward from latest known fire date; stop at horizon.
+    let cur = template.date;
+    let safety = 0;
+    while (cur && safety < 200) {
+      const next = nextOccurrence(template, cur);
+      if (!next) break;
+      if (next > horizonStr) break;
+      if (!existingDates.has(next)) {
+        const now = new Date().toISOString();
+        additions.push(syncTaskSnooze({
+          ...template,
+          id: mkid(),
+          date: next,
+          done: false,
+          completedAt: null,
+          archived: false,
+          // Fresh checklist on each spawn — see App.jsx spawn path for the
+          // matching choice on spawn-on-completion.
+          subtasks: (template.subtasks || []).map(s => ({ ...s, done: false })),
+          activity: [{ type: 'created', at: now, reason: 'horizon' }],
+          createdAt: now,
+          updatedAt: undefined,
+        }));
+        existingDates.add(next);
+      }
+      cur = next;
+      safety += 1;
+    }
+  }
+
+  return additions.length ? [...tasks, ...additions] : tasks;
 };
 
 // === Delegation: presets, spawn helpers, staleness, people store ===
@@ -810,9 +1164,22 @@ export {
   DAY_L,
   fmtWeek,
   nextOccurrence,
+  prevOccurrence,
+  recurrenceLabel,
+  deriveIsRoutine,
+  ensureRecurrenceFields,
+  migrateRecurrence,
+  mkRecurrenceId,
+  computeStreak,
+  routinesRollup,
+  DAY_INDEX,
+  DAY_CODES,
+  DAY_CODE_S,
   resolveRelativeSnoozeDate,
   rollTaskDateForward,
   rollIncompleteTasksToToday,
+  archiveStaleRoutines,
+  extendRoutineHorizon,
   makeTask,
   migrateTasks,
   syncTaskSnooze,

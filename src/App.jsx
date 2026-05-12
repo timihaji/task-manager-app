@@ -1,5 +1,6 @@
 import { TaskDrawer } from './drawer.jsx';
 import { DelegationsView } from './delegations.jsx';
+import { RoutinesView } from './components/RoutinesView.jsx';
 import {
   PROJ,
   ALL_TAGS,
@@ -20,9 +21,14 @@ import {
   DAY_L,
   fmtWeek,
   nextOccurrence,
+  recurrenceLabel,
+  ensureRecurrenceFields,
+  migrateRecurrence,
   syncTaskSnooze,
   rollTaskDateForward,
   rollIncompleteTasksToToday,
+  archiveStaleRoutines,
+  extendRoutineHorizon,
   makeTask,
   migrateTasks,
   parseTimeEst,
@@ -110,7 +116,7 @@ import {
 const LAST_VIEW_STORAGE_KEY = 'tm_last_view_v1';
 const SIMPLE_VIEWS = new Set([
   'week', 'list', 'stack', 'inbox', 'upcoming', 'backlog',
-  'snoozed', 'someday', 'blocked', 'completed', 'archived', 'delegations',
+  'snoozed', 'someday', 'blocked', 'completed', 'archived', 'delegations', 'routines',
 ]);
 
 function normalizeSavedView(value) {
@@ -249,6 +255,7 @@ function App() {
     collapsedGroups: [],            // array form of collapsedGrps Set
     completedOpenCols: [],          // colKeys with completed section expanded
     blockedOpenCols: [],            // colKeys with blocked section expanded
+    routinesOpenCols: [],           // colKeys with routines section expanded
     collapsedProjects: [],          // project IDs folded in week/inbox/list views
     stackExpandedProjects: [],      // project IDs expanded in Stack view
     drawerSecs: { props:true, sched:true, dele:true, notes:true, subs:true, log:false, block:true },
@@ -582,6 +589,14 @@ function App() {
     const next = typeof updater === 'function' ? updater(cur) : updater;
     return { ...prev, blockedOpenCols: Array.from(next) };
   });
+  // Per-day "↻ Routines" section is collapsed by default. Same pattern as
+  // completed/blocked — colKeys with the section *expanded* live in tweaks.
+  const routinesOpen = useMemo(() => new Set(Array.isArray(tweaks.routinesOpenCols) ? tweaks.routinesOpenCols : []), [tweaks.routinesOpenCols]);
+  const setRoutinesOpen = (updater) => setTweakState(prev => {
+    const cur = new Set(Array.isArray(prev.routinesOpenCols) ? prev.routinesOpenCols : []);
+    const next = typeof updater === 'function' ? updater(cur) : updater;
+    return { ...prev, routinesOpenCols: Array.from(next) };
+  });
   const recentBlockReasons = Array.isArray(tweaks.recentBlockReasons) ? tweaks.recentBlockReasons : [];
   const setRecentBlockReasons = (updater) => {
     const prev = Array.isArray(tweaks.recentBlockReasons) ? tweaks.recentBlockReasons : [];
@@ -689,7 +704,7 @@ function App() {
         if (raw) saved = JSON.parse(raw);
       } catch {}
       const seed = Array.isArray(saved) && saved.length ? saved : INIT_TASKS;
-      const merged = rollIncompleteTasksToToday(migrateTasks(seed));
+      const merged = extendRoutineHorizon(archiveStaleRoutines(rollIncompleteTasksToToday(migrateRecurrence(migrateTasks(seed)))));
       syncUidFromTasks(merged);
       lastSyncedTasksRef.current = merged;
       setTasks(merged);
@@ -706,7 +721,7 @@ function App() {
       try {
         const fetched = await fetchTasks(workspaceId);
         if (cancelled) return;
-        const merged = rollIncompleteTasksToToday(migrateTasks(fetched));
+        const merged = extendRoutineHorizon(archiveStaleRoutines(rollIncompleteTasksToToday(migrateRecurrence(migrateTasks(fetched)))));
         syncUidFromTasks(merged);
         lastSyncedTasksRef.current = merged;
         setTasks(merged);
@@ -893,7 +908,12 @@ function App() {
 
   useEffect(() => {
     if (!tasksReady) return;
-    const next = rollIncompleteTasksToToday(tasks, todayKey);
+    // Order matters: roll non-routine overdue tasks forward first, then sweep
+    // routines (auto-archive missed instances), then ensure the next 14 days
+    // of every routine series have concrete instances on the calendar.
+    let next = rollIncompleteTasksToToday(tasks, todayKey);
+    next = archiveStaleRoutines(next, todayKey);
+    next = extendRoutineHorizon(next, 14, todayKey);
     if (next !== tasks) setTasks(next);
   }, [tasks, todayKey, tasksReady]);
 
@@ -1082,6 +1102,19 @@ function App() {
     lastRolledTodayRef.current = todayKey;
     resetTimelineToToday();
   }, [todayKey]);
+
+  // When tasks finish hydrating (from localStorage or Supabase), re-anchor
+  // today. Without this, an initial load that mounts Timeline before tasks
+  // are ready can leave the scroller stranded 120 days in the past — the
+  // belt-and-braces retries above expect today's column index to be stable,
+  // which it isn't until the data settles. Fires exactly once per session.
+  const initialAnchorDoneRef = useRef(false);
+  useEffect(() => {
+    if (initialAnchorDoneRef.current) return;
+    if (!tasksReady) return;
+    initialAnchorDoneRef.current = true;
+    if (view === 'week') resetTimelineToToday();
+  }, [tasksReady, view]);
 
   // Re-anchor today at the left edge whenever the user enters Timeline from
   // another view. Skips the initial mount (the first-mount layout effect
@@ -2196,6 +2229,7 @@ function App() {
         date: nextDate,
         dueDate: shiftDueDateForRecurrence(task, nextDate),
         childOrder: (task.childOrder||[]).map(cid => idMap.get(cid)).filter(Boolean),
+        subtasks: (task.subtasks || []).map(s => ({ ...s, done: false })),
         activity: [{type:'created',at:now}],
       }));
       kids.forEach(k => additions.push(syncTaskSnooze({
@@ -2204,6 +2238,7 @@ function App() {
         parentId: newProjectId,
         done: false, completedAt: null,
         dueDate: shiftDueDateForRecurrence(k, k.date || nextDate),
+        subtasks: (k.subtasks || []).map(s => ({ ...s, done: false })),
         activity: [{type:'created',at:now}],
       })));
     } else {
@@ -2212,6 +2247,9 @@ function App() {
         done:false, completedAt:null,
         date: nextDate,
         dueDate: shiftDueDateForRecurrence(task, nextDate),
+        // Fresh checklist on each spawn — same for tasks-with-cadence and
+        // routines (we don't want last cycle's ticks bleeding into this one).
+        subtasks: (task.subtasks || []).map(s => ({ ...s, done: false })),
         activity:[{type:'created',at:now}],
       }));
     }
@@ -3180,7 +3218,12 @@ function App() {
   // Stack/List task pool — all open top-level tasks, ignoring topbar pill filters by design.
   // Search still applies so users can find tasks in these views.
   const allOpenTopLevel = activeTasks.filter(t=>!t.done&&!t.parentId&&!t.snoozedUntil&&!t.delegatedTo&&!t.checkInOf&&taskMatchesSearch(t));
-  const stackOpenTopLevel = allOpenTopLevel.filter(t=>!t.someday);
+  // Stack body excludes routines entirely — they live in the pinned strip
+  // above. The strip handles today's routines; the rest of the routine series
+  // (tomorrow's walk, next week's triage, etc.) is chrome that shouldn't
+  // compete with priority work. Tasks-with-cadence (isRoutine === false) still
+  // appear here normally, marked only by the purple ↻ pill.
+  const stackOpenTopLevel = allOpenTopLevel.filter(t => !t.someday && !t.recurrence?.isRoutine);
 
   // non-week view tasks
   const listTasks = ()=>{
@@ -3880,6 +3923,15 @@ function App() {
           {renderTodayAfter && renderTimelineColumn(D.today(), 'sticky-')}
           {afterTimelineSpacerWidth>0 && <div className="col-spacer" style={{width:afterTimelineSpacerWidth}}/>}
           </div>
+        </div>
+      ) : view==='routines' ? (
+        <div className="board-area" style={{padding:0}}>
+          <RoutinesView
+            tasks={tasks}
+            tweaks={tweaks}
+            setTweak={(k,v)=>setTweak({[k]:v})}
+            onJumpTo={(id)=>{ setView('week'); setDrawerId(id); setFocusedId(id); }}
+          />
         </div>
       ) : view==='delegations' ? (
         <div className="board-area" style={{padding:'18px 24px'}}>

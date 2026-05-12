@@ -33,6 +33,7 @@ body[data-theme="dark"]{
   --success:#10b981;--success-bg:rgba(16,185,129,.10);--success-border:rgba(16,185,129,.25);
   --warning:#f59e0b;--warning-bg:rgba(245,158,11,.14);--warning-border:rgba(245,158,11,.35);--warning-fg:#fcd34d;
   --recurring:#a855f7;--recurring-bg:rgba(168,85,247,.14);--recurring-border:rgba(168,85,247,.30);--recurring-fg:#d8b4fe;
+  --routine:#6366f1;--routine-bg:rgba(99,102,241,.14);--routine-border:rgba(99,102,241,.35);--routine-fg:#a5b4fc;
 }
 body[data-theme="light"]{
   --bg:#f3f7f4;--bg-side:#e7efe9;--bg-top:#fffdfa;--bg-inbox:#e7efe9;--bg-dr:#fffdfa;
@@ -46,6 +47,7 @@ body[data-theme="light"]{
   --success:#047857;--success-bg:rgba(16,185,129,.10);--success-border:rgba(16,185,129,.25);
   --warning:#b45309;--warning-bg:#fffbeb;--warning-border:rgba(245,158,11,.4);--warning-fg:#b45309;
   --recurring:#7c3aed;--recurring-bg:#faf5ff;--recurring-border:rgba(168,85,247,.4);--recurring-fg:#7c3aed;
+  --routine:#4f46e5;--routine-bg:#eef2ff;--routine-border:rgba(99,102,241,.4);--routine-fg:#4f46e5;
 }
 /* look variants */
 body[data-look="minimal"]{--rk:2px;--shadow:0 1px 3px rgba(0,0,0,.4),0 4px 12px rgba(0,0,0,.3)}
@@ -735,6 +737,78 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 .dr-chip{padding:3px 8px;border-radius:2px;font-size:11px;background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-border)}
 .dr-chip.snooze{background:rgba(245,158,11,.1);color:#f59e0b;border-color:rgba(245,158,11,.25)}
 .dr-chip.someday{background:rgba(139,92,246,.1);color:#8b5cf6;border-color:rgba(139,92,246,.25)}
+.dr-chip.routine{background:var(--routine-bg);color:var(--routine-fg);border-color:var(--routine-border)}
+.dr-chip.recurring{background:var(--recurring-bg);color:var(--recurring-fg);border-color:var(--recurring-border)}
+
+/* Recurrence preset chips — pill-shaped, routine-blue when active.
+   Distinct from .dr-pick (square) so the recurrence section reads as a
+   tighter grouped control instead of generic picker buttons. */
+.dr-recur-chips{display:flex;flex-wrap:wrap;gap:6px}
+.dr-recur-chip{font:11.5px var(--font);padding:5px 11px;border-radius:999px;
+  background:var(--surface-2);color:var(--t3);
+  border:1px solid transparent;cursor:pointer;transition:all .12s;
+  display:inline-flex;align-items:center;gap:5px}
+.dr-recur-chip:hover{background:var(--surface-3);color:var(--t1)}
+.dr-recur-chip.act{background:var(--routine-bg);color:var(--routine);border-color:var(--routine-border);font-weight:600}
+
+/* Routine vs Recurring segmented control — both options always visible so the
+   active state is unambiguous (replaces an earlier toggle pill that read as
+   "is this on or off?"). Inactive option is muted, active is filled. */
+.dr-recur-mode-seg{display:flex;background:var(--surface-2);border:1px solid var(--border-s);
+  border-radius:5px;overflow:hidden;max-width:100%}
+.dr-recur-mode-seg button{flex:1 1 0;min-width:0;padding:6px 6px;
+  font:11.5px var(--font);color:var(--t3);background:transparent;border:none;
+  border-right:1px solid var(--border-s);cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:all .12s;
+  white-space:nowrap;overflow:hidden}
+.dr-recur-mode-seg button:last-child{border-right:none}
+.dr-recur-mode-seg button svg{width:12px;height:12px;flex-shrink:0}
+.dr-recur-mode-seg button span{overflow:hidden;text-overflow:ellipsis}
+.dr-recur-mode-seg button:hover{background:var(--surface-3);color:var(--t1)}
+.dr-recur-mode-seg button.act{background:var(--routine-bg);color:var(--routine);font-weight:600}
+.dr-recur-mode-seg button:nth-child(2).act{background:var(--recurring-bg);color:var(--recurring-fg)}
+.dr-recur-mode-desc{font-size:11.5px;color:var(--t3);margin-top:6px;line-height:1.45;max-width:380px}
+.dr-recur-mode-desc strong{color:var(--t2);font-weight:600}
+
+/* Auto-derive explainer — left-border accent makes it read as guidance, not
+   prose. Routine color so it ties visually to the segmented control above. */
+.dr-routine-hint{font-size:10.5px;color:var(--t3);margin-top:8px;
+  padding:2px 0 2px 9px;border-left:2px solid var(--routine);line-height:1.4;max-width:380px}
+.dr-routine-hint strong{color:var(--t2);font-weight:600}
+.dr-routine-hint em{color:var(--routine);font-style:normal;font-weight:500}
+
+/* Custom recurrence picker — inline expander beneath the Repeats chip row.
+   Holds: every-N stepper, day-of-week multi-select grid (weekly), day-of-
+   month input (monthly), and an optional Until date. Live preview at bottom. */
+.dr-recur-custom{margin-top:8px;padding:10px 12px;
+  background:var(--surface-2);border:1px solid var(--routine-border);
+  border-radius:6px;display:flex;flex-direction:column;gap:8px;max-width:420px}
+.dr-recur-custom-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.dr-recur-custom-lbl{font-size:11.5px;color:var(--t3);min-width:60px}
+.dr-recur-custom-num{width:50px;padding:4px 6px;font:12px var(--font);
+  background:var(--surface);border:1px solid var(--border-s);border-radius:3px;
+  color:var(--t1);outline:none;text-align:center}
+.dr-recur-custom-num:focus{border-color:var(--routine)}
+.dr-recur-custom-sel{padding:4px 8px;font:12px var(--font);
+  background:var(--surface);border:1px solid var(--border-s);border-radius:3px;
+  color:var(--t1);outline:none;cursor:pointer}
+.dr-recur-custom-sel:focus{border-color:var(--routine)}
+.dr-recur-custom-date{padding:4px 6px;font:12px var(--font);
+  background:var(--surface);border:1px solid var(--border-s);border-radius:3px;
+  color:var(--t1);outline:none}
+.dr-recur-custom-date:focus{border-color:var(--routine)}
+.dr-recur-custom-clear{padding:2px 7px;font:12px var(--font);
+  background:transparent;border:1px solid var(--border-s);border-radius:3px;
+  color:var(--t3);cursor:pointer}
+.dr-recur-custom-clear:hover{background:var(--surface-3);color:var(--t1)}
+.dr-day-grid{display:inline-flex;gap:4px}
+.dr-day-btn{width:28px;height:28px;padding:0;font:11.5px var(--font);font-weight:600;
+  background:var(--surface);border:1px solid var(--border-s);border-radius:50%;
+  color:var(--t3);cursor:pointer;transition:all .12s}
+.dr-day-btn:hover{background:var(--surface-3);color:var(--t1)}
+.dr-day-btn.on{background:var(--routine);color:#fff;border-color:var(--routine)}
+.dr-recur-custom-preview{font-size:11px;color:var(--t3);font-style:italic;
+  padding-top:4px;border-top:1px dashed var(--border-s)}
 .dr-body{flex:1;overflow-y:auto}
 .drs{border-bottom:1px solid var(--border)}
 .drs-hd{display:flex;align-items:center;gap:7px;padding:10px 16px;cursor:pointer;transition:background .1s}
@@ -860,6 +934,75 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 .blocked-grp-hdr:hover{color:#fde68a}
 .blocked-grp-hdr .grp-name{color:#fcd34d}
 .blocked-grp-hdr::before{content:'';width:6px;height:6px;border-radius:50%;background:#f59e0b;margin-right:2px;flex-shrink:0}
+/* Timeline per-day routines strip — header on its own row, then items flow
+   horizontally with flex-wrap. Items naturally re-flow as the column width
+   changes (Tim resizes columns via the timelineDays/sidePanelWidth toggles).
+   Long routine names ellipsis at max-width so they never blow out the layout. */
+.col-routines-strip{margin:2px 0 8px;padding:6px 8px;
+  background:var(--routine-bg);border:1px solid var(--routine-border);
+  border-radius:4px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.col-routines-strip .crs-hdr{display:flex;align-items:center;justify-content:space-between;line-height:1}
+.crs-label{font-size:9.5px;font-weight:700;letter-spacing:.1em;color:var(--routine);text-transform:uppercase}
+.crs-count{font-size:9.5px;font-weight:600;color:var(--routine);flex-shrink:0}
+.crs-items{display:flex;flex-wrap:wrap;gap:4px 10px;min-width:0}
+.crs-item{display:inline-flex;align-items:center;gap:5px;
+  background:transparent;border:none;padding:0;color:var(--t2);
+  font:11px var(--font);cursor:pointer;text-align:left;
+  transition:opacity .12s;
+  min-width:0;max-width:100%}
+.crs-item:hover{opacity:.85}
+.crs-item .crs-dot{width:10px;height:10px;border-radius:50%;
+  border:1.5px solid var(--t3);box-sizing:border-box;flex-shrink:0;
+  transition:background .12s,border-color .12s}
+.crs-item:hover .crs-dot{border-color:var(--t1)}
+.crs-item .crs-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  max-width:130px;min-width:0}
+.crs-item.done{color:var(--t4)}
+.crs-item.done .crs-name{text-decoration:line-through}
+.crs-item.done .crs-dot{background:#22c55e;border-color:#22c55e}
+
+/* Routines dashboard view */
+.rt-view{flex:1;padding:24px 32px;overflow-y:auto;background:var(--bg)}
+.rt-hdr{margin-bottom:18px}
+.rt-title{font-size:20px;font-weight:600;color:var(--t1);margin-bottom:2px;letter-spacing:-0.005em}
+.rt-sub{font-size:12px;color:var(--t3);margin-bottom:12px}
+.rt-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.rt-search{flex:1;min-width:200px;max-width:360px;background:var(--surface);border:1px solid var(--border-s);border-radius:3px;padding:6px 10px;font:13px var(--font);color:var(--t1);outline:none}
+.rt-search:focus{border-color:var(--routine)}
+.rt-seg{display:inline-flex;border:1px solid var(--border-s);border-radius:3px;background:var(--surface);overflow:hidden}
+.rt-seg button{padding:5px 12px;font:11.5px var(--font);background:transparent;color:var(--t3);border:none;border-right:1px solid var(--border-s);cursor:pointer}
+.rt-seg button:last-child{border-right:none}
+.rt-seg button:hover{background:var(--surface-2);color:var(--t1)}
+.rt-seg button.act{background:var(--surface-2);color:var(--routine);font-weight:600}
+
+.rt-empty{text-align:center;padding:80px 24px;color:var(--t3)}
+.rt-empty-icon{font-size:48px;color:var(--routine);opacity:.4;margin-bottom:12px}
+.rt-empty h3{margin:0 0 6px;font-size:16px;color:var(--t2);font-weight:500}
+.rt-empty p{margin:0;font-size:13px;max-width:380px;margin-inline:auto;line-height:1.5}
+
+.rt-table{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.rt-row{display:grid;grid-template-columns: minmax(180px,2fr) 1fr 80px 110px 110px 120px;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.rt-row:last-child{border-bottom:none}
+.rt-row:hover:not(.rt-head){background:var(--surface-2)}
+.rt-row.rt-head{cursor:default;background:var(--surface-2);font-size:10.5px;font-weight:600;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;padding:8px 16px}
+.rt-row.rt-head:hover{background:var(--surface-2)}
+.rt-c{font-size:13px;color:var(--t2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rt-c-title{display:flex;align-items:center;gap:8px}
+.rt-title-text{color:var(--t1);font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.rt-proj{font-size:10px;font-weight:700;letter-spacing:.06em;background:var(--surface-2);padding:1.5px 5px;border-radius:2px;flex-shrink:0}
+.rt-life{font-size:11px;color:var(--t3);flex-shrink:0}
+.rt-streak{color:#22c55e;font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:4px}
+.rt-streak svg{width:13px;height:13px;flex-shrink:0}
+.rt-streak-zero,.rt-rate-zero{color:var(--t4)}
+.rt-rate-pct{color:var(--t1);font-weight:500;margin-right:6px}
+.rt-rate-bar{display:inline-block;width:60px;height:4px;background:var(--surface-2);border-radius:2px;overflow:hidden;vertical-align:middle}
+.rt-rate-bar i{display:block;height:100%;background:#22c55e}
+
+@media (max-width: 800px){
+  .rt-row{grid-template-columns: 1fr 80px;gap:6px}
+  .rt-row.rt-head{display:none}
+  .rt-c-cadence,.rt-c-last,.rt-c-next,.rt-c-rate{display:none}
+}
 
 /* drawer 3-way status segmented control */
 .dr-status-seg{display:inline-flex;border:1px solid var(--border-s);border-radius:3px;overflow:hidden}
@@ -992,6 +1135,36 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 .stack-toolbar .seg button:hover{background:var(--surface-2);color:var(--t1)}
 .stack-toolbar .seg button.act{background:var(--surface-2);color:var(--accent);font-weight:600}
 
+/* stack routines strip — today's routines, pinned above the priority body.
+   Outside the SortableContext / FLIP root so it never interferes with drag.
+   Visual model: the whole strip has the blue tinted background; individual
+   items are plain (no chip border) — just a tick-circle + name inline. */
+.stack-routines-strip{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:10px 16px;margin:8px 24px 0;
+  background:var(--routine-bg);
+  border:1px solid var(--routine-border);
+  border-radius:6px}
+.srs-label{font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--routine);flex-shrink:0}
+.srs-item{display:inline-flex;align-items:center;gap:6px;
+  background:transparent;border:none;padding:0;color:var(--t2);
+  font:12px var(--font);cursor:pointer;transition:opacity .12s}
+.srs-item:hover{opacity:.85}
+.srs-item .srs-dot{width:12px;height:12px;border-radius:50%;
+  border:1.5px solid var(--t3);box-sizing:border-box;flex-shrink:0;
+  transition:background .12s,border-color .12s}
+.srs-item:hover .srs-dot{border-color:var(--t1)}
+.srs-item.done{color:var(--t4)}
+.srs-item.done .srs-name{text-decoration:line-through}
+.srs-item.done .srs-dot{background:#22c55e;border-color:#22c55e}
+.srs-count{margin-left:auto;font-size:10.5px;color:var(--routine);font-weight:600;letter-spacing:.04em;flex-shrink:0}
+
+/* "PRIORITY STACK" divider — sits between the routines strip (chrome) and the
+   priority cards (work) so the user reads them as different surfaces.
+   Mirrors the synthesis brief's section separator. */
+.stack-routines-divider{display:flex;align-items:center;gap:10px;margin:14px 24px 6px;color:var(--t4)}
+.stack-routines-divider .line{flex:1;height:1px;background:var(--border)}
+.stack-routines-divider .lbl{font-size:9.5px;font-weight:700;letter-spacing:.12em;color:var(--t4);text-transform:uppercase;flex-shrink:0}
+
 /* stack body */
 .stack-body{flex:1;overflow-y:auto;padding:18px 0 200px}
 .stack-inner{max-width:780px;margin:0 auto;padding:0 24px;display:flex;flex-direction:column;gap:8px;position:relative}
@@ -1107,6 +1280,7 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 .schip-due-today{background:var(--accent-dim);color:var(--accent);border-color:var(--accent-border);font-weight:600}
 .schip-due-overdue{background:var(--danger-bg);color:var(--danger-fg);border-color:var(--danger-border);font-weight:600}
 .schip-recurring{background:var(--recurring-bg);color:var(--recurring-fg);border-color:var(--recurring-border)}
+.schip-routine{background:var(--routine-bg);color:var(--routine-fg);border-color:var(--routine-border)}
 .schip-time{font-family:var(--mono);font-size:9.5px;font-weight:500;color:var(--t2);margin-left:auto;display:inline-flex;align-items:center;gap:3px}
 
 /* project subtask progress + expander */

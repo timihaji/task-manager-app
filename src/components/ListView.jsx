@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREA_NAMES, daysSince } from '../data.js';
+import { PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREA_NAMES, daysSince, recurrenceLabel } from '../data.js';
 import { I } from '../utils/icons.jsx';
 import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from '../utils/colors.js';
 import { PRI_INFO } from '../utils/constants.js';
@@ -49,6 +49,12 @@ function ListTaskItem({ task, focused, selected, renaming, onOpen, onFocus, onSe
       {task.snoozedUntil && <span className="list-item-date" title={`Returns ${task.snoozedUntil}`}>Until {task.snoozedUntil}</span>}
       {task.date && <span className="list-item-date" title={`Start Date: ${task.date}`}>Start {task.date}</span>}
       {task.dueDate && <span className="list-item-date" title={`Due Date: ${task.dueDate}`}>Due {task.dueDate}</span>}
+      {task.recurrence && (
+        <span className={`schip ${task.recurrence.isRoutine ? 'schip-routine' : 'schip-recurring'}`}
+              title={`Repeats: ${recurrenceLabel(task.recurrence)}${task.recurrence.isRoutine ? ' (routine)' : ''}`}>
+          ↻ {recurrenceLabel(task.recurrence)}
+        </span>
+      )}
     </div>
   );
 }

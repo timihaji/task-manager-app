@@ -40,9 +40,15 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
   const colKey = D.str(date);
   const past = D.isPast(colKey);
   const today = D.isTdy(colKey);
-  const active  = tasks.filter(t=>!t.done && !t.blocked);
+  // Routines: pull out into their own folded section so daily routines don't
+  // clutter the day's active flow. Include both done + active so the user
+  // can see "2/4 routines done today" at a glance via the header counter.
+  const routines = tasks.filter(t => t.recurrence?.isRoutine && !t.blocked);
+  const routineIds = new Set(routines.map(t => t.id));
+  const routinesDone = routines.filter(t => t.done).length;
+  const active  = tasks.filter(t=>!t.done && !t.blocked && !routineIds.has(t.id));
   const blocked = tasks.filter(t=>!t.done &&  t.blocked);
-  const done    = tasks.filter(t=>t.done);
+  const done    = tasks.filter(t=>t.done && !routineIds.has(t.id));
   // Flatten counter: count children inside project shells, not the shells themselves.
   // Blocked tasks (and blocked children of projects) are excluded from the day's progress math.
   const flatten = (list) => list.flatMap(t => t.cardType==='project' ? (childrenOf?.(t.id)||[]).filter(k=>!k.blocked) : [t]);
@@ -85,7 +91,31 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
       </div>
       <div className="col-divider"/>
       <ColDroppable id={`col:${colKey}`} data={{ kind: 'column', date: colKey }} className="col-body"
-        onDoubleClick={e=>{ if(!e.target.closest('.card,.grp-hdr,.done-grp-hdr,.card-add-zone')) onAdd(colKey,date); }}>
+        onDoubleClick={e=>{ if(!e.target.closest('.card,.grp-hdr,.done-grp-hdr,.routines-grp-hdr,.card-add-zone')) onAdd(colKey,date); }}>
+        {/* Routines strip — pinned at the top of each day column, vertical
+            stack of tick-circles. Same pattern as the Stack pinned strip but
+            laid out vertically to fit narrow Timeline columns. Routines never
+            participate in drag/FLIP or the normal card flow — they're chrome,
+            not priority work. */}
+        {routines.length > 0 && (
+          <div className="col-routines-strip" role="group" aria-label="Routines for this day">
+            <div className="crs-hdr">
+              <span className="crs-label">ROUTINES</span>
+              <span className="crs-count">{routinesDone}/{routines.length}</span>
+            </div>
+            <div className="crs-items">
+              {routines.map(t => (
+                <button key={t.id}
+                  className={`crs-item${t.done ? ' done' : ''}`}
+                  onClick={(e) => { e.stopPropagation(); onToggle?.(t.id); }}
+                  title={t.done ? `${t.title} — done, tap to undo` : `${t.title} — tap to complete`}>
+                  <span className="crs-dot" aria-hidden="true"/>
+                  <span className="crs-name">{t.title}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Per-group SortableContext (was a single context wrapping every group).
             With one flat context, dnd-kit's verticalListSortingStrategy treated
             the whole column as a flat list and visibly pushed cards across

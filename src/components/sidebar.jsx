@@ -53,6 +53,15 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, 
     archived: tasks.filter(t=>t.archived&&!t.parentId).length,
     stack: all.filter(t=>!t.done&&!t.parentId&&!t.snoozedUntil&&!t.delegatedTo&&!t.checkInOf).length,
     delegations: all.filter(t=>!!t.delegatedTo&&!t.done).length,
+    routines: (() => {
+      // Count unique routine series (by recurrenceId, isRoutine===true)
+      const seen = new Set();
+      for (const t of all) {
+        const id = t.recurrence?.recurrenceId;
+        if (id && t.recurrence?.isRoutine && !t.archived) seen.add(id);
+      }
+      return seen.size;
+    })(),
   };
   const viewIs = (v) => typeof view==='string'?view===v:(view?.type===v.type&&view?.id===v.id);
   const NavItem=({ico,label,v,cnt})=>{
@@ -75,6 +84,7 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, 
         <NavItem ico={I.Check} label="Completed" v="completed" cnt={counts.completed}/>
         <NavItem ico={I.Archive} label="Archived" v="archived" cnt={counts.archived}/>
         <NavItem ico={I.Deleg} label="Delegations" v="delegations" cnt={counts.delegations}/>
+        <NavItem ico={I.Recur} label="Routines" v="routines" cnt={counts.routines}/>
       </div>
       <div className="lnav-sec">
         <div className="lnav-lbl">Location</div>
