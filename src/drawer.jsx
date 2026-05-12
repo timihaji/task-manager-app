@@ -29,9 +29,9 @@ function DrSection({ title, open, onToggle, children }) {
   );
 }
 
-function DRow({ label, children, ...rest }) {
+function DRow({ label, children, className, ...rest }) {
   return (
-    <div className="dr-row" {...rest}>
+    <div className={`dr-row${className ? ' ' + className : ''}`} {...rest}>
       <div className="dr-row-lbl">{label}</div>
       <div className="dr-row-val">{children}</div>
     </div>
@@ -108,6 +108,13 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
   };
   const [cadenceCustom, setCadenceCustom] = useState('');
   const [delegateName, setDelegateName] = useState('');
+  // When the drawer is opened via card→routine drop, this is the recurrenceId
+  // of the freshly-converted task. The Repeats + Treat-as rows get a purple
+  // emphasis (background tint + left border + initial pulse) until the user
+  // opens a different task or closes the drawer. Telegraphs "we made this a
+  // routine — here's where the cadence lives, tweak it if you want".
+  const [recurEmphasisId, setRecurEmphasisId] = useState(null);
+  const recurEmphasized = !!recurEmphasisId && recurEmphasisId === task?.recurrence?.recurrenceId;
   const titleRef = useRef(null);
   const timeMoreRef = useRef(null);
   useEffect(() => {
@@ -136,18 +143,18 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
         onInitialFocusConsumed?.();
       }
       // Card→routine drop opens the drawer with focus on the Repeats row.
-      // Scroll it into view and flash an outline so the user knows where
-      // to refine the cadence we auto-applied.
+      // Scroll it into view and apply purple emphasis to the routine rows so
+      // the user knows where to refine the cadence we auto-applied.
+      // Emphasis persists until they open another task / close the drawer.
       if (initialFocus === 'recurrence') {
+        setRecurEmphasisId(task.recurrence?.recurrenceId || null);
         requestAnimationFrame(() => {
           const row = document.querySelector('.dr-body .dr-row[data-recur-row]');
-          if (row) {
-            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            row.classList.add('dr-row-flash');
-            setTimeout(() => row.classList.remove('dr-row-flash'), 1400);
-          }
+          if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
         onInitialFocusConsumed?.();
+      } else {
+        setRecurEmphasisId(null);
       }
     }
   }, [task?.id]);
@@ -802,7 +809,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
               )}
             </div>
           </DRow>
-          <DRow label="Repeats" data-recur-row>
+          <DRow label="Repeats" data-recur-row className={recurEmphasized ? 'dr-row-recur-emphasis' : ''}>
             <div className="dr-recur-chips">
               {RECUR_PRESETS.map(p => {
                 const active = matchRecurPreset(task.recurrence) === p.id && !customRecurOpen;
@@ -937,7 +944,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
           </DRow>
 
           {task.recurrence && (
-            <DRow label="Treat as">
+            <DRow label="Treat as" className={recurEmphasized ? 'dr-row-recur-emphasis' : ''}>
               {/* Segmented control — both states always visible so it's obvious
                   what's currently on. Replaces an earlier toggle pill that was
                   ambiguous about ON / OFF. */}
