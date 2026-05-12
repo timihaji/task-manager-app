@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useContext, createContext } from 'react';
 import ReactDOM from 'react-dom';
 import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_NAMES, LIFE_AREA_DARK, LIFE_AREA_LIGHT } from '../data.js';
 import { I } from '../utils/icons.jsx';
@@ -283,15 +283,12 @@ const PRESETS_DATA = [
   {n:'Nordic',  a:'#2563eb', db:'#08111f',ds:'#111d2f',dn:'#050c17',dbr:'#21314a',dt:'#eaf2ff', lb:'#f5f7fb',ls:'#ffffff',ln:'#e8edf5',lbr:'#d5dce8',lt:'#111827'},
   {n:'Mono',    a:'#737373', db:'#0a0a0a',ds:'#171717',dn:'#000000',dbr:'#262626',dt:'#fafafa', lb:'#fafafa',ls:'#ffffff',ln:'#f5f5f5',lbr:'#e5e5e5',lt:'#0a0a0a'},
 ];
-function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
-  // Tab choice is persisted in the settings blob so reopening the drawer
-  // returns the user to where they left off. Same pattern as the other UI
-  // prefs (filters, view, drawer folds, etc.) that live in `tweaks`.
-  const TAB_IDS = new Set(['appearance','colors','layout','taxonomy','data']);
-  const tab = TAB_IDS.has(tweaks.settingsTab) ? tweaks.settingsTab : 'appearance';
-  const setTab = (id) => setTweak('settingsTab', id);
-  const { user, signOut, supabaseDisabled } = useAuth();
-  const SRow = ({label,desc,children}) => (
+// Context so hoisted sub-components can read tweaks/setTweak without prop-drilling.
+// Must be module-level so the component references are stable across renders.
+const SettingsCtx = createContext(null);
+
+function SRow({label, desc, children}) {
+  return (
     <div style={{display:'flex',alignItems:'center',gap:16,padding:'12px 16px',borderBottom:'1px solid var(--border)'}}>
       <div style={{flex:1}}>
         <div style={{fontSize:13,fontWeight:500,color:'var(--t1)',marginBottom:2}}>{label}</div>
@@ -300,7 +297,10 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
       <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:8}}>{children}</div>
     </div>
   );
-  const Seg = ({id,opts}) => (
+}
+function Seg({id, opts}) {
+  const {tweaks, setTweak} = useContext(SettingsCtx);
+  return (
     <div style={{display:'flex',background:'var(--surface-3)',borderRadius:3,padding:2,gap:2}}>
       {opts.map(o=><button key={o} onClick={()=>setTweak(id,o)}
         style={{padding:'3px 10px',border:'none',borderRadius:2,cursor:'pointer',font:'12px var(--font)',
@@ -310,12 +310,27 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
           boxShadow:tweaks[id]===o?'0 1px 3px rgba(0,0,0,.1)':'none'}}>{o}</button>)}
     </div>
   );
-  const Tog = ({id}) => (
+}
+function Tog({id}) {
+  const {tweaks, setTweak} = useContext(SettingsCtx);
+  return (
     <button onClick={()=>setTweak(id,!tweaks[id])} style={{width:36,height:20,borderRadius:99,border:'none',cursor:'pointer',position:'relative',background:tweaks[id]?'var(--accent)':'var(--surface-3)',transition:'background .15s',flexShrink:0}}>
       <span style={{position:'absolute',top:3,left:tweaks[id]?19:3,width:14,height:14,borderRadius:'50%',background:'#fff',transition:'left .15s',boxShadow:'0 1px 3px rgba(0,0,0,.2)',display:'block'}}/>
     </button>
   );
-  const Card = ({children}) => <div style={{background:'var(--surface)',border:'1px solid var(--border-s)',borderRadius:4,overflow:'hidden',marginBottom:16}}>{children}</div>;
+}
+function SCard({children}) {
+  return <div style={{background:'var(--surface)',border:'1px solid var(--border-s)',borderRadius:4,overflow:'hidden',marginBottom:16}}>{children}</div>;
+}
+
+function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
+  // Tab choice is persisted in the settings blob so reopening the drawer
+  // returns the user to where they left off. Same pattern as the other UI
+  // prefs (filters, view, drawer folds, etc.) that live in `tweaks`.
+  const TAB_IDS = new Set(['appearance','colors','layout','taxonomy','data']);
+  const tab = TAB_IDS.has(tweaks.settingsTab) ? tweaks.settingsTab : 'appearance';
+  const setTab = (id) => setTweak('settingsTab', id);
+  const { user, signOut, supabaseDisabled } = useAuth();
   const applyPreset = p => setTweak({accentColor:p.a,dark_bg:p.db,dark_surface:p.ds,dark_sidebar:p.dn,dark_border:p.dbr,dark_text:p.dt,light_bg:p.lb,light_surface:p.ls,light_sidebar:p.ln,light_border:p.lbr,light_text:p.lt});
   const tabs = [
     {id:'appearance',label:'Appearance'},
@@ -397,6 +412,7 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
     setTimeout(()=>setExportMsg(''), 4000);
   };
   return (
+    <SettingsCtx.Provider value={{tweaks, setTweak}}>
     <div style={{flex:1,minHeight:0,height:'100%',display:'flex',overflow:'hidden',background:'var(--bg-side)'}}>
       <div className="settings-scroll" style={{width:180,minWidth:180,minHeight:0,borderRight:'1px solid var(--border)',padding:'12px 8px',display:'flex',flexDirection:'column',gap:2,background:'var(--bg-side)'}}>
         {tabs.map(t=><div key={t.id} onClick={()=>setTab(t.id)}
@@ -407,11 +423,11 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
       <SettingsScrollPane>
           {tab==='appearance' && <>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Mode</div>
-            <Card>
+            <SCard>
               <SRow label="Color mode" desc="Dark or light interface."><Seg id="theme" opts={['light','dark']}/></SRow>
               <SRow label="Style" desc="Border radius, shadows and surface treatment."><Seg id="look" opts={['minimal','soft','sharp','glass']}/></SRow>
               <SRow label="Font" desc="Interface typeface."><Seg id="font" opts={['geist','serif','mono']}/></SRow>
-            </Card>
+            </SCard>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,marginTop:24,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Color presets</div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(132px,1fr))',gap:8,marginBottom:20}}>
               {PRESETS_DATA.map(p=>(
@@ -423,18 +439,18 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
               ))}
             </div>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Accent</div>
-            <Card>
+            <SCard>
               <SRow label="Accent color" desc="Highlights, today badge, focus rings.">
                 <SwatchPicker value={tweaks.accentColor} onChange={c=>setTweak('accentColor',c)} size={26}/>
                 <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--t4)'}}>{tweaks.accentColor}</span>
               </SRow>
-            </Card>
+            </SCard>
           </>}
           {tab==='colors' && <>
             {[['Dark mode palette','dark'],['Light mode palette','light']].map(([title,mode])=>(
               <React.Fragment key={mode}>
                 <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,paddingBottom:8,borderBottom:'1px solid var(--border)',marginTop:mode==='light'?24:0}}>{title}</div>
-                <Card>
+                <SCard>
                   <div style={{padding:'14px 16px',display:'flex',gap:20,flexWrap:'wrap'}}>
                     {[['Background',`${mode}_bg`],['Surface',`${mode}_surface`],['Sidebar',`${mode}_sidebar`],['Borders',`${mode}_border`],['Text',`${mode}_text`]].map(([lbl,key])=>(
                       <div key={key} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:5}}>
@@ -443,11 +459,11 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
                       </div>
                     ))}
                   </div>
-                </Card>
+                </SCard>
               </React.Fragment>
             ))}
             <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,marginTop:24,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Card colour</div>
-            <Card>
+            <SCard>
               <SRow label="Default palette" desc="Which group of swatches appears when you right-click a card → Card colour…">
                 <select value={tweaks.cardColorPalette||'Sunset'}
                   onChange={e=>setTweak('cardColorPalette', e.target.value)}
@@ -466,11 +482,11 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
                   <option value="overlay">Overlay (colour film)</option>
                 </select>
               </SRow>
-            </Card>
+            </SCard>
             {[['Dark mode','Dark'],['Light mode','Light']].map(([title,modeKey])=>(
               <React.Fragment key={modeKey}>
                 <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,marginTop:20,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Card colour — {title}</div>
-                <Card>
+                <SCard>
                   <SRow label="Strength" desc="How much of the colour shows through. 0 = invisible, 100 = the colour fully replaces the surface.">
                     <input type="range" min={0} max={100} step={5}
                       value={tweaks[`cardColor${modeKey}Pct`] ?? (modeKey==='Light'?50:20)}
@@ -492,13 +508,13 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
                       style={{width:140,accentColor:'var(--accent)'}}/>
                     <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--t4)',minWidth:36,textAlign:'right'}}>{tweaks[`cardColor${modeKey}LightShift`] ?? 0}%</span>
                   </SRow>
-                </Card>
+                </SCard>
               </React.Fragment>
             ))}
           </>}
           {tab==='layout' && <>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Board</div>
-            <Card>
+            <SCard>
               <SRow label="New tasks appear at" desc="Where new tasks land when you press A or click + New task. Top puts them at the start; Bottom appends to the end."><Seg id="newTaskPosition" opts={['top','bottom']}/></SRow>
               <SRow label="Show weekends" desc="Display Saturday and Sunday columns."><Tog id="showWeekend"/></SRow>
               <SRow label="Day window" desc="How many day columns fit on screen, including the pinned Today column. Auto picks by width; 4 is focused, 5 is workweek, 7 is full week."><Seg id="dayWindow" opts={['auto',4,5,7]}/></SRow>
@@ -528,11 +544,11 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
                   style={{width:120,accentColor:'var(--accent)'}}/>
                 <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--t4)',minWidth:34,textAlign:'right'}}>{Math.round((tweaks.shadowIntensity ?? 0) * 100)}%</span>
               </SRow>
-            </Card>
+            </SCard>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,marginTop:24,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Stack view</div>
-            <Card>
+            <SCard>
               <SRow label="Card height" desc="Vertical padding inside each card. Lower fits more on screen; higher gives each card more breathing room.">
-                <input type="range" min={2} max={20} step={1} value={tweaks.stackPadY ?? 7}
+                <input type="range" min={2} max={60} step={1} value={tweaks.stackPadY ?? 7}
                   onChange={e=>setTweak('stackPadY',Number(e.target.value))}
                   style={{width:120,accentColor:'var(--accent)'}}/>
                 <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--t4)',minWidth:28,textAlign:'right'}}>{tweaks.stackPadY ?? 7}px</span>
@@ -547,12 +563,12 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
               <SRow label="Show completed today" desc="Expandable footer listing tasks you ticked off today, with a one-click restore."><Tog id="stackShowCompleted"/></SRow>
               <SRow label="Group by start date" desc="Insert sticky section headers (Overdue, Today, Tomorrow, This week, Later, No start date) between cards. Only takes effect when sort is set to Start."><Tog id="stackGroupByDate"/></SRow>
               <SRow label="Show spine line" desc="Vertical accent line running down the left edge of the stack."><Tog id="stackShowSpine"/></SRow>
-            </Card>
+            </SCard>
           </>}
           {tab==='taxonomy' && <TaxonomyManager taxonomy={taxonomy} actions={taxonomyActions}/>}
           {tab==='data' && <>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Export</div>
-            <Card>
+            <SCard>
               <SRow label="Export all data" desc="Download a JSON file with every tm_* key in localStorage (tasks, settings, taxonomy, delegation people, group prefs, recent block reasons). Read-only — your data stays in localStorage.">
                 <button onClick={handleExport}
                   style={{padding:'6px 14px',border:'1px solid var(--border-s)',borderRadius:3,background:'var(--accent)',color:'#fff',font:'500 12.5px var(--font)',cursor:'pointer'}}>
@@ -562,9 +578,9 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
               {exportMsg && (
                 <div style={{padding:'10px 16px',font:'12px var(--mono)',color:'var(--t3)'}}>{exportMsg}</div>
               )}
-            </Card>
+            </SCard>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,marginTop:24,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Import</div>
-            <Card>
+            <SCard>
               <SRow label="Import from JSON" desc="Restore from a previously exported file. Overwrites matching keys in localStorage and reloads the app. Keys not present in the file are kept as-is. You'll be asked to confirm before anything is written.">
                 <input ref={importInputRef} type="file" accept="application/json,.json" onChange={handleImportFile} style={{display:'none'}}/>
                 <button onClick={()=>importInputRef.current && importInputRef.current.click()}
@@ -575,23 +591,24 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
               {importMsg && (
                 <div style={{padding:'10px 16px',font:'12px var(--mono)',color:'var(--t3)'}}>{importMsg}</div>
               )}
-            </Card>
+            </SCard>
             {!supabaseDisabled && (
               <>
                 <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,marginTop:24,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Account</div>
-                <Card>
+                <SCard>
                   <SRow label="Signed in as" desc={user?.email ? `Authenticated via Supabase as ${user.email}.` : 'Authenticated via Supabase.'}>
                     <button onClick={()=>signOut()}
                       style={{padding:'6px 14px',border:'1px solid var(--border-s)',borderRadius:3,background:'var(--surface-2)',color:'var(--t1)',font:'500 12.5px var(--font)',cursor:'pointer'}}>
                       Sign out
                     </button>
                   </SRow>
-                </Card>
+                </SCard>
               </>
             )}
           </>}
       </SettingsScrollPane>
     </div>
+    </SettingsCtx.Provider>
   );
 }
 
