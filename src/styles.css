@@ -201,7 +201,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);display:flex;f
 .col-date-row{display:flex;align-items:baseline;gap:6px;margin-bottom:6px}
 .col-date{font-size:19px;font-weight:600;letter-spacing:-.5px;color:var(--t4);line-height:1}
 .col.is-today .col-date{color:var(--t1)}
-.col-today-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);background:var(--accent-dim);padding:1.5px 5px;border-radius:2px}
+.col-today-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);background:var(--accent-dim);padding:1.5px 5px;border-radius:2px;line-height:1}
 .col-meta{display:flex;align-items:center;gap:5px;margin-bottom:7px}
 .col-prog{flex:1;height:6px;background:var(--border-s);border-radius:999px;overflow:hidden}
 .col-prog-fill{height:100%;background:var(--accent);border-radius:999px;transition:width .4s}
@@ -1101,8 +1101,11 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 /* Timeline per-day routines strip — header on its own row, then items flow
    horizontally with flex-wrap. Items naturally re-flow as the column width
    changes (Tim resizes columns via the timelineDays/sidePanelWidth toggles).
-   Long routine names ellipsis at max-width so they never blow out the layout. */
-.col-routines-strip{margin:2px 0 8px;padding:6px 8px;
+   Long routine names ellipsis at max-width so they never blow out the layout.
+   Margin: 0 so the strip's top edge aligns with where the first regular card
+   would sit in a routine-free column. col-body's existing gap handles the
+   space between the strip and the next card. */
+.col-routines-strip{margin:0;padding:6px 8px;
   background:var(--routine-bg);border:1px solid var(--routine-border);
   border-radius:4px;display:flex;flex-direction:column;gap:6px;min-width:0}
 .col-routines-strip .crs-hdr{display:flex;align-items:center;justify-content:space-between;line-height:1}
