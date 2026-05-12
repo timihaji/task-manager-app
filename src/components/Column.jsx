@@ -213,6 +213,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
                 selected={selectedIds?.has(task.id)}
                 onOpen={onOpen} onToggle={onToggle} onDelete={onDelete}
                 onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
+                sortableData={{ kind: 'completed-task', date: colKey, parentId: task.parentId || null }}
                 childrenOf={childrenOf} projectStats={projectStats}
                 collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
                 forceOpenProjects={forceOpenProjects}

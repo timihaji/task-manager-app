@@ -2484,7 +2484,7 @@ function App() {
   // dnd-kit collision detection always picks the closest card as anchor and
   // we'd insert before it — so dropping below the last card in a column
   // landed second-to-last instead of last, which feels like a snap-back.
-  const reorderManyInDate = (taskIds, dateKey, anchorId, insertAfter = false) => {
+  const reorderManyInDate = (taskIds, dateKey, anchorId, insertAfter = false, extraPatch = null) => {
     if (!taskIds || !taskIds.length) return;
     setTasks(prev => {
       const idSet = new Set(taskIds);
@@ -2510,7 +2510,7 @@ function App() {
       const above = slotIdx > 0 ? inCol[slotIdx - 1] : null;
       const below = slotIdx < inCol.length ? inCol[slotIdx] : null;
       const positions = computeGroupPositions(above, below, movedOrdered.length);
-      const patched = movedOrdered.map((t, i) => ({...t, date: dateKey, parentId: null, position: positions[i]}));
+      const patched = movedOrdered.map((t, i) => ({...t, date: dateKey, parentId: null, position: positions[i], ...(extraPatch || {})}));
       // Array insert index mirrors the column slot.
       let insertAt;
       if (below) insertAt = remaining.indexOf(below);
@@ -2633,7 +2633,7 @@ function App() {
     const oData = event.over?.data?.current;
     let overCol = null;
     if (oData) {
-      if (oData.kind === 'task' || oData.kind === 'stack-task') overCol = oData.date != null ? oData.date : 'inbox';
+      if (oData.kind === 'task' || oData.kind === 'stack-task' || oData.kind === 'completed-task') overCol = oData.date != null ? oData.date : 'inbox';
       else if (oData.kind === 'column') overCol = oData.date != null ? oData.date : 'inbox';
     }
     const fromCol = document.body.dataset.fromCol;
@@ -2750,6 +2750,44 @@ function App() {
             }
           }
         }
+        return;
+      }
+
+      // Completed task dragged out of a day's Completed section → reopen + move.
+      // Restricted to today or a future date (past targets are no-ops; the
+      // Completed view itself isn't a meaningful destination).
+      if (aData.kind === 'completed-task') {
+        let targetDate;
+        if (oData.kind === 'task' || oData.kind === 'completed-task') {
+          const overTask = taskById(String(over.id));
+          targetDate = oData.date === undefined ? (overTask?.date || null) : oData.date;
+        } else if (oData.kind === 'column') {
+          targetDate = oData.date === undefined ? null : oData.date;
+        } else {
+          return;
+        }
+        if (!targetDate || D.isPast(targetDate)) return;
+        const srcIds = (selectedIds.has(activeId) && selectedIds.size > 1)
+          ? [...selectedIds].filter(id => taskById(id)?.done)
+          : [activeId];
+        if (!srcIds.length) return;
+        // Anchor only meaningful when dropping onto an active task in the
+        // destination column. Dropping onto another completed card (or empty
+        // column body) appends at the end of the destination's active list.
+        const anchorId = oData.kind === 'task' ? String(over.id) : null;
+        let insertAfter = false;
+        if (anchorId) {
+          const anchorEl = document.querySelector(`.card[data-card-id="${anchorId}"]`);
+          const y = dragPointerY.current;
+          if (anchorEl && y != null) {
+            const r = anchorEl.getBoundingClientRect();
+            insertAfter = y >= r.top + r.height / 2;
+          }
+        }
+        pushSnapshotUndo();
+        reorderManyInDate(srcIds, targetDate, anchorId, insertAfter, { done: false, completedAt: null });
+        setToast(srcIds.length > 1 ? `Reopened ${srcIds.length}` : 'Reopened');
+        setTimeout(()=>setToast(null), 1400);
         return;
       }
 
