@@ -216,6 +216,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);display:flex;f
 .col.is-past .card{filter:grayscale(.35);opacity:.65;transition:filter .15s,opacity .15s}
 .col.is-past .card:hover{filter:none;opacity:1}
 .col.is-today .card{filter:none!important;opacity:1!important;background:var(--surface)!important}
+.col.is-today .card:hover,.col.is-today .card.focused,.col.is-today .card.selected{background:var(--surface-2)!important}
 .col-add{display:flex;align-items:center;gap:4px;padding:4px 8px;border:none;border-top:1px solid var(--border);background:transparent;color:var(--t4);font:11px var(--font);cursor:pointer;transition:background .1s;flex-shrink:0}
 .col-add svg{width:10px;height:10px}
 .col-add:hover{background:var(--surface-2);color:var(--t3)}
@@ -372,6 +373,19 @@ body.marquee-active *{user-select:none !important}
 /* project cards */
 .card.card-project{border-color:color-mix(in srgb,var(--accent) 38%,var(--border-s));box-shadow:var(--shadow)}
 .card.card-project:hover{box-shadow:var(--shadow-hover)}
+/* Project parent must NOT take the .card:hover/.focused/.selected bg shift to
+   --surface-2 — that's the subtask base bg now, so the parent would visually
+   merge with its own children. Keep the parent's bg at --surface; the hover
+   signal is carried by the shadow lift above. !important is needed to beat
+   the glass-look focused rule and the base .card:hover rule. */
+.card.card-project:hover,
+.card.card-project.focused,
+.card.card-project.selected{background:var(--surface) !important}
+body[data-look="glass"] .card.card-project:hover,
+body[data-look="glass"] .card.card-project.focused,
+body[data-look="glass"] .card.card-project.selected{
+  background:color-mix(in srgb,var(--surface) 70%,transparent) !important;
+}
 /* stale delegated project — keep the red border that .card-project would otherwise mask */
 .card.card-project.card-stale{box-shadow:0 0 0 1px #ef4444aa,var(--shadow)}
 .card.card-project.card-stale:hover{box-shadow:0 0 0 1px #ef4444cc,var(--shadow-hover)}
@@ -384,7 +398,27 @@ body.marquee-active *{user-select:none !important}
 .card-proj-prog{display:inline-block;flex:1;min-width:0;height:6px;border-radius:999px;background:var(--surface-3);overflow:hidden}
 .card-proj-prog-fill{display:block;height:100%;border-radius:999px;background:var(--accent);transition:width .15s}
 .card-project-body{margin-top:8px;padding-top:8px;padding-left:10px;border-top:1px dashed var(--border);display:flex;flex-direction:column;gap:var(--card-gap,3px)}
-.card-project-body > .card{cursor:pointer}
+/* Subtask cards sit a clear notch above the project parent so the nesting
+   reads at a glance, then hover steps up further. !important is needed to
+   beat the glass-look base rule (line ~56) and other forced .card bgs.
+   The hover mix uses --t4 (muted text) so the step is visible in both
+   dark and light themes — dark surface-2 and surface are too close
+   together for a pure --surface-2 hover to register. */
+.card-project-body > .card{cursor:pointer;background:var(--surface-2) !important}
+.card-project-body > .card:hover,
+.card-project-body > .card.focused,
+.card-project-body > .card.selected{background:color-mix(in srgb,var(--surface-2) 78%,var(--t4)) !important}
+/* Glass-look composition: keep the translucent base under the contrast tint. */
+body[data-look="glass"] .card-project-body > .card{
+  background:color-mix(in srgb,var(--surface-2) 70%,transparent) !important;
+}
+body[data-look="glass"] .card-project-body > .card:hover,
+body[data-look="glass"] .card-project-body > .card.focused,
+body[data-look="glass"] .card-project-body > .card.selected{
+  background:color-mix(in srgb,
+    color-mix(in srgb,var(--surface-2) 78%,var(--t4))
+    78%, transparent) !important;
+}
 .card-proj-empty{font-size:11px;color:var(--t4);font-style:italic;padding:6px 4px}
 /* During an active drag, the inline +Add zones between subtasks must not
    intercept pointer events — they sit inside the project body but outside
@@ -2361,7 +2395,11 @@ body[data-color-style="srgb"] .scard[style*="--card-color"]{
   background: color-mix(in srgb, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface)) !important;
 }
 body[data-color-style="srgb"] .card.selected[style*="--card-color"],
-body[data-color-style="srgb"] .scard.selected[style*="--card-color"]{
+body[data-color-style="srgb"] .scard.selected[style*="--card-color"],
+body[data-color-style="srgb"] .card.focused[style*="--card-color"],
+body[data-color-style="srgb"] .scard.focused[style*="--card-color"],
+body[data-color-style="srgb"] .card[style*="--card-color"]:hover,
+body[data-color-style="srgb"] .scard[style*="--card-color"]:hover{
   background: color-mix(in srgb, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface-2)) !important;
 }
 
@@ -2371,7 +2409,11 @@ body[data-color-style="oklch"] .scard[style*="--card-color"]{
   background: color-mix(in oklch, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface)) !important;
 }
 body[data-color-style="oklch"] .card.selected[style*="--card-color"],
-body[data-color-style="oklch"] .scard.selected[style*="--card-color"]{
+body[data-color-style="oklch"] .scard.selected[style*="--card-color"],
+body[data-color-style="oklch"] .card.focused[style*="--card-color"],
+body[data-color-style="oklch"] .scard.focused[style*="--card-color"],
+body[data-color-style="oklch"] .card[style*="--card-color"]:hover,
+body[data-color-style="oklch"] .scard[style*="--card-color"]:hover{
   background: color-mix(in oklch, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface-2)) !important;
 }
 
@@ -2381,7 +2423,11 @@ body[data-color-style="hsl"] .scard[style*="--card-color"]{
   background: color-mix(in hsl, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface)) !important;
 }
 body[data-color-style="hsl"] .card.selected[style*="--card-color"],
-body[data-color-style="hsl"] .scard.selected[style*="--card-color"]{
+body[data-color-style="hsl"] .scard.selected[style*="--card-color"],
+body[data-color-style="hsl"] .card.focused[style*="--card-color"],
+body[data-color-style="hsl"] .scard.focused[style*="--card-color"],
+body[data-color-style="hsl"] .card[style*="--card-color"]:hover,
+body[data-color-style="hsl"] .scard[style*="--card-color"]:hover{
   background: color-mix(in hsl, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface-2)) !important;
 }
 
@@ -2389,6 +2435,16 @@ body[data-color-style="hsl"] .scard.selected[style*="--card-color"]{
 body[data-color-style="solid"] .card[style*="--card-color"],
 body[data-color-style="solid"] .scard[style*="--card-color"]{
   background: var(--eff-color, var(--card-color)) !important;
+}
+/* Solid is opaque, so there's no surface to mix into — nudge toward surface-2
+   to produce a subtle hover/focused/selected shift in both themes. */
+body[data-color-style="solid"] .card[style*="--card-color"]:hover,
+body[data-color-style="solid"] .scard[style*="--card-color"]:hover,
+body[data-color-style="solid"] .card.focused[style*="--card-color"],
+body[data-color-style="solid"] .scard.focused[style*="--card-color"],
+body[data-color-style="solid"] .card.selected[style*="--card-color"],
+body[data-color-style="solid"] .scard.selected[style*="--card-color"]{
+  background: color-mix(in srgb, var(--eff-color, var(--card-color)) 88%, var(--surface-2)) !important;
 }
 
 /* Method: Translucent overlay (colour layer ON TOP of surface, alpha-composited) */
@@ -2398,7 +2454,11 @@ body[data-color-style="overlay"] .scard[style*="--card-color"]{
   background-image: linear-gradient(var(--overlay-rgba, transparent), var(--overlay-rgba, transparent)) !important;
 }
 body[data-color-style="overlay"] .card.selected[style*="--card-color"],
-body[data-color-style="overlay"] .scard.selected[style*="--card-color"]{
+body[data-color-style="overlay"] .scard.selected[style*="--card-color"],
+body[data-color-style="overlay"] .card.focused[style*="--card-color"],
+body[data-color-style="overlay"] .scard.focused[style*="--card-color"],
+body[data-color-style="overlay"] .card[style*="--card-color"]:hover,
+body[data-color-style="overlay"] .scard[style*="--card-color"]:hover{
   background-color: var(--surface-2) !important;
   background-image: linear-gradient(var(--overlay-rgba, transparent), var(--overlay-rgba, transparent)) !important;
 }
@@ -2412,15 +2472,45 @@ body[data-look="glass"][data-color-style="srgb"] .scard[style*="--card-color"]{
     color-mix(in srgb, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface))
     70%, transparent) !important;
 }
+body[data-look="glass"][data-color-style="srgb"] .card[style*="--card-color"]:hover,
+body[data-look="glass"][data-color-style="srgb"] .scard[style*="--card-color"]:hover,
+body[data-look="glass"][data-color-style="srgb"] .card.focused[style*="--card-color"],
+body[data-look="glass"][data-color-style="srgb"] .scard.focused[style*="--card-color"],
+body[data-look="glass"][data-color-style="srgb"] .card.selected[style*="--card-color"],
+body[data-look="glass"][data-color-style="srgb"] .scard.selected[style*="--card-color"]{
+  background: color-mix(in srgb,
+    color-mix(in srgb, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface-2))
+    78%, transparent) !important;
+}
 body[data-look="glass"][data-color-style="oklch"] .card[style*="--card-color"],
 body[data-look="glass"][data-color-style="oklch"] .scard[style*="--card-color"]{
   background: color-mix(in srgb,
     color-mix(in oklch, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface))
     70%, transparent) !important;
 }
+body[data-look="glass"][data-color-style="oklch"] .card[style*="--card-color"]:hover,
+body[data-look="glass"][data-color-style="oklch"] .scard[style*="--card-color"]:hover,
+body[data-look="glass"][data-color-style="oklch"] .card.focused[style*="--card-color"],
+body[data-look="glass"][data-color-style="oklch"] .scard.focused[style*="--card-color"],
+body[data-look="glass"][data-color-style="oklch"] .card.selected[style*="--card-color"],
+body[data-look="glass"][data-color-style="oklch"] .scard.selected[style*="--card-color"]{
+  background: color-mix(in srgb,
+    color-mix(in oklch, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface-2))
+    78%, transparent) !important;
+}
 body[data-look="glass"][data-color-style="hsl"] .card[style*="--card-color"],
 body[data-look="glass"][data-color-style="hsl"] .scard[style*="--card-color"]{
   background: color-mix(in srgb,
     color-mix(in hsl, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface))
     70%, transparent) !important;
+}
+body[data-look="glass"][data-color-style="hsl"] .card[style*="--card-color"]:hover,
+body[data-look="glass"][data-color-style="hsl"] .scard[style*="--card-color"]:hover,
+body[data-look="glass"][data-color-style="hsl"] .card.focused[style*="--card-color"],
+body[data-look="glass"][data-color-style="hsl"] .scard.focused[style*="--card-color"],
+body[data-look="glass"][data-color-style="hsl"] .card.selected[style*="--card-color"],
+body[data-look="glass"][data-color-style="hsl"] .scard.selected[style*="--card-color"]{
+  background: color-mix(in srgb,
+    color-mix(in hsl, var(--eff-color, var(--card-color)) calc(var(--card-tint-pct, 20) * 1%), var(--surface-2))
+    78%, transparent) !important;
 }

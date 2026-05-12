@@ -9,6 +9,9 @@ import { EmptyState } from './EmptyState.jsx';
 function ListTaskItem({ task, focused, selected, renaming, onOpen, onFocus, onSelect, onRename, onRenameDone, onContextMenu }) {
   const [draft,setDraft] = useState(task.title || '');
   const ref = useRef(null);
+  // See TaskCard.jsx for rationale — clears hover-induced focus on leave while
+  // leaving click/keyboard focus alone.
+  const hoverFocusRef = useRef(false);
   useEffect(()=>setDraft(task.title || ''),[task.id,task.title]);
   useEffect(()=>{ if(renaming) requestAnimationFrame(()=>{ ref.current?.focus(); ref.current?.select(); }); },[renaming]);
   const finish = (save=true) => {
@@ -18,8 +21,9 @@ function ListTaskItem({ task, focused, selected, renaming, onOpen, onFocus, onSe
   };
   return (
     <div className={`list-item${focused?' focused':''}${selected?' selected':''}`} data-list-id={task.id}
-      onMouseEnter={()=>onFocus(task.id)}
-      onClick={()=>!renaming&&onFocus(task.id)}
+      onMouseEnter={()=>{ if(!focused) hoverFocusRef.current=true; onFocus(task.id); }}
+      onMouseLeave={()=>{ if(hoverFocusRef.current && focused) onFocus(null); hoverFocusRef.current=false; }}
+      onClick={()=>{ if(renaming) return; hoverFocusRef.current=false; onFocus(task.id); }}
       onDoubleClick={()=>!renaming&&onOpen(task.id)}
       onContextMenu={e=>{ if(onContextMenu){ e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}>
       <button className={`bulk-check${selected?' on':''}`} title={selected?'Deselect task':'Select task'}
