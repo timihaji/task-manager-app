@@ -196,6 +196,11 @@ function App() {
   const boardRef = useRef(null);
   const boardShellRef = useRef(null);
   const panState = useRef({isPanning:false,startX:0,scrollLeft:0});
+  // Tracks the mousedown coordinates for the app-body click handler. If the
+  // user releases >4px away from the start, the click was actually a drag
+  // (canvas pan, etc.) and we suppress the "close drawer / clear focus"
+  // logic. Otherwise pure background-clicks still close.
+  const bodyClickGuard = useRef(null);
   const boardRaf = useRef(null);
   const pendingTodayJump = useRef(true);
   const pendingTodayJumpBehavior = useRef('auto');
@@ -1809,6 +1814,44 @@ function App() {
       setUndoStack(s=>[...s.slice(-9),{id,before}]);
       setTasks(prev=>prev.map(t=>t.id===id ? applyTaskPatch(t, {...changes, childOrder:t.childOrder||[]}) : t));
       return;
+    }
+    // Cadence re-alignment. If the user is setting/changing a recurrence
+    // with a freq that doesn't match the card's current date (e.g. card on
+    // Thursday, recurrence "weekly on Tuesday"), move the card to the next
+    // valid cadence date >= card.date. Past dates are left alone — they're
+    // history, not future-facing. Inbox tasks (no date) get nothing changed.
+    const newRecForAlign = Object.prototype.hasOwnProperty.call(changes, 'recurrence') ? changes.recurrence : undefined;
+    if (newRecForAlign?.freq && before.date) {
+      const todayForAlign = D.str(D.today());
+      if (before.date >= todayForAlign) {
+        const dayCodes = ['sun','mon','tue','wed','thu','fri','sat'];
+        const matchesCadence = (dateStr, rec) => {
+          if (!rec?.freq) return true;
+          const d = D.parse(dateStr); const dow = d.getDay();
+          if (rec.freq === 'daily') return true;
+          if (rec.freq === 'weekdays') return dow >= 1 && dow <= 5;
+          if (rec.freq === 'weekly') {
+            if (Array.isArray(rec.byDay) && rec.byDay.length) return rec.byDay.includes(dayCodes[dow]);
+            return true;
+          }
+          if (rec.freq === 'monthly') {
+            if (rec.byMonthDay) return d.getDate() === rec.byMonthDay;
+            return true;
+          }
+          return true;
+        };
+        if (!matchesCadence(before.date, newRecForAlign)) {
+          // Walking nextOccurrence from yesterday-of-start finds the next
+          // valid date >= startDate (returns start if it matches, else next).
+          const aligned = nextOccurrence(
+            { recurrence: newRecForAlign },
+            D.str(D.add(D.parse(before.date), -1))
+          );
+          if (aligned && aligned !== before.date) {
+            changes = { ...changes, date: aligned };
+          }
+        }
+      }
     }
     // Series propagation for recurrence edits. When the user changes a
     // routine's recurrence in the drawer, the change should affect more than
@@ -3766,24 +3809,29 @@ function App() {
     if (t.archived) setView('archived');
     else if (t.done) setView('completed');
     else setView('week');
-    // Let the new view render before trying to find + highlight the element.
-    setTimeout(() => {
-      const sel = `[data-card-id="${CSS.escape(id)}"], .list-item[data-list-id="${CSS.escape(id)}"]`;
+    // Retry-find the element across a few frames so the view-switch render
+    // can settle (especially Timeline which virtualises). Once found, scroll
+    // into view + apply the persistent highlight.
+    const sel = `[data-card-id="${CSS.escape(id)}"], .list-item[data-list-id="${CSS.escape(id)}"]`;
+    let tries = 0;
+    const findAndHighlight = () => {
+      tries += 1;
       const el = document.querySelector(sel);
-      if (!el) return;
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (!el) {
+        if (tries < 30) setTimeout(findAndHighlight, 40);
+        return;
+      }
+      el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
       el.classList.add('routine-jump-highlight');
       const clear = (e) => {
         if (e && el.contains(e.target)) return;
         el.classList.remove('routine-jump-highlight');
         document.removeEventListener('click', clear, true);
       };
-      // Delay click listener so the originating click on the drawer button
-      // doesn't immediately clear the highlight.
       setTimeout(() => document.addEventListener('click', clear, true), 300);
-      // Hard timeout fallback — clears even if user never clicks.
       setTimeout(() => clear(null), 12000);
-    }, 200);
+    };
+    setTimeout(findAndHighlight, 40);
   };
   const openSettings = () => { setDrawerId(null); setRenamingId(null); setSettingsOpen(s=>!s); };
   const drawerTask = drawerId ? taskById(drawerId) : null;
@@ -4186,7 +4234,19 @@ function App() {
 
     {/* BODY */}
     <div className="app-shell">
-    <div className={`app-body${isNarrowScreen?' is-mobile':''}${filtersActive?' chk-mode':''}${selectedIds.size?' chk-mode':''}`} onClick={e=>{ setFilterOpen(false); setGroupOpen(false); setTbOverflowOpen(false); if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar,.dvv,.rt-view')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); } }}>
+    <div className={`app-body${isNarrowScreen?' is-mobile':''}${filtersActive?' chk-mode':''}${selectedIds.size?' chk-mode':''}`}
+      onMouseDown={e=>{ bodyClickGuard.current = { x: e.clientX, y: e.clientY }; }}
+      onClick={e=>{
+        setFilterOpen(false); setGroupOpen(false); setTbOverflowOpen(false);
+        // Only treat as a "close-the-drawer click" if the pointer didn't
+        // drift significantly between mousedown and mouseup. Pans on the
+        // timeline canvas register as drags (>4px move) and should not
+        // close the drawer/focus/selection.
+        const a = bodyClickGuard.current;
+        bodyClickGuard.current = null;
+        if (a && (Math.abs(e.clientX - a.x) > 4 || Math.abs(e.clientY - a.y) > 4)) return;
+        if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar,.dvv,.rt-view')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); }
+      }}>
       <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false); if (isNarrowScreen) setNavCollapsed(true);}} collapsed={navCollapsed} theme={theme}
         activeLifeAreas={filters.lifeAreas}
         onLifeAreaToggle={id=>toggleFilter('lifeAreas',id)}/>
