@@ -7,7 +7,7 @@ import { TaskCard } from './TaskCard.jsx';
 import { EmptyState } from './EmptyState.jsx';
 import { Tick } from './Tick.jsx';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { useDroppable } from '@dnd-kit/core';
+import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { useTapSpring } from '../hooks/useTapSpring.js';
 import { useMagnet } from '../hooks/useMagnet.js';
 
@@ -25,6 +25,68 @@ function GrpDroppable({ id, data, baseClass, isCustom, children }) {
   const { setNodeRef, isOver } = useDroppable({ id, data, disabled: !isCustom });
   return (
     <div ref={isCustom ? setNodeRef : undefined} className={`${baseClass}${isOver && isCustom ? ' grp-drop-into' : ''}`}>{children}</div>
+  );
+}
+
+// Routine strip pill — draggable so the user can pull it out of the strip into
+// a column body (demote to one-off card) or onto another day's strip
+// (reschedule the routine instance, see Q2-B in docs/routines-fix-and-drag-plan).
+// Done pills are not draggable and shake on pointerdown (Q4-A).
+function RoutineStripItem({ task, colKey, onToggle, onOpen, onContextMenu }) {
+  const btnRef = useRef(null);
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `routine:${task.id}`,
+    data: { kind: 'routine-instance', taskId: task.id, date: colKey },
+    disabled: !!task.done,
+  });
+  const setRefs = (el) => { btnRef.current = el; setNodeRef(el); };
+  const onPointerDownDone = (e) => {
+    if (!task.done) return;
+    const el = btnRef.current;
+    if (!el) return;
+    el.animate(
+      [
+        { transform: 'translateX(0)' },
+        { transform: 'translateX(-4px)' },
+        { transform: 'translateX(4px)' },
+        { transform: 'translateX(-2px)' },
+        { transform: 'translateX(0)' },
+      ],
+      { duration: 240, easing: 'ease-out' }
+    );
+  };
+  return (
+    <button
+      ref={setRefs}
+      className={`crs-item${task.done ? ' done' : ''}${isDragging ? ' is-dragging' : ''}`}
+      data-routine-id={task.id}
+      onClick={(e) => { e.stopPropagation(); onToggle?.(task.id); }}
+      onDoubleClick={(e) => { e.stopPropagation(); e.preventDefault(); onOpen?.(task.id); }}
+      onContextMenu={(e) => { if (onContextMenu) { e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); onOpen?.(task.id); } }}
+      onPointerDown={onPointerDownDone}
+      title={`${task.title} — tap to ${task.done ? 'undo' : 'complete'} · double-click to edit · ${task.done ? 'undo first to move' : 'drag to a day to make one-off, drag to another day’s strip to reschedule'}`}
+      {...(task.done ? {} : listeners)}
+      {...(task.done ? {} : attributes)}>
+      <span className="crs-dot" aria-hidden="true"/>
+      <span className="crs-name">{task.title}</span>
+    </button>
+  );
+}
+
+// Drop target wrapping the routine strip — used for Q2-B (drop on strip
+// reschedules the routine instance to that column's date, keeps it in the
+// series). Body-drop in the column itself demotes to a one-off card and is
+// handled by ColDroppable above.
+function RoutineStripDropZone({ colKey, children }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `col-strip:${colKey}`,
+    data: { kind: 'routine-strip', date: colKey },
+  });
+  return (
+    <div ref={setNodeRef} className={`col-routines-strip${isOver ? ' strip-drop-target' : ''}`} role="group" aria-label="Routines for this day">
+      {children}
+    </div>
   );
 }
 
@@ -101,23 +163,22 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
         {routines.length > 0 && (
           <div className="grp-free col-routines-grp">
             <div className="card-add-zone col-routines-spacer" aria-hidden="true"/>
-            <div className="col-routines-strip" role="group" aria-label="Routines for this day">
+            <RoutineStripDropZone colKey={colKey}>
               <div className="crs-hdr">
                 <span className="crs-label">ROUTINES</span>
                 <span className="crs-count">{routinesDone}/{routines.length}</span>
               </div>
               <div className="crs-items">
                 {routines.map(t => (
-                  <button key={t.id}
-                    className={`crs-item${t.done ? ' done' : ''}`}
-                    onClick={(e) => { e.stopPropagation(); onToggle?.(t.id); }}
-                    title={t.done ? `${t.title} — done, tap to undo` : `${t.title} — tap to complete`}>
-                    <span className="crs-dot" aria-hidden="true"/>
-                    <span className="crs-name">{t.title}</span>
-                  </button>
+                  <RoutineStripItem key={t.id}
+                    task={t}
+                    colKey={colKey}
+                    onToggle={onToggle}
+                    onOpen={onOpen}
+                    onContextMenu={cardExtras?.onContextMenu}/>
                 ))}
               </div>
-            </div>
+            </RoutineStripDropZone>
           </div>
         )}
         {/* Per-group SortableContext (was a single context wrapping every group).

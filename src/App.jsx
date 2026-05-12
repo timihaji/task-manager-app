@@ -1809,6 +1809,56 @@ function App() {
       setTasks(prev=>prev.map(t=>t.id===id ? applyTaskPatch(t, {...changes, childOrder:t.childOrder||[]}) : t));
       return;
     }
+    // Series propagation for recurrence edits. When the user changes a
+    // routine's recurrence in the drawer, the change should affect more than
+    // just this instance — otherwise the series silently desyncs. Rules:
+    //   • pure isRoutine flip → copy flag to all non-archived siblings.
+    //   • pattern change → drop open siblings (today + future); past
+    //     done/archived stay frozen as historical record (Q1-B).
+    //   • recurrence removed → drop future open siblings, this task becomes a
+    //     one-off; past instances keep their recurrence shape.
+    // extendRoutineHorizon next render regenerates the future on the new
+    // schedule, walking forward from the edited instance's date.
+    const beforeRec = before.recurrence;
+    const recurrenceTouched =
+      Object.prototype.hasOwnProperty.call(changes, 'recurrence') &&
+      !!beforeRec?.recurrenceId;
+    if (recurrenceTouched) {
+      const rid = beforeRec.recurrenceId;
+      const newRec = changes.recurrence;
+      const patternKeys = ['freq','interval','byDay','byMonthDay','until'];
+      const sameVal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+      const isPatternChange = !newRec || patternKeys.some(k => !sameVal(beforeRec[k], newRec[k]));
+      const todayStr = D.str(D.today());
+      pushSnapshotUndo();
+      setTasks(prev => prev.flatMap(t => {
+        if (t.id === id) return [applyTaskPatch(t, changes)];
+        if (t.recurrence?.recurrenceId !== rid) return [t];
+        if (!newRec) {
+          // Remove-recurrence (None preset = stop the series). Drop every open
+          // sibling (today + future). For past done/archived: keep historical
+          // recurrence shape but flip isRoutine off so the series stops —
+          // routinesRollup hides it, extendRoutineHorizon stops using it as
+          // a template. Past instances still display "↻ daily" etc in the
+          // Completed view (Q1-B: history-honest).
+          if (!t.done && !t.archived) return [];
+          return [{ ...t, recurrence: { ...t.recurrence, isRoutine: false } }];
+        }
+        if (isPatternChange) {
+          // Pattern change. Drop other open today/future siblings;
+          // extendRoutineHorizon regenerates them on the new schedule next
+          // render. Past done/archived siblings keep their existing
+          // recurrence shape (Q1-B).
+          if (!t.done && !t.archived && t.date && t.date >= todayStr) return [];
+          return [t];
+        }
+        // Pure isRoutine flip — propagate the flag to all non-archived
+        // siblings so strip / dashboard / rollup all read consistently.
+        if (t.archived) return [t];
+        return [{ ...t, recurrence: { ...t.recurrence, isRoutine: !!newRec.isRoutine } }];
+      }));
+      return;
+    }
     setUndoStack(s=>[...s.slice(-9),{id,before}]);
     setTasks(prev=>prev.map(t=>t.id===id ? applyTaskPatch(t, changes) : t));
   };
@@ -2672,21 +2722,31 @@ function App() {
     // ghost — chips, priority bars, project progress, the whole thing — rather
     // than a stub with just the title.
     let srcHTML = null;
+    let routineGhost = null;
     try {
-      const el = document.querySelector(`[data-card-id="${srcId}"]`);
-      if (el) {
-        // Measure the source card so the destination gap is exactly its height.
-        document.body.style.setProperty('--drag-card-h', el.offsetHeight + 'px');
-        const clone = el.cloneNode(true);
-        clone.removeAttribute('style');
-        clone.classList.remove('is-dragging','dragging','focused','selected','spawning','card-drop-target');
-        srcHTML = clone.outerHTML;
+      if (data.kind === 'routine-instance') {
+        // Routine strip pills aren't cards — build a card-shaped ghost from
+        // the task itself so the morph reads as pill → card during drag.
+        const t = taskById(data.taskId);
+        if (t) {
+          routineGhost = { title: t.title, date: t.date, project: t.project };
+        }
+      } else {
+        const el = document.querySelector(`[data-card-id="${srcId}"]`);
+        if (el) {
+          // Measure the source card so the destination gap is exactly its height.
+          document.body.style.setProperty('--drag-card-h', el.offsetHeight + 'px');
+          const clone = el.cloneNode(true);
+          clone.removeAttribute('style');
+          clone.classList.remove('is-dragging','dragging','focused','selected','spawning','card-drop-target');
+          srcHTML = clone.outerHTML;
+        }
       }
     } catch {}
     // fromCol mirrors the card's column for the §09 cross-column arming check.
     // null date → inbox; 'stack-task' source has no date so we fall back to inbox.
     const fromCol = data.date != null ? data.date : 'inbox';
-    setActiveDrag({ id: srcId, kind: data.kind || 'task', fromCol, srcHTML });
+    setActiveDrag({ id: srcId, kind: data.kind || 'task', fromCol, srcHTML, routineGhost });
     document.body.dataset.dndActive = 'true';
     document.body.dataset.fromCol = fromCol;
     // Pointer-Y tracker: keeps dragPointerY fresh between dndOnDragOver fires.
@@ -2782,6 +2842,80 @@ function App() {
     try {
       if (!over) return;
       haptics.drop();
+
+      // Routine strip pill dragged out of the strip.
+      // - Drop on a column body / task / completed-task → demote: clear
+      //   recurrence, set date to the target's date. Card becomes a one-off.
+      // - Drop on another column's routine-strip (kind: 'routine-strip') →
+      //   reschedule: keep recurrence, change date to that day. Refuse if
+      //   target already has a sibling of same series, or target date is in
+      //   the past (would auto-archive next render).
+      // - Drop on inbox column → demote with date=null.
+      // Filter-aware: if active filter would hide the resulting card on the
+      // target column, the drop still succeeds (Q3-B) and a toast surfaces
+      // with an Undo affordance.
+      if (aData.kind === 'routine-instance') {
+        const taskId = aData.taskId || activeId.replace(/^routine:/, '');
+        const task = taskById(taskId);
+        if (!task) return;
+        let targetDate = null;
+        let intent = 'demote';
+        if (oData.kind === 'routine-strip') {
+          targetDate = oData.date;
+          intent = 'reschedule';
+        } else if (oData.kind === 'column') {
+          targetDate = oData.date === undefined ? null : oData.date;
+        } else if (oData.kind === 'task' || oData.kind === 'completed-task' || oData.kind === 'stack-task') {
+          const overTask = taskById(String(over.id));
+          targetDate = oData.date === undefined ? (overTask?.date || null) : oData.date;
+        } else {
+          return;
+        }
+        // Reschedule path (Q2-B). Refuse same-day, past-day, or duplicate-sibling.
+        if (intent === 'reschedule') {
+          if (!targetDate || targetDate === task.date) return;
+          const todayStr = D.str(D.today());
+          if (targetDate < todayStr) {
+            showToast('Can’t reschedule a routine to a past day', { timeout: 1800 });
+            return;
+          }
+          const conflict = tasks.some(t =>
+            t.id !== task.id &&
+            t.recurrence?.recurrenceId === task.recurrence?.recurrenceId &&
+            t.date === targetDate &&
+            !t.archived);
+          if (conflict) {
+            showToast(`${task.title}: already an instance on that day`, { timeout: 1800 });
+            return;
+          }
+          pushSnapshotUndo();
+          setTasks(prev => prev.map(t => t.id === task.id ? syncTaskSnooze({ ...t, date: targetDate }) : t));
+          showToast(`Routine moved to ${targetDate}`, { undoable: true });
+          return;
+        }
+        // Demote path: clear recurrence, set date.
+        const ts = new Date().toISOString();
+        const seriesId = task.recurrence?.recurrenceId || null;
+        pushSnapshotUndo();
+        setTasks(prev => prev.map(t => t.id === task.id ? syncTaskSnooze({
+          ...t,
+          recurrence: null,
+          date: targetDate,
+          activity: [...(t.activity || []), { type: 'demoted-from-routine', at: ts, fromSeries: seriesId }],
+        }) : t));
+        // Filtered-drop toast (Q3-B): warn if filters would hide the new card.
+        const wouldBeFiltered = (() => {
+          if (!targetDate) return false; // inbox-bound card; inbox view has its own visibility
+          const mock = { ...task, recurrence: null, date: targetDate };
+          return !taskOwnFilters(mock);
+        })();
+        if (wouldBeFiltered) {
+          showToast(`Card created on ${targetDate} — clear filters to see it`, { undoable: true });
+        } else {
+          showToast(targetDate ? `One-off card on ${targetDate}` : 'Moved to inbox', { undoable: true });
+        }
+        return;
+      }
 
       // Stack reorder — both source and target are stack tasks.
       // Multi-select: when the dragged card is part of a multi-selection, every
@@ -4339,7 +4473,12 @@ function App() {
         card flies from somewhere above into position". Killing the overlay
         animation leaves only the source's slide, which is the polished part. */}
     <DragOverlay zIndex={9999} dropAnimation={null}>
-      {activeDrag?.srcHTML ? (
+      {activeDrag?.routineGhost ? (
+        <div className="dnd-overlay-routine">
+          <div className="dnd-or-title">{activeDrag.routineGhost.title}</div>
+          <div className="dnd-or-meta">↻ → one-off · drop on a day</div>
+        </div>
+      ) : activeDrag?.srcHTML ? (
         <div className="dnd-overlay-ghost" dangerouslySetInnerHTML={{ __html: activeDrag.srcHTML }} />
       ) : null}
     </DragOverlay>

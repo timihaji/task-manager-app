@@ -675,7 +675,10 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
               <button key={t.id}
                 className={`srs-item${t.done ? ' done' : ''}`}
                 onClick={(e) => { e.stopPropagation(); onComplete?.(t.id); }}
-                title={t.done ? `${t.title} — done, tap to undo` : `${t.title} — tap to complete`}>
+                onDoubleClick={(e) => { e.stopPropagation(); e.preventDefault(); onOpen?.(t.id); }}
+                onContextMenu={(e) => { if (onContextMenu) { e.preventDefault(); e.stopPropagation(); onContextMenu(t, e.clientX, e.clientY); } }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); onOpen?.(t.id); } }}
+                title={`${t.title} — tap to ${t.done ? 'undo' : 'complete'} · double-click to edit · right-click for more`}>
                 <span className="srs-dot" aria-hidden="true"/>
                 <span className="srs-name">{t.title}</span>
               </button>

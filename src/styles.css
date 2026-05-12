@@ -1141,6 +1141,45 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 .crs-item.done{color:var(--t4)}
 .crs-item.done .crs-name{text-decoration:line-through}
 .crs-item.done .crs-dot{background:#22c55e;border-color:#22c55e}
+/* Drag-out affordances. Open pills get a grab cursor + 4px activation
+   threshold via dnd-kit. Done pills can't be dragged (Q4-A) — they shake on
+   pointerdown instead (handled in RoutineStripItem). The source pill dims to
+   0.35 while a card-shaped ghost in the DragOverlay morphs out and follows
+   the cursor. */
+.crs-item{cursor:grab; touch-action:none}
+.crs-item:active{cursor:grabbing}
+.crs-item.done{cursor:pointer}
+.crs-item.is-dragging{opacity:.35}
+/* Strip-as-drop-target (Q2-B): dropping on another day's routine strip
+   reschedules the routine instance (keeps it in the series). Highlight the
+   strip in a slightly stronger indigo so it's distinguishable from the
+   column body drop zone (which demotes to a one-off card). */
+.col-routines-strip.strip-drop-target{
+  border-color:var(--routine);
+  box-shadow:0 0 0 2px var(--routine-bg), inset 0 0 0 1px var(--routine-border);
+}
+/* DragOverlay ghost for a strip pill. Starts pill-shaped, morphs into a
+   card-shaped tile over ~280ms to telegraph "this will become a one-off
+   card if dropped on a column body". Reduced-motion users skip the morph. */
+.dnd-overlay-routine{
+  background:var(--bg-dr); border:1px solid var(--routine);
+  border-radius:6px; padding:8px 10px; color:var(--t1);
+  box-shadow:0 14px 40px rgba(0,0,0,.45), 0 0 0 1px var(--routine);
+  font:12px var(--font);
+  width:160px;
+  animation:routine-drag-morph .28s cubic-bezier(.34,1.56,.64,1) both;
+}
+.dnd-overlay-routine .dnd-or-title{font-weight:500}
+.dnd-overlay-routine .dnd-or-meta{
+  font:10px var(--font-mono,var(--font)); color:var(--t3); margin-top:2px;
+}
+@keyframes routine-drag-morph{
+  from{width:120px; padding:4px 8px; border-radius:99px}
+  to  {width:160px; padding:8px 10px; border-radius:6px}
+}
+@media (prefers-reduced-motion: reduce){
+  .dnd-overlay-routine{animation:none}
+}
 
 /* Routines dashboard view */
 .rt-view{flex:1;padding:24px 32px;overflow-y:auto;background:var(--bg)}
