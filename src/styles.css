@@ -615,6 +615,9 @@ body.marquee-active *{user-select:none !important}
 .dvv-cad-dot.now{background:var(--accent);border-color:var(--accent);width:13px;height:13px;box-shadow:0 0 0 5px var(--accent-dim)}
 .dvv-cad-dot.due{background:var(--danger,#ef4444);border-color:var(--danger,#ef4444);width:13px;height:13px;box-shadow:0 0 0 5px rgba(239,68,68,0.16)}
 .dvv-cad-dot.pending{background:var(--surface);border-style:dashed;border-color:var(--t4)}
+/* "missed" — offset passed without firing. Soft amber so it's noticeable
+   but not alarmist, distinct from pending (future). */
+.dvv-cad-dot.missed{background:var(--surface);border-style:dashed;border-color:var(--warning,#f59e0b);opacity:.7}
 .dvv-cad-dot:hover,.dvv-cad-dot.is-linked{transform:translate(-50%,-50%) scale(1.5);box-shadow:0 0 0 5px var(--accent-dim),0 4px 12px rgba(0,0,0,0.25);z-index:3}
 /* Labels are interactive — hovering one fires the same hoverStep as the dot,
    so the tooltip + log-row cross-highlight surface from either target. */

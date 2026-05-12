@@ -824,15 +824,16 @@ function RightPane({
     const dots = [];
     // d0 dot (delegated)
     dots.push({ key: 'd0', pos: 0, day: 0, kind: 'delegated', label: 'Delegated' });
-    // Timeline shows things that *happened* — not pre-scheduled phantoms.
-    // A cadence offset only earns a dot if a corresponding event fired
-    // (the user actioned a check-in as Nudged or Heard back, or logged a
-    // manual nudge). Future check-ins stay invisible until they trigger.
+    // Cadence offsets that *haven't fired yet* get a dashed "pending" dot,
+    // muted but visible — so a fresh delegation still reads as a timeline
+    // (otherwise the whole strip is just a single Delegated dot). Offsets
+    // with a matching event upgrade to chased/heard.
     schedule.forEach(off => {
       const matchingEv = (task.activity || []).find(a => a.day === off && (a.type === 'nudge-sent' || a.type === 'heard-back'));
-      if (!matchingEv) return;
       const pos = (off / maxDay) * 100;
-      const kind = matchingEv.type === 'heard-back' ? 'heard' : 'chased';
+      const kind = matchingEv?.type === 'heard-back' ? 'heard'
+                 : matchingEv?.type === 'nudge-sent' ? 'chased'
+                 : (off > days ? 'pending' : 'missed');
       dots.push({ key: `d${off}`, pos, day: off, kind, label: `Day ${off}` });
     });
     // Also include any manual nudges / heard-backs whose day offset isn't
@@ -997,8 +998,9 @@ function RightPane({
         </div>
       </div>
 
-      {/* Cadence */}
-      {cadenceDots.dots.length > 1 && (
+      {/* Cadence — always visible when delegated so the user can edit the
+          schedule even if no events have fired yet. */}
+      {task.delegatedTo && (
         <div className={`dvv-cad${cadenceOpen?' is-pop-open':''}`}>
           <div className="dvv-cad-lbl">
             <span>Cadence</span>
