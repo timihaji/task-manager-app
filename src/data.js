@@ -535,8 +535,16 @@ const extendRoutineHorizon = (tasks = [], daysAhead = 14, todayStr = D.str(D.tod
     const dated = siblings.filter(t => t.date);
     if (!dated.length) continue;
     const template = dated.reduce((a, b) => (a.date > b.date ? a : b));
-    // Walk forward from latest known fire date; stop at horizon.
-    let cur = template.date;
+    // Walk from the latest at-or-before-today instance so we backfill gaps
+    // between today and any pre-existing future instances. Without this, a card
+    // rescheduled to Wednesday leaves a hole where Friday should be, and the
+    // walk (starting from the latest future instance) never fills it in.
+    const latestPast = siblings
+      .filter(t => t.date && t.date <= todayStr)
+      .map(t => t.date)
+      .sort()
+      .pop();
+    let cur = latestPast || D.str(D.add(D.parse(todayStr), -1));
     let safety = 0;
     while (cur && safety < 200) {
       const next = nextOccurrence(template, cur);
