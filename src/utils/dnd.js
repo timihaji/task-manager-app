@@ -55,9 +55,23 @@ export function compositeCollisionDetection(args) {
       const bodyNode = cont.node?.current;
       if (!bodyNode) continue;
       const bodyRect = bodyNode.getBoundingClientRect();
-      if (pointer.x < bodyRect.left || pointer.x > bodyRect.right) continue;
-      if (pointer.y < bodyRect.top || pointer.y > bodyRect.bottom) continue;
       const targetId = d.targetId;
+      const hasSubtaskDroppable = args.droppableContainers.some(c => {
+        const cd = c.data?.current;
+        return cd?.kind === 'task' && cd?.parentId === targetId;
+      });
+      // Empty project: the visible body is only ~50px tall, so users
+      // naturally aim at the card title and hit step 1 below (sibling
+      // reorder). Expand the catch area to the whole project card and route
+      // the drop to the body so it nests instead.
+      const cardNode = !hasSubtaskDroppable ? bodyNode.closest('.card.card-project') : null;
+      const hitRect = cardNode ? cardNode.getBoundingClientRect() : bodyRect;
+      if (pointer.x < hitRect.left || pointer.x > hitRect.right) continue;
+      if (pointer.y < hitRect.top || pointer.y > hitRect.bottom) continue;
+      const outsideBody = pointer.y < bodyRect.top || pointer.y > bodyRect.bottom;
+      if (!hasSubtaskDroppable && outsideBody) {
+        return [{ id: cont.id, data: { droppableContainer: cont, value: 0 } }];
+      }
 
       // a) Top 8px → nest as first child.
       if (pointer.y - bodyRect.top <= NEST_EDGE_PX) {
@@ -72,15 +86,9 @@ export function compositeCollisionDetection(args) {
         return cd?.kind === 'task' && cd?.parentId === targetId;
       });
       if (subtaskHit) return [subtaskHit];
-      // b2) Fresh / empty project — body has no subtask droppables. The
-      //     fall-through "closest sibling" path below would route the drop to
-      //     the project's neighbour instead of into the project, making it
-      //     impossible to drop into a newly-created project except by hitting
-      //     the 8px nest edge. Return the body itself so the drop nests.
-      const hasSubtaskDroppable = args.droppableContainers.some(c => {
-        const cd = c.data?.current;
-        return cd?.kind === 'task' && cd?.parentId === targetId;
-      });
+      // b2) Empty body — the fall-through "closest sibling" path below would
+      //     route the drop to a neighbour. Return the body itself so the
+      //     cursor anywhere inside an empty body nests.
       if (!hasSubtaskDroppable) {
         return [{ id: cont.id, data: { droppableContainer: cont, value: 0 } }];
       }
