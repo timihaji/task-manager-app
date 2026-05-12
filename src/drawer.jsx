@@ -953,53 +953,61 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
             })()}
           </DRow>
 
-          {task.recurrence && (
-            <DRow label="Treat as" className={recurEmphasized ? 'dr-row-recur-emphasis' : ''}>
-              {/* Segmented control — both states always visible so it's obvious
-                  what's currently on. Replaces an earlier toggle pill that was
-                  ambiguous about ON / OFF. */}
-              <div className="dr-recur-mode-seg" role="group" aria-label="Routine or recurring task">
-                <button
-                  className={task.recurrence.isRoutine ? 'act' : ''}
-                  onClick={() => upd({ recurrence: { ...task.recurrence, isRoutine: true } })}>
-                  <I.Flame/><span>Routine</span>
-                </button>
-                <button
-                  className={!task.recurrence.isRoutine ? 'act' : ''}
-                  onClick={() => upd({ recurrence: { ...task.recurrence, isRoutine: false } })}>
-                  <I.Recur/><span>Recurring</span>
-                </button>
+          {/* Treat-as toggle always renders so users know the option exists.
+              When recurrence is null, the buttons are visually disabled and a
+              hint nudges them to pick a cadence above. Once recurrence is set
+              (including the "pending routine" state from strip-drop), the
+              buttons become live and reflect task.recurrence.isRoutine. */}
+          <DRow label="Treat as" className={recurEmphasized ? 'dr-row-recur-emphasis' : ''}>
+            <div className={`dr-recur-mode-seg${!task.recurrence ? ' is-disabled' : ''}`} role="group" aria-label="Routine or recurring task">
+              <button
+                disabled={!task.recurrence}
+                className={task.recurrence?.isRoutine ? 'act' : ''}
+                onClick={() => task.recurrence && upd({ recurrence: { ...task.recurrence, isRoutine: true } })}>
+                <I.Flame/><span>Routine</span>
+              </button>
+              <button
+                disabled={!task.recurrence}
+                className={task.recurrence && !task.recurrence.isRoutine ? 'act' : ''}
+                onClick={() => task.recurrence && upd({ recurrence: { ...task.recurrence, isRoutine: false } })}>
+                <I.Recur/><span>Recurring</span>
+              </button>
+            </div>
+            {!task.recurrence ? (
+              <div className="dr-recur-mode-desc dr-recur-mode-desc-muted">
+                Pick a cadence above to choose how missed instances behave.
               </div>
+            ) : (
               <div className="dr-recur-mode-desc">
                 {task.recurrence.isRoutine
                   ? <><strong>Rolls forward silently if missed.</strong> Streak tracks consecutive days; missed days break the streak but don't pile up as overdue.</>
                   : <><strong>Missed instances stay as overdue cards.</strong> Use this for real obligations (rent, taxes) that don't go away when you miss them.</>}
               </div>
-              {task.recurrence.freq && deriveIsRoutine(task.recurrence) !== !!task.recurrence.isRoutine && (
-                <div className="dr-routine-hint">
-                  Suggested for <em>{recurrenceLabel(task.recurrence)}</em>: <strong>{deriveIsRoutine(task.recurrence) ? 'Routine' : 'Recurring task'}</strong>.
-                </div>
-              )}
-              {(() => {
-                // "Go to first instance" — jump to the earliest sibling of the
-                // series. Useful when the user is editing a future or past
-                // instance and wants the head of the series. Hidden when
-                // there's only one instance or the current task is the first.
-                const rid = task.recurrence.recurrenceId;
-                if (!rid) return null;
-                const dated = (tasks || []).filter(t => t.recurrence?.recurrenceId === rid && t.date);
-                if (dated.length < 2) return null;
-                const first = dated.reduce((a, b) => (a.date < b.date ? a : b));
-                if (first.id === task.id) return null;
-                return (
-                  <button className="dr-jump-first" onClick={() => onJumpTo?.(first.id)}
-                          title={`Jump to ${first.date}`}>
-                    ↶ Go to first instance · <span className="dr-jump-first-date">{first.date}</span>
-                  </button>
-                );
-              })()}
-            </DRow>
-          )}
+            )}
+            {task.recurrence?.freq && deriveIsRoutine(task.recurrence) !== !!task.recurrence.isRoutine && (
+              <div className="dr-routine-hint">
+                Suggested for <em>{recurrenceLabel(task.recurrence)}</em>: <strong>{deriveIsRoutine(task.recurrence) ? 'Routine' : 'Recurring task'}</strong>.
+              </div>
+            )}
+            {(() => {
+              // "Go to first instance" — jump to the earliest sibling of the
+              // series. Useful when the user is editing a future or past
+              // instance and wants the head of the series. Hidden when
+              // there's only one instance or the current task is the first.
+              const rid = task.recurrence?.recurrenceId;
+              if (!rid) return null;
+              const dated = (tasks || []).filter(t => t.recurrence?.recurrenceId === rid && t.date);
+              if (dated.length < 2) return null;
+              const first = dated.reduce((a, b) => (a.date < b.date ? a : b));
+              if (first.id === task.id) return null;
+              return (
+                <button className="dr-jump-first" onClick={() => onJumpTo?.(first.id)}
+                        title={`Jump to ${first.date}`}>
+                  ↶ Go to first instance · <span className="dr-jump-first-date">{first.date}</span>
+                </button>
+              );
+            })()}
+          </DRow>
           <DRow label="Someday">
             <button className={`dr-pick${task.someday?' act':''}`}
               style={task.someday?{background:'rgba(139,92,246,.12)',color:'#8b5cf6',borderColor:'rgba(139,92,246,.45)'}:{}}

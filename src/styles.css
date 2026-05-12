@@ -944,6 +944,10 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 .dr-recur-mode-seg button:hover{background:var(--surface-3);color:var(--t1)}
 .dr-recur-mode-seg button.act{background:var(--routine-bg);color:var(--routine);font-weight:600}
 .dr-recur-mode-seg button:nth-child(2).act{background:var(--recurring-bg);color:var(--recurring-fg)}
+.dr-recur-mode-seg.is-disabled{opacity:.5}
+.dr-recur-mode-seg button:disabled{cursor:not-allowed; color:var(--t4)}
+.dr-recur-mode-seg button:disabled:hover{background:transparent; color:var(--t4)}
+.dr-recur-mode-desc-muted{color:var(--t4); font-style:italic}
 .dr-recur-mode-desc{font-size:11.5px;color:var(--t3);margin-top:6px;line-height:1.45;max-width:380px}
 .dr-recur-mode-desc strong{color:var(--t2);font-weight:600}
 
@@ -1216,6 +1220,31 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 }
 .dr-jump-first:hover{text-decoration:underline}
 .dr-jump-first-date{color:var(--t3); font-family:var(--font-mono,var(--font))}
+/* Highlight applied to a card or list-item when the user clicks "Go to first
+   instance" in the drawer. Glowing indigo outline + persistent ring until the
+   user clicks elsewhere (or a 12s timeout). Survives re-renders because the
+   class is re-applied by the helper's effect chain. */
+.routine-jump-highlight{
+  animation:routine-jump-pulse 1s ease-out 2;
+  position:relative;
+  z-index:2;
+}
+.routine-jump-highlight::after{
+  content:''; position:absolute; inset:-4px;
+  border:2px solid var(--routine,#6366f1);
+  border-radius:inherit;
+  box-shadow:0 0 0 4px rgba(99,102,241,.18), 0 8px 24px rgba(99,102,241,.20);
+  pointer-events:none;
+  border-radius:10px;
+}
+@keyframes routine-jump-pulse{
+  0%   {transform:scale(.98); filter:brightness(1)}
+  40%  {transform:scale(1.02); filter:brightness(1.08)}
+  100% {transform:scale(1); filter:brightness(1)}
+}
+@media (prefers-reduced-motion: reduce){
+  .routine-jump-highlight{animation:none}
+}
 
 /* Routines dashboard view */
 .rt-view{flex:1;padding:24px 32px;overflow-y:auto;background:var(--bg)}

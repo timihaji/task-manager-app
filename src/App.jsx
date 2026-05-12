@@ -1895,6 +1895,63 @@ function App() {
       }));
       return;
     }
+    // First-add path: recurrence is going from null (or no recurrenceId) to
+    // a full recurrence shape (freq + recurrenceId). When the source task is
+    // already DONE and dated in the PAST, back-fill the gap from its date to
+    // yesterday with done siblings — per user request, "if a user has a card
+    // that has been complete in the past and makes it a routine, it should
+    // make completed instances in the past, and uncompleted instances in
+    // the present and future." extendRoutineHorizon handles today+future
+    // (undone) on the next render; archiveStaleRoutines skips done siblings,
+    // so the back-filled history sticks.
+    const todayStr = D.str(D.today());
+    if (
+      Object.prototype.hasOwnProperty.call(changes, 'recurrence') &&
+      changes.recurrence?.freq &&
+      changes.recurrence?.recurrenceId &&
+      !beforeRec?.freq &&
+      before.done &&
+      before.date &&
+      before.date < todayStr
+    ) {
+      const newRec = changes.recurrence;
+      const backfill = [];
+      let cur = before.date;
+      let pastDoneCount = 0;
+      let presentCount = 0;
+      for (let i = 0; i < 400; i++) {
+        const nextDate = nextOccurrence({ recurrence: newRec }, cur);
+        if (!nextDate || nextDate > todayStr) break;
+        const isPast = nextDate < todayStr;
+        const now = new Date().toISOString();
+        backfill.push(syncTaskSnooze({
+          ...before,
+          id: mkid(),
+          date: nextDate,
+          done: isPast,
+          completedAt: isPast ? (before.completedAt || now) : null,
+          archived: false,
+          subtasks: (before.subtasks || []).map(s => ({ ...s, done: isPast })),
+          activity: [{ type: 'created', at: now, reason: 'back-fill' }],
+          createdAt: now,
+          recurrence: newRec,
+        }));
+        if (isPast) pastDoneCount++; else presentCount++;
+        cur = nextDate;
+      }
+      if (backfill.length) {
+        pushSnapshotUndo();
+        setTasks(prev => [
+          ...prev.map(t => t.id === id ? applyTaskPatch(t, changes) : t),
+          ...backfill,
+        ]);
+        const parts = [];
+        if (pastDoneCount) parts.push(`${pastDoneCount} past as done`);
+        if (presentCount) parts.push(`today undone`);
+        showToast(`Back-filled ${parts.join(' + ')}`, { undoable: true });
+        return;
+      }
+    }
     setUndoStack(s=>[...s.slice(-9),{id,before}]);
     setTasks(prev=>prev.map(t=>t.id===id ? applyTaskPatch(t, changes) : t));
   };
@@ -3694,6 +3751,40 @@ function App() {
   };
 
   const openTask = (id) => { setSettingsOpen(false); setRenamingId(null); setDrawerFromLeft(false); setDrawerId(id); setFocusedId(id); };
+
+  // Jump to a task by id, switch to a view that should make it visible,
+  // animate-scroll it to center, and highlight it until the user clicks
+  // elsewhere. Used by "Go to first instance" in the drawer's recurrence
+  // section. View choice:
+  //   • done task → 'completed' view (shows past completed instances)
+  //   • else → 'week' (Timeline)
+  const jumpToTaskHighlighted = (id) => {
+    const t = taskById(id);
+    if (!t) return;
+    setDrawerId(id);
+    setFocusedId(id);
+    if (t.archived) setView('archived');
+    else if (t.done) setView('completed');
+    else setView('week');
+    // Let the new view render before trying to find + highlight the element.
+    setTimeout(() => {
+      const sel = `[data-card-id="${CSS.escape(id)}"], .list-item[data-list-id="${CSS.escape(id)}"]`;
+      const el = document.querySelector(sel);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('routine-jump-highlight');
+      const clear = (e) => {
+        if (e && el.contains(e.target)) return;
+        el.classList.remove('routine-jump-highlight');
+        document.removeEventListener('click', clear, true);
+      };
+      // Delay click listener so the originating click on the drawer button
+      // doesn't immediately clear the highlight.
+      setTimeout(() => document.addEventListener('click', clear, true), 300);
+      // Hard timeout fallback — clears even if user never clicks.
+      setTimeout(() => clear(null), 12000);
+    }, 200);
+  };
   const openSettings = () => { setDrawerId(null); setRenamingId(null); setSettingsOpen(s=>!s); };
   const drawerTask = drawerId ? taskById(drawerId) : null;
 
@@ -3738,7 +3829,7 @@ function App() {
   // board pan-to-scroll — attach move/up to document so fast drags don't lose events
   const onBoardMouseDown = e => {
     if (e.button !== 0) return;
-    if (e.target.closest('.card,.col-add,.col-groupby,.col-groupby-wrap,.card-add-zone,.side-panel,.col-hdr,.grp-hdr,.done-grp-hdr,.tb-btn,.lnav-item,.drawer')) return;
+    if (e.target.closest('.card,.col-add,.col-groupby,.col-groupby-wrap,.card-add-zone,.side-panel,.col-hdr,.grp-hdr,.done-grp-hdr,.tb-btn,.lnav-item,.drawer,.col-routines-strip,.crs-item')) return;
     const el = boardRef.current; if (!el) return;
     if (e.shiftKey) { startMarquee(e, el); return; }
     userScrolledRef.current = true;
@@ -4370,7 +4461,7 @@ function App() {
       onClearBlocked={clearBlocked}
       recentBlockReasons={recentBlockReasons}
       blockingCountFor={blockingCountFor}
-      onJumpTo={(id)=>{ setDrawerId(id); setFocusedId(id); }}
+      onJumpTo={jumpToTaskHighlighted}
       onCheckIn={(id, mode)=>{ const t=taskById(id); if(t && !t.done) completeTask(id, t.date||'inbox', mode); }}
       onGoToCard={(id)=>{
         const t = taskById(id);
