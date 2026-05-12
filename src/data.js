@@ -561,6 +561,29 @@ const extendRoutineHorizon = (tasks = [], daysAhead = 14, todayStr = D.str(D.tod
   return additions.length ? [...tasks, ...additions] : tasks;
 };
 
+// Strip dangling IDs out of delegation parents' checkInTaskIds / expiryTaskId.
+// Heals tasks loaded from a store that lost the child rows but kept the
+// references on the parent (e.g. the parent was completed → sync deleted the
+// pending children, but the parent's array was never rewritten). Without this,
+// every check-in lookup misses and reminders go silent. Idempotent.
+const pruneOrphanCheckIns = (tasks = []) => {
+  const validIds = new Set(tasks.map(t => t && t.id).filter(Boolean));
+  let changed = false;
+  const next = tasks.map(t => {
+    if (!t) return t;
+    const ids = Array.isArray(t.checkInTaskIds) ? t.checkInTaskIds : null;
+    const hasStaleChild = ids ? ids.some(cid => !validIds.has(cid)) : false;
+    const hasStaleExpiry = !!(t.expiryTaskId && !validIds.has(t.expiryTaskId));
+    if (!hasStaleChild && !hasStaleExpiry) return t;
+    changed = true;
+    const patch = {};
+    if (hasStaleChild) patch.checkInTaskIds = ids.filter(cid => validIds.has(cid));
+    if (hasStaleExpiry) patch.expiryTaskId = null;
+    return { ...t, ...patch };
+  });
+  return changed ? next : tasks;
+};
+
 // === Delegation: presets, spawn helpers, staleness, people store ===
 
 const CHECKIN_PRESETS = {
@@ -1277,6 +1300,7 @@ export {
   rollIncompleteTasksToToday,
   archiveStaleRoutines,
   extendRoutineHorizon,
+  pruneOrphanCheckIns,
   makeTask,
   migrateTasks,
   syncTaskSnooze,

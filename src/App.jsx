@@ -29,6 +29,7 @@ import {
   rollIncompleteTasksToToday,
   archiveStaleRoutines,
   extendRoutineHorizon,
+  pruneOrphanCheckIns,
   makeTask,
   migrateTasks,
   parseTimeEst,
@@ -704,7 +705,7 @@ function App() {
         if (raw) saved = JSON.parse(raw);
       } catch {}
       const seed = Array.isArray(saved) && saved.length ? saved : INIT_TASKS;
-      const merged = extendRoutineHorizon(archiveStaleRoutines(rollIncompleteTasksToToday(migrateRecurrence(migrateTasks(seed)))));
+      const merged = pruneOrphanCheckIns(extendRoutineHorizon(archiveStaleRoutines(rollIncompleteTasksToToday(migrateRecurrence(migrateTasks(seed))))));
       syncUidFromTasks(merged);
       lastSyncedTasksRef.current = merged;
       setTasks(merged);
@@ -721,7 +722,7 @@ function App() {
       try {
         const fetched = await fetchTasks(workspaceId);
         if (cancelled) return;
-        const merged = extendRoutineHorizon(archiveStaleRoutines(rollIncompleteTasksToToday(migrateRecurrence(migrateTasks(fetched)))));
+        const merged = pruneOrphanCheckIns(extendRoutineHorizon(archiveStaleRoutines(rollIncompleteTasksToToday(migrateRecurrence(migrateTasks(fetched))))));
         syncUidFromTasks(merged);
         lastSyncedTasksRef.current = merged;
         setTasks(merged);
@@ -2191,13 +2192,25 @@ function App() {
         const ct = prev.find(x => x.id === cid);
         if (ct && !ct.done) pendingIds.add(cid);
       });
+      let clearExpiry = false;
       if (completedTask.expiryTaskId) {
         const exp = prev.find(x => x.id === completedTask.expiryTaskId);
-        if (exp && !exp.done) pendingIds.add(completedTask.expiryTaskId);
+        if (exp && !exp.done) { pendingIds.add(completedTask.expiryTaskId); clearExpiry = true; }
       }
       if (pendingIds.size) {
+        // Strip the soon-to-be-deleted IDs from the parent so syncTaskDiff doesn't
+        // upsert a parent row that points at children we're about to delete in the
+        // same batch (which is what stranded Tax return's check-ins in Supabase).
         return {
-          tasks: prev.filter(t => !pendingIds.has(t.id)),
+          tasks: prev
+            .filter(t => !pendingIds.has(t.id))
+            .map(t => {
+              if (t.id !== completedTask.id) return t;
+              const remainingIds = (t.checkInTaskIds || []).filter(cid => !pendingIds.has(cid));
+              const patch = { checkInTaskIds: remainingIds };
+              if (clearExpiry) patch.expiryTaskId = null;
+              return { ...t, ...patch };
+            }),
           openCountChange: -1,
           openCountName: completedTask.delegatedTo,
         };
