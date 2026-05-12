@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_NAMES, fmtTimeEst, daysSince, isStale, D } from '../data.js';
+import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_NAMES, fmtTimeEst, daysSince, isStale, D, recurrenceLabel } from '../data.js';
 import { I } from '../utils/icons.jsx';
 import { PRI_INFO } from '../utils/constants.js';
 import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from '../utils/colors.js';
@@ -276,6 +276,15 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
             </span>
           );
         })()}
+        {/* Recurrence pill — blue for routines, purple for tasks-with-cadence.
+            Visible on every card in Timeline (and via TaskCard reuse, anywhere
+            this component renders) per the visual-consistency rule. */}
+        {task.recurrence && (
+          <span className={`schip ${task.recurrence.isRoutine ? 'schip-routine' : 'schip-recurring'}`}
+                title={`Repeats: ${recurrenceLabel(task.recurrence)}${task.recurrence.isRoutine ? ' (routine)' : ''}`}>
+            ↻ {recurrenceLabel(task.recurrence)}
+          </span>
+        )}
         {/* Snooze (visible only when set; reachable via right-click / shortcut otherwise) */}
         {task.snoozedUntil && (
           <span ref={snoozeRef} className={`card-meta-btn${openPop==='snooze'?' act':''}`}

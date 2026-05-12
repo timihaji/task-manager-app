@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { I } from '../utils/icons.jsx';
-import { D, parseTimeEst, fmtTimeEst, PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREA_NAMES } from '../data.js';
+import { D, parseTimeEst, fmtTimeEst, PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREA_NAMES, recurrenceLabel } from '../data.js';
 import { lifeAreaPalette } from '../utils/colors.js';
 import { cardColorVars } from '../utils/cardColor.js';
 import { PriBars } from './PriBars.jsx';
@@ -185,7 +185,11 @@ function ChipRow({ task, isProject, allTasks, theme }) {
 
       {task.checkInOf && <span className="schip schip-delegated">→ Check-in</span>}
       {task.blocked && <span className="schip schip-blocked" title={task.blockedReason}>⏸ Blocked</span>}
-      {task.recurrence && <span className="schip schip-recurring">↻ {task.recurrence.freq}</span>}
+      {task.recurrence && (
+        <span className={`schip ${task.recurrence.isRoutine ? 'schip-routine' : 'schip-recurring'}`}>
+          ↻ {recurrenceLabel(task.recurrence)}
+        </span>
+      )}
 
       {totalTime && <span className="schip-time">⏱ {totalTime}</span>}
       <PriBars pri={task.priority || task.pri}/>
@@ -618,6 +622,16 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
   );
   const doneToday = doneTodayList.length;
 
+  // Today's routines: pinned strip above the priority stack, outside the
+  // SortableContext so it never participates in drag/FLIP. Routines aren't
+  // priority-ranked — they're background practice; they live in chrome.
+  const todayRoutines = useMemo(() => {
+    const today = D.str(D.today());
+    return (allTasks || [])
+      .filter(t => t.recurrence?.isRoutine && t.date === today && !t.archived && !t.parentId)
+      .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  }, [allTasks]);
+
   return (
     <div className="stack-shell">
       <div className="stack-toolbar">
@@ -652,6 +666,32 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
           </div>
         </div>
       </div>
+
+      {todayRoutines.length > 0 && (
+        <>
+          <div className="stack-routines-strip" role="group" aria-label="Today's routines">
+            <span className="srs-label">TODAY'S ROUTINES</span>
+            {todayRoutines.map(t => (
+              <button key={t.id}
+                className={`srs-item${t.done ? ' done' : ''}`}
+                onClick={(e) => { e.stopPropagation(); onComplete?.(t.id); }}
+                title={t.done ? `${t.title} — done, tap to undo` : `${t.title} — tap to complete`}>
+                <span className="srs-dot" aria-hidden="true"/>
+                <span className="srs-name">{t.title}</span>
+              </button>
+            ))}
+            <span className="srs-count">{todayRoutines.filter(t => t.done).length}/{todayRoutines.length}</span>
+          </div>
+          {/* Divider so the routines strip reads as chrome, not as item #1 of
+              the priority list. Mirrors the synthesis brief's "PRIORITY STACK"
+              section separator. */}
+          <div className="stack-routines-divider" aria-hidden="true">
+            <span className="line"/>
+            <span className="lbl">PRIORITY STACK</span>
+            <span className="line"/>
+          </div>
+        </>
+      )}
 
       <div className="stack-body" ref={stackBodyRef}
            onMouseDown={(e)=>{
