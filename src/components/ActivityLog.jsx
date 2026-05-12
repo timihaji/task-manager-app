@@ -29,30 +29,34 @@ export function lastNoteFor(task) {
 }
 
 // Map an activity event → display label + dot kind + day-offset.
+// `editField` indicates which field of the underlying event can be edited
+// inline (when present). All entries are deletable.
 export function describeActivity(ev, parent) {
   if (!ev) return null;
   const day = ev.day ?? null;
   switch (ev.type) {
     case 'delegated':
-      return { kind: 'delegated', day: 0, label: <><b>Delegated to {ev.to || parent?.delegatedTo}</b> — the original handoff</> };
+      return { kind: 'delegated', day: 0, editField: 'to',
+        label: <><b>Delegated to {ev.to || parent?.delegatedTo}</b> — the original handoff</> };
     case 're-delegated':
-      return { kind: 'delegated', day: 0, label: <><b>Re-delegated</b> from {ev.from} to {ev.to}</> };
+      return { kind: 'delegated', day: 0, editField: 'to',
+        label: <><b>Re-delegated</b> from {ev.from} to {ev.to}</> };
     case 'nudge-sent':
-      return { kind: 'chased', day, label: <>Chased <small style={{opacity:0.7}}>(day {day})</small></> };
+      return { kind: 'chased', day, label: <>Nudged</> };
     case 'chased':
       return {
-        kind: 'chased', day,
-        editable: !!ev.text,
-        label: ev.text ? <><b>Chased</b> — "{ev.text}"</> : <>Chased outside the app</>,
+        kind: 'chased', day, editField: 'text',
+        label: ev.text ? <><b>Nudged</b> — "{ev.text}"</> : <>Nudged outside the app</>,
       };
     case 'heard-back':
-      return { kind: 'heard', day, label: <><b>Heard back</b> <small style={{opacity:0.7}}>(day {day})</small></> };
+      return { kind: 'heard', day, label: <><b>Heard back</b></> };
     case 'note':
-      return { kind: 'note', day, editable: true, label: <>{ev.text || <em>note</em>}</> };
+      return { kind: 'note', day, editField: 'text', label: <>{ev.text || <em>note</em>}</> };
     case 'cadence-changed':
-      return { kind: 'meta', day: null, label: <>Cadence updated to <code>{Array.isArray(ev.schedule) ? ev.schedule.join('/') : '?'}</code></> };
     case 'cadence-stretched':
-      return { kind: 'meta', day: null, label: <>Cadence stretched ×{ev.factor || '1.5'}</> };
+      // Cadence changes are mechanic, not conversation — surfaced inline in
+      // the cadence strip, not in the activity log.
+      return null;
     case 'reclaimed':
       return { kind: 'meta', day: null, label: <>Taken back to your list</> };
     case 'created':
@@ -71,7 +75,13 @@ export function ActivityLog({
   onChase,
   onAddNote,
   onCheckIn,
+  onTakeBack,
   showToast,
+  // App-level confirm dialog. Same shape as App.jsx's confirmDialog state:
+  // { message, onConfirm, onCancel, destructive?, confirmLabel? }. Falls
+  // back to window.confirm if absent so the component still works in tests
+  // and stories without the App context.
+  showConfirm,
   // Optional hover-link integration (cadence ↔ log). When provided, log rows
   // toggle the linked state on the matching cadence dot via these callbacks.
   hoverStep,
@@ -108,15 +118,29 @@ export function ActivityLog({
     return out;
   }, [task]);
 
-  // Cool-down: any contact in the last 24h disables the Chased button.
+  // Cool-down: a nudge (manual or system) or any logged contact in the last
+  // 24h disables the manual nudge button. Returning the reason makes it easy
+  // for the UI to explain *why* the button is greyed out — Tim found the
+  // previous opaque "Chased recently" label confusing.
   const cooldown = useMemo(() => {
-    if (!task) return false;
+    if (!task) return null;
     const lc = task.lastContactAt ? new Date(task.lastContactAt).getTime() : 0;
-    const lastAction = (task.activity || [])
+    const lastNudge = (task.activity || [])
       .filter(a => a.type === 'chased' || a.type === 'nudge-sent')
       .reduce((m, a) => Math.max(m, new Date(a.at || 0).getTime()), 0);
-    const recent = Math.max(lc, lastAction);
-    return recent && (Date.now() - recent) < 86400000;
+    const lastHeard = (task.activity || [])
+      .filter(a => a.type === 'heard-back')
+      .reduce((m, a) => Math.max(m, new Date(a.at || 0).getTime()), 0);
+    const recent = Math.max(lc, lastNudge, lastHeard);
+    if (!recent || (Date.now() - recent) >= 86400000) return null;
+    const hours = Math.floor((Date.now() - recent) / 3600000);
+    const ago = hours < 1 ? 'less than an hour ago'
+              : hours === 1 ? '1h ago'
+              : `${hours}h ago`;
+    // Decide which event triggered the cooldown (prefer the most recent).
+    let kind = 'nudge';
+    if (lastHeard >= lastNudge && lastHeard >= lc) kind = 'heard';
+    return { ago, kind };
   }, [task]);
 
   // Default action handlers (composed from onUpdate when caller didn't pass dedicated ones).
@@ -133,16 +157,21 @@ export function ActivityLog({
   const addNote = onAddNote || defaultAddNote;
   const chase = onChase || defaultChase;
 
-  // Edit/delete entry handlers.
+  // Edit/delete entry handlers. `editField` on each entry tells us which
+  // field of the underlying event to edit (text for notes/chases, `to` for
+  // delegated/re-delegated). Entries without an editField can still be deleted.
   const beginEdit = (entry) => {
     const original = task?.activity?.[entry.idx];
+    const field = entry.editField;
+    if (!field) return;
     setEditingIdx(entry.idx);
-    setEditingText(original?.text || '');
+    setEditingText(original?.[field] || '');
   };
-  const saveEdit = () => {
+  const saveEdit = (entry) => {
     if (editingIdx == null) return;
+    const field = entry?.editField || 'text';
     const next = (task.activity || []).map((ev, i) =>
-      i === editingIdx ? { ...ev, text: editingText.trim() || ev.text } : ev
+      i === editingIdx ? { ...ev, [field]: editingText.trim() || ev[field] } : ev
     );
     onUpdate?.(task.id, { activity: next });
     setEditingIdx(null);
@@ -150,9 +179,40 @@ export function ActivityLog({
   };
   const cancelEdit = () => { setEditingIdx(null); setEditingText(''); };
   const deleteEntry = (entry) => {
+    const doDelete = () => {
+      const removed = task.activity?.[entry.idx];
+      const next = (task.activity || []).filter((_, i) => i !== entry.idx);
+      const patch = { activity: next };
+      // If we removed a contact-bearing event (chase, nudge-sent, heard-back),
+      // recompute `lastContactAt` so the manual-nudge cooldown lifts.
+      // Otherwise deleting the entry would clear it from the log while still
+      // gating the button — confusing and what Tim hit when retrying a nudge.
+      if (removed && ['chased', 'nudge-sent', 'heard-back'].includes(removed.type)) {
+        const remaining = next.filter(a => ['chased', 'nudge-sent', 'heard-back'].includes(a.type));
+        if (remaining.length === 0) {
+          patch.lastContactAt = null;
+        } else {
+          const latestMs = remaining.reduce((m, a) => {
+            const t = new Date(a.at || 0).getTime();
+            return t > m ? t : m;
+          }, 0);
+          patch.lastContactAt = latestMs ? new Date(latestMs).toISOString() : null;
+        }
+      }
+      onUpdate?.(task.id, patch);
+    };
+    if (showConfirm) {
+      showConfirm({
+        message: 'Delete this activity entry? This can’t be undone.',
+        destructive: true,
+        confirmLabel: 'Delete entry',
+        onConfirm: () => { doDelete(); showConfirm(null); },
+        onCancel: () => showConfirm(null),
+      });
+      return;
+    }
     if (!window.confirm('Delete this activity entry? This can’t be undone.')) return;
-    const next = (task.activity || []).filter((_, i) => i !== entry.idx);
-    onUpdate?.(task.id, { activity: next });
+    doDelete();
   };
 
   if (!task) return null;
@@ -169,6 +229,7 @@ export function ActivityLog({
         )}
         {logEntries.map(entry => {
           if (editingIdx === entry.idx) {
+            const placeholder = entry.editField === 'to' ? 'Recipient name' : 'Entry text';
             return (
               <div key={entry.idx} className="dvv-log-row editing">
                 <span className={`dvv-log-dot ${entry.kind}`}/>
@@ -176,17 +237,18 @@ export function ActivityLog({
                   className="dvv-log-edit-input"
                   autoFocus
                   value={editingText}
+                  placeholder={placeholder}
                   onChange={e => setEditingText(e.target.value)}
                   onKeyDown={e => {
-                    if (e.key === 'Enter') { e.preventDefault(); saveEdit(); }
+                    if (e.key === 'Enter') { e.preventDefault(); saveEdit(entry); }
                     if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
                   }}
-                  onBlur={saveEdit}
-                  aria-label="Edit entry text"
+                  onBlur={() => saveEdit(entry)}
+                  aria-label={`Edit entry ${entry.editField === 'to' ? 'recipient' : 'text'}`}
                 />
                 <button className="dvv-log-acn-btn" data-tooltip="Save (↵)"
                   aria-label="Save edit"
-                  onMouseDown={e => { e.preventDefault(); saveEdit(); }}><I.Check/></button>
+                  onMouseDown={e => { e.preventDefault(); saveEdit(entry); }}><I.Check/></button>
                 <button className="dvv-log-acn-btn" data-tooltip="Cancel (Esc)"
                   aria-label="Cancel edit"
                   onMouseDown={e => { e.preventDefault(); cancelEdit(); }}><I.X/></button>
@@ -201,27 +263,47 @@ export function ActivityLog({
               onMouseLeave={linkable ? () => setHoverStep(null) : undefined}>
               <span className={`dvv-log-dot ${entry.kind}`}/>
               <div className="dvv-log-body">
-                {entry.day != null && <span className="dvv-log-badge">d{entry.day}</span>}
+                {entry.day != null && <span className="dvv-log-badge">Day {entry.day}</span>}
                 {entry.label}
               </div>
               <span className="dvv-log-time">{fmtAgo(entry.at)}</span>
-              {entry.editable && (
-                <span className="dvv-log-actions">
+              <span className="dvv-log-actions">
+                {entry.editField && (
                   <button className="dvv-log-acn-btn" data-tooltip="Edit this entry"
                     aria-label="Edit entry"
                     onClick={(e) => { e.stopPropagation(); beginEdit(entry); }}>
                     <I.Pencil/>
                   </button>
-                  <button className="dvv-log-acn-btn danger" data-tooltip="Delete this entry"
-                    aria-label="Delete entry"
-                    onClick={(e) => { e.stopPropagation(); deleteEntry(entry); }}>
-                    <I.Trash/>
-                  </button>
-                </span>
-              )}
+                )}
+                <button className="dvv-log-acn-btn danger" data-tooltip="Delete this entry"
+                  aria-label="Delete entry"
+                  onClick={(e) => { e.stopPropagation(); deleteEntry(entry); }}>
+                  <I.Trash/>
+                </button>
+              </span>
             </div>
           );
         })}
+        {logEntries.length > 0 && (() => {
+          const daysIn = task.delegatedAt
+            ? Math.max(0, Math.floor((Date.now() - new Date(task.delegatedAt).getTime()) / 86400000))
+            : 0;
+          const linkable = !!setHoverStep;
+          return (
+            <div className={`dvv-log-row dvv-log-now-row${hoverStep === 'now' ? ' is-linked' : ''}`}
+              aria-hidden="false"
+              onMouseEnter={linkable ? () => setHoverStep('now') : undefined}
+              onMouseLeave={linkable ? () => setHoverStep(null) : undefined}>
+              <span className="dvv-log-dot now"/>
+              <div className="dvv-log-body">
+                <span className="dvv-log-badge">Day {daysIn}</span>
+                <b>Now</b>
+              </div>
+              <span className="dvv-log-time">today</span>
+              <span className="dvv-log-actions" aria-hidden="true"/>
+            </div>
+          );
+        })()}
       </div>
 
       {variant === 'full' && (
@@ -231,7 +313,7 @@ export function ActivityLog({
             <span className="dvv-cmp-help" data-tooltip="Notes capture what happened — what they said, when you chased, anything contextual. The latest note becomes the card's subtitle."
               data-tt-pos="below"><I.Info/></span>
           </div>
-          <div className="dvv-cmp-instr">Log what they said, when you nudged, or anything that should be remembered.</div>
+          <div className="dvv-cmp-instr">Log what they said, when you nudged, or anything worth remembering. <kbd>⌘</kbd><kbd>↵</kbd> to save fast.</div>
           <textarea
             ref={composerRef}
             className="dvv-cmp-input"
@@ -268,21 +350,35 @@ export function ActivityLog({
               <I.Check/> Heard back
             </button>
             {cooldown ? (
-              <span className="dvv-cmp-cooldown" data-tooltip="You chased them in the last 24h — give it a beat"
+              <span className="dvv-cmp-cooldown"
+                data-tooltip={cooldown.kind === 'heard'
+                  ? `You heard back ${cooldown.ago} — no need to nudge yet`
+                  : `Nudged ${cooldown.ago} — give it a beat`}
                 data-tt-pos="below">
-                <I.Clock/> Chased recently
+                <I.Clock/> {cooldown.kind === 'heard' ? `Heard back ${cooldown.ago}` : `Nudged ${cooldown.ago}`}
               </span>
             ) : (
-              <button className="dvv-cmp-btn warning"
-                data-tooltip="Log a chase (Slack/email/in person). Updates last-contact without spawning a new check-in."
-                aria-label="Log a chase"
+              <button className="dvv-cmp-btn nudge"
+                data-tooltip="Log a nudge (Slack/email/in person). Updates last-contact without spawning a new check-in."
+                aria-label="Log a nudge"
                 onClick={() => {
                   const text = composerText.trim();
                   chase(task.id, text);
                   setComposerText('');
-                  showToast?.(`Logged chase${task.delegatedTo ? ' to ' + task.delegatedTo : ''}`, { undoable: true, timeout: 3500 });
+                  showToast?.(`Logged nudge${task.delegatedTo ? ' to ' + task.delegatedTo : ''}`, { undoable: true, timeout: 3500 });
                 }}>
-                <I.Flag/> Chased
+                <I.Flag/> Nudge
+              </button>
+            )}
+            {onTakeBack && task.delegatedTo && (
+              <button className="dvv-cmp-btn takeback"
+                data-tooltip="Reclaim this task and put it on today's column"
+                aria-label="Take back"
+                onClick={() => {
+                  onTakeBack?.(task.id);
+                  showToast?.('Took back to today', { undoable: true });
+                }}>
+                <I.Undo/> Take back
               </button>
             )}
             <span className="dvv-cmp-spacer"/>
