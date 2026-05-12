@@ -3614,7 +3614,16 @@ function App() {
       <button className="app-burger" onClick={()=>setNavCollapsed(c=>!c)} aria-label={navCollapsed?'Open menu':'Close menu'} title="Menu">
         <span/><span/><span/>
       </button>
-      <div className="tb-logo"><div className="tb-icon">K</div>kanban</div>
+      <div className="tb-logo">
+        <div className="tb-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="14" height="14">
+            <circle cx="12" cy="12" r="2" fill="currentColor"/>
+            <circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" strokeWidth="1.4" opacity=".75"/>
+            <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.3" opacity=".4"/>
+          </svg>
+        </div>
+        Echo
+      </div>
       <div className="tb-sep tb-hide-mobile"/>
       <div className="tb-crumb tb-hide-mobile">
         <span>Workspace</span><span>›</span>

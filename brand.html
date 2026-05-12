@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Echo · Brand</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Source+Serif+4:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d9488'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='white'/%3E%3Ccircle cx='16' cy='16' r='6.5' fill='none' stroke='white' stroke-width='1.5' opacity='.75'/%3E%3Ccircle cx='16' cy='16' r='10.5' fill='none' stroke='white' stroke-width='1.4' opacity='.4'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#071512;--bg-soft:#0a1816;
+  --surface:#10201d;--surface-2:#1d342f;--surface-3:#243d37;
+  --border:#1d342f;--border-s:#243d37;
+  --t1:#e6fffb;--t2:#c3ddd7;--t3:#8eada6;--t4:#66837c;
+  --accent:#14b8a6;--accent-soft:#2dd4bf;--accent-deep:#0d9488;
+  --accent-dim:rgba(20,184,166,.14);
+  --accent-border:rgba(20,184,166,.3);
+  --cream:#f5efe0;
+  --warning:#f59e0b;
+  --danger:#ef4444;
+  --shadow:0 1px 2px rgba(0,0,0,.25),0 8px 24px rgba(0,0,0,.18);
+  --radius:10px;--radius-sm:6px;
+  --ease-out:cubic-bezier(.2,0,0,1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--t1);font-family:'Geist',system-ui,sans-serif;font-size:15.5px;line-height:1.65;-webkit-font-smoothing:antialiased}
+body{background:radial-gradient(ellipse at top,var(--bg-soft) 0%,var(--bg) 60%);min-height:100vh}
+code,pre,.mono{font-family:'Geist Mono',monospace;font-size:.9em}
+.serif{font-family:'Source Serif 4',Georgia,serif;font-weight:400}
+::selection{background:var(--accent-dim);color:var(--t1)}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
+::-webkit-scrollbar-thumb:hover{background:var(--surface-3)}
+
+a{color:var(--accent-soft);text-decoration:none;border-bottom:1px solid var(--accent-border)}
+a:hover{color:var(--accent)}
+
+/* Layout */
+.layout{display:grid;grid-template-columns:220px minmax(0,1fr);max-width:1180px;margin:0 auto;padding:0 32px;gap:64px}
+@media (max-width:920px){.layout{grid-template-columns:1fr;gap:24px;padding:0 20px}.toc{display:none}}
+
+/* TOC */
+.toc{position:sticky;top:0;align-self:start;padding:32px 0;height:100vh;overflow-y:auto;font-size:13px;border-right:1px solid var(--border);padding-right:20px}
+.toc-title{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--t4);margin-bottom:16px;padding-left:12px}
+.toc a{display:block;color:var(--t3);text-decoration:none;border-bottom:none;padding:5px 12px;border-left:1px solid transparent;transition:all .15s var(--ease-out);border-radius:0 4px 4px 0}
+.toc a:hover{color:var(--t1)}
+.toc a.active{color:var(--accent);border-left-color:var(--accent);background:var(--accent-dim)}
+
+/* Content */
+.content{padding:48px 0 120px}
+
+/* Hero */
+.hero{display:flex;flex-direction:column;align-items:flex-start;gap:24px;padding:32px 0 64px;border-bottom:1px solid var(--border);margin-bottom:64px}
+.wordmark-row{display:flex;align-items:center;gap:18px}
+.ripple-mark{position:relative;width:64px;height:64px;flex-shrink:0}
+.ripple-mark .dot{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:10px;height:10px;background:var(--accent);border-radius:50%;box-shadow:0 0 24px var(--accent-dim)}
+.ripple-mark .ring{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border-radius:50%;border:1.5px solid var(--accent);opacity:0;animation:rippleOut 3.2s var(--ease-out) infinite}
+.ripple-mark .ring:nth-child(2){animation-delay:.0s}
+.ripple-mark .ring:nth-child(3){animation-delay:1.0s}
+.ripple-mark .ring:nth-child(4){animation-delay:2.0s}
+@keyframes rippleOut{
+  0%{width:14px;height:14px;opacity:.7}
+  100%{width:62px;height:62px;opacity:0}
+}
+.wordmark{font-family:'Source Serif 4',Georgia,serif;font-weight:300;font-size:72px;letter-spacing:-2px;line-height:1;color:var(--t1)}
+.tagline{font-family:'Source Serif 4',Georgia,serif;font-style:italic;font-weight:300;font-size:24px;color:var(--t2);max-width:560px}
+.meta{display:flex;gap:14px;color:var(--t4);font-size:12px;font-family:'Geist Mono',monospace;letter-spacing:.04em}
+.meta span+span:before{content:"·";margin-right:14px;color:var(--border-s)}
+
+/* Sections */
+section{margin-bottom:72px;scroll-margin-top:24px}
+h2{font-family:'Source Serif 4',Georgia,serif;font-weight:400;font-size:34px;letter-spacing:-.5px;color:var(--t1);margin-bottom:24px;line-height:1.2}
+h3{font-size:14px;font-weight:600;color:var(--t2);margin-bottom:10px;letter-spacing:-.1px}
+h4{font-size:11px;font-weight:700;color:var(--t4);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px}
+p{color:var(--t2);margin-bottom:16px;max-width:680px}
+p.lede{font-family:'Source Serif 4',Georgia,serif;font-size:19px;line-height:1.55;color:var(--t1);font-weight:300}
+
+/* Story */
+.story p{font-family:'Source Serif 4',Georgia,serif;font-size:18px;line-height:1.65;color:var(--t2);font-weight:300;max-width:640px}
+.story p+p{margin-top:18px}
+.story p:first-child::first-letter{font-size:48px;float:left;line-height:1;padding:8px 10px 0 0;color:var(--accent)}
+
+/* Card grid */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px}
+.card-num{font-family:'Geist Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:.1em;margin-bottom:8px}
+.card h3{margin-bottom:6px;color:var(--t1)}
+.card p{font-size:14px;line-height:1.55;color:var(--t3);margin:0}
+
+/* Positioning table */
+.table{display:grid;grid-template-columns:160px 1fr;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;max-width:680px}
+.table > div{padding:14px 18px;border-bottom:1px solid var(--border)}
+.table > div:nth-child(odd){background:var(--bg-soft);color:var(--t4);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.table > div:nth-child(even){color:var(--t2)}
+.table > div:nth-last-child(1),.table > div:nth-last-child(2){border-bottom:none}
+
+/* Tone do/don't */
+.tone-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:780px}
+@media (max-width:640px){.tone-grid{grid-template-columns:1fr}}
+.tone-col{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+.tone-col.do{border-left:3px solid var(--accent)}
+.tone-col.dont{border-left:3px solid var(--danger);opacity:.85}
+.tone-col h4{margin-bottom:14px}
+.tone-col ul{list-style:none;padding:0;margin:0}
+.tone-col li{font-size:14px;color:var(--t2);padding:6px 0;line-height:1.5}
+.tone-col li::before{content:"—";color:var(--t4);margin-right:8px}
+
+/* Hero copy candidates */
+.hero-cards{display:grid;gap:14px;max-width:780px}
+.hero-card{background:linear-gradient(180deg,var(--surface) 0%,var(--bg-soft) 100%);border:1px solid var(--border);border-radius:var(--radius);padding:28px 32px}
+.hero-card .hl{font-family:'Source Serif 4',Georgia,serif;font-weight:400;font-size:28px;color:var(--t1);letter-spacing:-.4px;margin-bottom:8px;line-height:1.2}
+.hero-card .sl{font-size:14px;color:var(--t3);line-height:1.55;margin:0}
+
+/* Pillars */
+.pillars{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.pillar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;position:relative;overflow:hidden}
+.pillar::before{content:"";position:absolute;top:-30px;right:-30px;width:80px;height:80px;border-radius:50%;border:1px solid var(--accent-border);opacity:.4}
+.pillar::after{content:"";position:absolute;top:-12px;right:-12px;width:44px;height:44px;border-radius:50%;border:1px solid var(--accent-border);opacity:.55}
+.pillar h3{font-family:'Source Serif 4',Georgia,serif;font-weight:400;font-size:20px;color:var(--t1);letter-spacing:-.3px;margin-bottom:8px}
+.pillar p{font-size:14px;color:var(--t3);margin:0;line-height:1.55}
+
+/* Naming list */
+.naming{display:grid;grid-template-columns:1fr 1fr;gap:0;max-width:680px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.naming > div{padding:12px 18px;border-bottom:1px solid var(--border);font-size:14px}
+.naming > div:nth-child(odd){color:var(--t3);background:var(--bg-soft)}
+.naming > div:nth-child(even){color:var(--t1);font-family:'Geist Mono',monospace;font-size:13px}
+.naming > div:nth-last-child(1),.naming > div:nth-last-child(2){border-bottom:none}
+
+/* Quotes / social */
+.quotes{display:grid;gap:14px;max-width:780px}
+.quote{background:var(--surface);border-left:3px solid var(--accent);border-radius:0 var(--radius) var(--radius) 0;padding:18px 22px;font-family:'Source Serif 4',Georgia,serif;font-style:italic;font-size:17px;line-height:1.55;color:var(--t2);font-weight:300}
+
+/* Palette */
+.palette{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;max-width:780px}
+.swatch{border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)}
+.swatch .sw{height:80px}
+.swatch .sl{padding:10px 12px;background:var(--surface);font-size:12px}
+.swatch .sl b{display:block;color:var(--t1);margin-bottom:2px}
+.swatch .sl span{font-family:'Geist Mono',monospace;color:var(--t4);font-size:11px}
+
+/* Type sample */
+.type-sample{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px 32px;max-width:680px}
+.type-sample .ts-serif{font-family:'Source Serif 4',Georgia,serif;font-weight:300;font-size:32px;color:var(--t1);letter-spacing:-.4px;margin-bottom:10px}
+.type-sample .ts-sans{font-family:'Geist',sans-serif;font-size:14px;color:var(--t3);line-height:1.6}
+.type-sample .ts-mono{font-family:'Geist Mono',monospace;font-size:12px;color:var(--t4);margin-top:14px;letter-spacing:.04em}
+
+/* Backup callout */
+.backup{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--warning);border-radius:var(--radius);padding:22px 26px;max-width:780px}
+.backup h3{color:var(--warning);margin-bottom:6px;font-size:13px;text-transform:uppercase;letter-spacing:.1em}
+.backup p{font-size:14px;color:var(--t3);margin:0;line-height:1.6}
+.backup p + p{margin-top:10px}
+
+/* Next steps */
+.steps{list-style:none;padding:0;margin:0;max-width:680px}
+.steps li{display:flex;gap:14px;padding:12px 0;border-bottom:1px solid var(--border);font-size:14px;color:var(--t2)}
+.steps li:last-child{border-bottom:none}
+.steps .n{font-family:'Geist Mono',monospace;font-size:11px;color:var(--accent);min-width:24px}
+
+/* Divider */
+.div{height:1px;background:var(--border);margin:48px 0;max-width:680px}
+
+footer{margin-top:80px;padding-top:24px;border-top:1px solid var(--border);color:var(--t4);font-size:12px;font-family:'Geist Mono',monospace}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="toc">
+    <div class="toc-title">Echo · Brand</div>
+    <div class="toc-section">
+      <a href="#story" class="active">The story</a>
+      <a href="#tagline">Tagline</a>
+      <a href="#positioning">Positioning</a>
+      <a href="#pillars">Message pillars</a>
+      <a href="#tone">Tone of voice</a>
+      <a href="#naming">In-product naming</a>
+      <a href="#hero">Homepage hero</a>
+      <a href="#launch">Launch hooks</a>
+      <a href="#visual">Visual direction</a>
+      <a href="#backup">Backup: Polaris</a>
+      <a href="#next">Next steps</a>
+    </div>
+  </nav>
+
+  <main class="content">
+
+    <header class="hero">
+      <div class="wordmark-row">
+        <div class="ripple-mark" aria-hidden="true">
+          <div class="ring"></div>
+          <div class="ring"></div>
+          <div class="ring"></div>
+          <div class="dot"></div>
+        </div>
+        <div class="wordmark">Echo</div>
+      </div>
+      <div class="tagline">Listens for the silence.</div>
+      <div class="meta">
+        <span>Brand v0.1</span>
+        <span>Internal</span>
+        <span>2026</span>
+      </div>
+    </header>
+
+    <section id="story" class="story">
+      <h2>The story</h2>
+      <p>You delegate a task. For the first day, you remember. By the third day, your brain has filed it under <em>done</em> — even though it isn't. Two weeks later, someone asks, "hey, whatever happened to…" and your stomach drops.</p>
+      <p>Echo is built on a simple observation: the dangerous thing is silence. When work leaves your hands, you stop hearing about it — and most task managers don't notice. They treat <em>assigned</em> as the end of the story.</p>
+      <p>Echo treats it as the beginning. Every delegation has an expected rhythm of response: a daily check-in for the contractor, a weekly sync with a teammate, a monthly review with a vendor. When that rhythm breaks, Echo surfaces the silence — quietly, before it becomes a fire.</p>
+      <p>You don't have to remember to follow up. You don't have to micromanage. You don't have to keep a private spreadsheet of who owes you what. Echo listens, and tells you when it's time to ask.</p>
+    </section>
+
+    <section id="tagline">
+      <h2>Tagline</h2>
+      <p class="lede">Lead with <strong>"Listens for the silence."</strong></p>
+      <div class="grid">
+        <div class="card"><div class="card-num">ALT 01</div><h3>Hear back from every handoff.</h3><p>More literal. Good for sales pages.</p></div>
+        <div class="card"><div class="card-num">ALT 02</div><h3>Most apps tell you when work is done. Echo tells you when it's gone quiet.</h3><p>Long-form comparison line. Good for ads + intros.</p></div>
+        <div class="card"><div class="card-num">ALT 03</div><h3>The task is theirs. The accountability is yours.</h3><p>Reframes the category around the delegator.</p></div>
+      </div>
+    </section>
+
+    <section id="positioning">
+      <h2>Positioning</h2>
+      <div class="table">
+        <div>Category</div><div>Task manager built around delegation.</div>
+        <div>For</div><div>Managers, founders, and operators who hand off work and are on the hook for it landing.</div>
+        <div>Against</div><div>Trello, Asana, Todoist — apps that treat <em>assign</em> as a moment, not a relationship.</div>
+        <div>Promise</div><div>Nothing you delegate falls through the cracks.</div>
+      </div>
+    </section>
+
+    <section id="pillars">
+      <h2>Message pillars</h2>
+      <div class="pillars">
+        <div class="pillar"><h3>Silence is the signal.</h3><p>Most apps tell you when something is done. Echo tells you when something has gone too long without an update.</p></div>
+        <div class="pillar"><h3>You're the one on the hook.</h3><p>Accountability stays with the delegator. Echo is built around you, not the doer.</p></div>
+        <div class="pillar"><h3>Cadence, not chasing.</h3><p>Set the rhythm once — daily, weekly, every other Thursday. Echo handles the rest. No nag-the-team mode.</p></div>
+        <div class="pillar"><h3>People memory.</h3><p>Echo remembers who you've delegated to before, what worked, what stalled — so the next handoff starts smarter.</p></div>
+      </div>
+    </section>
+
+    <section id="tone">
+      <h2>Tone of voice</h2>
+      <div class="tone-grid">
+        <div class="tone-col do">
+          <h4>Do</h4>
+          <ul>
+            <li>Calm. The opposite of urgency-bait.</li>
+            <li>Plain-spoken. "Handoff," not "workstream."</li>
+            <li>Slightly knowing — we've both been the one who forgot to follow up.</li>
+            <li>Confident in the small claim ("we surface stale handoffs").</li>
+            <li>Quiet specifics over loud generalities.</li>
+          </ul>
+        </div>
+        <div class="tone-col dont">
+          <h4>Don't</h4>
+          <ul>
+            <li>"Revolutionize your team."</li>
+            <li>"Unlock your potential."</li>
+            <li>Synergize. Leverage. Workstream. Holistic.</li>
+            <li>Exclamation points. Hype.</li>
+            <li>Pretend Echo replaces 1:1s or trust.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="naming">
+      <h2>In-product naming</h2>
+      <div class="naming">
+        <div>A task waiting on someone</div><div>Open echo</div>
+        <div>A handoff that's gone too long without update</div><div>Quiet</div>
+        <div>A scheduled check-in</div><div>Check-in</div>
+        <div>The people memory store</div><div>People</div>
+        <div>Existing surfaces (don't rename)</div><div>Inbox, Stack, Board, Timeline</div>
+      </div>
+    </section>
+
+    <section id="hero">
+      <h2>Homepage hero candidates</h2>
+      <div class="hero-cards">
+        <div class="hero-card">
+          <div class="hl">Listens for the silence.</div>
+          <div class="sl">Echo is the task manager for the work you hand off — and need to make sure comes back.</div>
+        </div>
+        <div class="hero-card">
+          <div class="hl">You delegated it. Now what?</div>
+          <div class="sl">Echo tracks the follow-up so you don't have to.</div>
+        </div>
+        <div class="hero-card">
+          <div class="hl">The task is theirs. The accountability is yours.</div>
+          <div class="sl">Echo keeps you on top of every handoff without micromanaging anyone.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="launch">
+      <h2>Launch &amp; social hooks</h2>
+      <div class="quotes">
+        <div class="quote">"I built Echo because I kept losing track of what I'd delegated. Two weeks of silence, and then I'd remember — usually right when it mattered."</div>
+        <div class="quote">"The expensive mistakes in a manager's week aren't the things you're doing. They're the things you handed off three weeks ago and forgot about."</div>
+        <div class="quote">"Most productivity apps optimize for getting more done. Echo optimizes for not dropping the thing you already handed off."</div>
+      </div>
+    </section>
+
+    <section id="visual">
+      <h2>Visual direction</h2>
+
+      <h4 style="margin-top:8px">Motif</h4>
+      <p>Concentric ripples — a dot with rings propagating outward. The mark <em>is</em> the product: a single point that sends a signal and waits for a reply. Use sparingly; the static mark is one ring + one dot, the animated version (loading states, empty-state illustrations) shows the propagation.</p>
+
+      <div class="div"></div>
+
+      <h4>Palette</h4>
+      <div class="palette">
+        <div class="swatch"><div class="sw" style="background:#14b8a6"></div><div class="sl"><b>Accent</b><span>#14b8a6</span></div></div>
+        <div class="swatch"><div class="sw" style="background:#0d9488"></div><div class="sl"><b>Accent deep</b><span>#0d9488</span></div></div>
+        <div class="swatch"><div class="sw" style="background:#2dd4bf"></div><div class="sl"><b>Accent soft</b><span>#2dd4bf</span></div></div>
+        <div class="swatch"><div class="sw" style="background:#071512"></div><div class="sl"><b>Background</b><span>#071512</span></div></div>
+        <div class="swatch"><div class="sw" style="background:#10201d"></div><div class="sl"><b>Surface</b><span>#10201d</span></div></div>
+        <div class="swatch"><div class="sw" style="background:#f5efe0"></div><div class="sl"><b>Cream (light)</b><span>#f5efe0</span></div></div>
+      </div>
+      <p style="font-size:13px;color:var(--t4);margin-top:12px">Teal is intentionally not the standard productivity-app cobalt. Cream is the marketing/light-mode counterpart.</p>
+
+      <div class="div"></div>
+
+      <h4>Type</h4>
+      <div class="type-sample">
+        <div class="ts-serif">Listens for the silence.</div>
+        <div class="ts-sans">Headlines and brand voice use Source Serif (or Tiempos / GT Alpina in production) — a quiet, considered serif. UI and body copy use Geist, the existing app sans. Mono is Geist Mono for code &amp; meta.</div>
+        <div class="ts-mono">Source Serif 4 · Geist · Geist Mono</div>
+      </div>
+
+      <div class="div"></div>
+
+      <h4>Iconography</h4>
+      <p style="font-size:14px">Line-weight, slightly hand-drawn. Less geometric than Linear, less playful than Trello. The Echo mark itself sits at the centre of the system — every loading state, every empty state, every "waiting on someone" surface can echo the ripple.</p>
+    </section>
+
+    <section id="backup">
+      <h2>Backup: Polaris</h2>
+      <div class="backup">
+        <h3>If Echo runs into trademark or domain trouble</h3>
+        <p>Polaris flips the metaphor: instead of <em>listening for silence</em>, it's <em>the fixed point in a shifting sky</em>. Tagline: "The star that doesn't move."</p>
+        <p>Same product, slightly more contemplative tone. Caveat: there's a small Japanese todo app already on Google Play called Polaris, and Polaris Office competes for SEO. Use only if Echo is blocked.</p>
+      </div>
+    </section>
+
+    <section id="next">
+      <h2>Next steps</h2>
+      <ol class="steps">
+        <li><span class="n">01</span><span><strong>Domain check.</strong> getecho.app, echo.so, echohq.com, useecho.com, echo.todo</span></li>
+        <li><span class="n">02</span><span><strong>Trademark.</strong> USPTO TESS in IC 009 (software) and IC 042 (SaaS). EU/UK pass.</span></li>
+        <li><span class="n">03</span><span><strong>Codebase rename.</strong> page title, topbar logo, export-source string, eventual package.json + README.</span></li>
+        <li><span class="n">04</span><span><strong>Landing page v0.</strong> Hero + the four message pillars + one product screenshot.</span></li>
+      </ol>
+    </section>
+
+    <footer>
+      Echo · brand v0.1 · 2026 · open <code>brand.html</code> direct in browser
+    </footer>
+
+  </main>
+</div>
+
+<script>
+// TOC active-link tracking
+const links = document.querySelectorAll('.toc a');
+const sections = Array.from(links).map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const setActive = () => {
+  const y = window.scrollY + 120;
+  let cur = sections[0];
+  for (const s of sections) if (s.offsetTop <= y) cur = s;
+  links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur.id));
+};
+window.addEventListener('scroll', setActive, {passive:true});
+setActive();
+</script>
+</body>
+</html>

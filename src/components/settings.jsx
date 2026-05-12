@@ -336,7 +336,7 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
       try {
         const parsed = JSON.parse(reader.result);
         const dump = parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object' ? parsed.data : null;
-        if (!dump) throw new Error('File is missing a top-level "data" object — not a Task Manager export.');
+        if (!dump) throw new Error('File is missing a top-level "data" object — not an Echo export.');
         const keys = Object.keys(dump).filter(k => k.startsWith('tm_'));
         if (!keys.length) throw new Error('No tm_* keys found in the file.');
         const existing = [];
@@ -377,7 +377,7 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
       const payload = {
         exportedAt: new Date().toISOString(),
         schemaVersion: 1,
-        source: 'Task Manager (localStorage)',
+        source: 'Echo (localStorage)',
         data: dump,
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
