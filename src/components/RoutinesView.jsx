@@ -75,8 +75,17 @@ function RoutinesView({ tasks, onJumpTo, tweaks, setTweak }) {
       {rows.length === 0 ? (
         <div className="rt-empty">
           <div className="rt-empty-icon">↻</div>
-          <h3>No routines yet</h3>
-          <p>Make a recurring task and toggle "Treat as routine" in the drawer to track it here.</p>
+          {rollup.length === 0 ? (
+            <>
+              <h3>No routines yet</h3>
+              <p>Make a recurring task and toggle "Treat as routine" in the drawer to track it here.</p>
+            </>
+          ) : (
+            <>
+              <h3>No matches</h3>
+              <p>Clear the filter to see all {rollup.length} {rollup.length === 1 ? 'routine' : 'routines'}.</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="rt-table">
