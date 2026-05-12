@@ -3071,6 +3071,43 @@ function App() {
           showToast(`Routine moved to ${targetDate}`, { undoable: true });
           return;
         }
+        // Block demote when the series has active future instances. Dragging
+        // a single instance out of a live routine into the column body would
+        // turn it into a one-off and leave the rest of the series intact —
+        // probably not what the user wants. Shake the source pill, toast a
+        // warning, and auto-open the drawer so the user can decide whether
+        // to stop the whole series (None preset) or rebase its cadence.
+        // Drop on another day's strip (reschedule) is unaffected — handled
+        // earlier in the routine-strip branch above.
+        if (task.recurrence?.recurrenceId) {
+          const todayStr = D.str(D.today());
+          const hasActiveFutureSiblings = tasks.some(t =>
+            t.id !== task.id &&
+            t.recurrence?.recurrenceId === task.recurrence.recurrenceId &&
+            !t.done && !t.archived &&
+            t.date && t.date > todayStr
+          );
+          if (hasActiveFutureSiblings) {
+            setTimeout(() => {
+              const sourceEl = document.querySelector(`[data-routine-id="${CSS.escape(task.id)}"]`);
+              sourceEl?.animate(
+                [
+                  { transform: 'translateX(0)' },
+                  { transform: 'translateX(-5px)' },
+                  { transform: 'translateX(5px)' },
+                  { transform: 'translateX(-3px)' },
+                  { transform: 'translateX(0)' },
+                ],
+                { duration: 260, easing: 'ease-out' }
+              );
+            }, 40);
+            setDrawerId(task.id);
+            setFocusedId(task.id);
+            setDrawerInitialFocus('recurrence');
+            showToast(`"${task.title}" is part of a live routine — edit the cadence in the drawer instead`, { timeout: 4500 });
+            return;
+          }
+        }
         // Demote path: clear recurrence, set date.
         const ts = new Date().toISOString();
         const seriesId = task.recurrence?.recurrenceId || null;
