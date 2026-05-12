@@ -108,13 +108,15 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
   };
   const [cadenceCustom, setCadenceCustom] = useState('');
   const [delegateName, setDelegateName] = useState('');
-  // When the drawer is opened via card→routine drop, this is the recurrenceId
-  // of the freshly-converted task. The Repeats + Treat-as rows get a purple
-  // emphasis (background tint + left border + initial pulse) until the user
-  // opens a different task or closes the drawer. Telegraphs "we made this a
-  // routine — here's where the cadence lives, tweak it if you want".
-  const [recurEmphasisId, setRecurEmphasisId] = useState(null);
-  const recurEmphasized = !!recurEmphasisId && recurEmphasisId === task?.recurrence?.recurrenceId;
+  // When the drawer is opened via card→routine drop, this is set to the
+  // task's id. The Repeats + Treat-as rows get a purple emphasis (background
+  // tint + left border + initial pulse) until the user opens a different
+  // task or closes the drawer. Telegraphs "we queued this for a routine —
+  // pick a cadence here". Keyed on task.id (not recurrenceId) because the
+  // drop no longer pre-fills a default cadence — the task has no recurrence
+  // until the user picks one.
+  const [recurEmphasisTaskId, setRecurEmphasisTaskId] = useState(null);
+  const recurEmphasized = !!recurEmphasisTaskId && recurEmphasisTaskId === task?.id;
   const titleRef = useRef(null);
   const timeMoreRef = useRef(null);
   useEffect(() => {
@@ -147,14 +149,14 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
       // the user knows where to refine the cadence we auto-applied.
       // Emphasis persists until they open another task / close the drawer.
       if (initialFocus === 'recurrence') {
-        setRecurEmphasisId(task.recurrence?.recurrenceId || null);
+        setRecurEmphasisTaskId(task.id);
         requestAnimationFrame(() => {
           const row = document.querySelector('.dr-body .dr-row[data-recur-row]');
           if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
         onInitialFocusConsumed?.();
       } else {
-        setRecurEmphasisId(null);
+        setRecurEmphasisTaskId(null);
       }
     }
   }, [task?.id]);
