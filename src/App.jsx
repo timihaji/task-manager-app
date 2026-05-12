@@ -23,6 +23,7 @@ import {
   nextOccurrence,
   recurrenceLabel,
   ensureRecurrenceFields,
+  mkRecurrenceId,
   migrateRecurrence,
   syncTaskSnooze,
   rollTaskDateForward,
@@ -1835,14 +1836,22 @@ function App() {
         if (t.id === id) return [applyTaskPatch(t, changes)];
         if (t.recurrence?.recurrenceId !== rid) return [t];
         if (!newRec) {
-          // Remove-recurrence (None preset = stop the series). Drop every open
-          // sibling (today + future). For past done/archived: keep historical
-          // recurrence shape but flip isRoutine off so the series stops —
-          // routinesRollup hides it, extendRoutineHorizon stops using it as
-          // a template. Past instances still display "↻ daily" etc in the
-          // Completed view (Q1-B: history-honest).
-          if (!t.done && !t.archived) return [];
-          return [{ ...t, recurrence: { ...t.recurrence, isRoutine: false } }];
+          // None on instance X: split-point semantics. The edited X becomes a
+          // one-off (recurrence:null via applyTaskPatch above). Other siblings
+          // dated AFTER X.date AND open are dropped — these are the "ones
+          // ahead of it" the user wants gone. Siblings dated at-or-before X
+          // (past done/archived, today, intermediate open) are left intact
+          // EXCEPT they get `until: dayBefore(X.date)` added to their
+          // recurrence so extendRoutineHorizon won't keep regenerating the
+          // future. Series effectively ends at the previous occurrence.
+          // Q1-B (history-honest): past recurrence shape kept, only the
+          // until field is appended.
+          const cutoffDate = before.date;
+          if (!cutoffDate) return t.done || t.archived ? [t] : [];
+          const dayBefore = D.str(D.add(D.parse(cutoffDate), -1));
+          if (!t.done && !t.archived && t.date && t.date > cutoffDate) return [];
+          if (t.recurrence) return [{ ...t, recurrence: { ...t.recurrence, until: dayBefore } }];
+          return [t];
         }
         if (isPatternChange) {
           // Pattern change. Drop other open today/future siblings;
@@ -2890,13 +2899,15 @@ function App() {
       // Filter-aware: if active filter would hide the resulting card on the
       // target column, the drop still succeeds (Q3-B) and a toast surfaces
       // with an Undo affordance.
-      // Regular card dropped onto a column's routines strip → move date to
-      // that day and open the drawer with the Repeats row emphasized purple
-      // so the user can pick a cadence. We deliberately don't pre-fill a
-      // recurrence (the user said "don't default to Daily") — the strip drop
-      // is the intent signal; cadence is their decision. If they close the
-      // drawer without picking, the date change persists (the drop "moved"
-      // the card; reasonable enough since they dragged toward that day).
+      // Regular card dropped onto a column's routines strip → mark the task
+      // as a "pending routine" (isRoutine=true + new recurrenceId, no freq
+      // yet) so it shows up immediately in the strip as a single instance.
+      // extendRoutineHorizon skips series with no freq (nextOccurrence
+      // returns null), so no phantom future instances spawn until the user
+      // picks a cadence in the drawer. Repeats row opens emphasized purple.
+      // If the user picks a preset → horizon kicks in and future spawns. If
+      // they close the drawer without picking → the task stays in the strip
+      // as a pending routine; they can finish later or click None to demote.
       // Tasks already in a routine series are no-op.
       if (aData.kind === 'task' && oData.kind === 'routine-strip') {
         const targetDate = oData.date;
@@ -2904,8 +2915,14 @@ function App() {
         const t = taskById(activeId);
         if (!t || t.recurrence?.isRoutine) return;
         pushSnapshotUndo();
+        const pendingRec = { recurrenceId: mkRecurrenceId(), isRoutine: true };
         setTasks(prev => prev.map(x => x.id === t.id
-          ? syncTaskSnooze({ ...x, date: targetDate, activity: [...(x.activity||[]), { type: 'queued-for-routine', at: new Date().toISOString() }] })
+          ? syncTaskSnooze({
+              ...x,
+              date: targetDate,
+              recurrence: pendingRec,
+              activity: [...(x.activity||[]), { type: 'queued-for-routine', at: new Date().toISOString() }],
+            })
           : x
         ));
         setDrawerId(t.id);

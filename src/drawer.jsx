@@ -315,6 +315,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
 
   const matchRecurPreset = (r) => {
     if (!r) return 'none';
+    if (!r.freq) return null; // pending routine — no preset matches yet
     if (r.freq === 'daily' && (r.interval || 1) === 1 && !r.byDay) return 'daily';
     if (r.freq === 'weekdays') return 'weekdays';
     if (r.freq === 'weekly' && (r.interval || 1) === 1) {
@@ -821,7 +822,13 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                     onClick={() => {
                       setCustomRecurOpen(false);
                       if (!p.value) { upd({ recurrence: null }); return; }
-                      upd({ recurrence: ensureRecurrenceFields(p.value, task.recurrence?.recurrenceId) });
+                      // Preserve existing isRoutine flag if the task already
+                      // has one (e.g. pending routine from strip-drop, or
+                      // user previously flipped Treat-as). For a fresh
+                      // recurrence, default to false — the user decides via
+                      // the Treat-as toggle. No auto-derive based on freq.
+                      const explicitIsRoutine = task.recurrence?.isRoutine ?? false;
+                      upd({ recurrence: ensureRecurrenceFields({ ...p.value, isRoutine: explicitIsRoutine }, task.recurrence?.recurrenceId) });
                     }}>
                     {p.label}
                   </button>
@@ -840,6 +847,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                       // becomes weekly + Mon..Fri byDay; weekly w/o byDay
                       // becomes weekly + empty byDay so the grid renders.)
                       let cur = task.recurrence;
+                      const explicitIsRoutine = task.recurrence?.isRoutine ?? false;
                       if (!cur) {
                         cur = { freq:'weekly', interval:1, byDay:[] };
                       } else if (cur.freq === 'weekdays') {
@@ -847,7 +855,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                       } else if (cur.freq === 'weekly' && !Array.isArray(cur.byDay)) {
                         cur = { ...cur, byDay: [] };
                       }
-                      upd({ recurrence: ensureRecurrenceFields(cur, task.recurrence?.recurrenceId) });
+                      upd({ recurrence: ensureRecurrenceFields({ ...cur, isRoutine: explicitIsRoutine }, task.recurrence?.recurrenceId) });
                       setCustomRecurOpen(true);
                     }}>
                     {isCustomMatch ? `Custom · ${recurrenceLabel(task.recurrence)}` : 'Custom…'}
@@ -967,11 +975,29 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                   ? <><strong>Rolls forward silently if missed.</strong> Streak tracks consecutive days; missed days break the streak but don't pile up as overdue.</>
                   : <><strong>Missed instances stay as overdue cards.</strong> Use this for real obligations (rent, taxes) that don't go away when you miss them.</>}
               </div>
-              {deriveIsRoutine(task.recurrence) !== !!task.recurrence.isRoutine && (
+              {task.recurrence.freq && deriveIsRoutine(task.recurrence) !== !!task.recurrence.isRoutine && (
                 <div className="dr-routine-hint">
-                  Default for <em>{recurrenceLabel(task.recurrence)}</em> is <strong>{deriveIsRoutine(task.recurrence) ? 'Routine' : 'Recurring task'}</strong>. You overrode it.
+                  Suggested for <em>{recurrenceLabel(task.recurrence)}</em>: <strong>{deriveIsRoutine(task.recurrence) ? 'Routine' : 'Recurring task'}</strong>.
                 </div>
               )}
+              {(() => {
+                // "Go to first instance" — jump to the earliest sibling of the
+                // series. Useful when the user is editing a future or past
+                // instance and wants the head of the series. Hidden when
+                // there's only one instance or the current task is the first.
+                const rid = task.recurrence.recurrenceId;
+                if (!rid) return null;
+                const dated = (tasks || []).filter(t => t.recurrence?.recurrenceId === rid && t.date);
+                if (dated.length < 2) return null;
+                const first = dated.reduce((a, b) => (a.date < b.date ? a : b));
+                if (first.id === task.id) return null;
+                return (
+                  <button className="dr-jump-first" onClick={() => onJumpTo?.(first.id)}
+                          title={`Jump to ${first.date}`}>
+                    ↶ Go to first instance · <span className="dr-jump-first-date">{first.date}</span>
+                  </button>
+                );
+              })()}
             </DRow>
           )}
           <DRow label="Someday">
