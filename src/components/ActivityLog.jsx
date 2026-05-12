@@ -57,12 +57,30 @@ export function describeActivity(ev, parent) {
       // Cadence changes are mechanic, not conversation — surfaced inline in
       // the cadence strip, not in the activity log.
       return null;
+    case 'expiry-set': {
+      // Date field shown for context; null/empty means the user cleared it.
+      const fmt = (iso) => {
+        if (!iso) return null;
+        try {
+          const dt = new Date(iso + 'T00:00:00');
+          return dt.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+        } catch { return null; }
+      };
+      const when = fmt(ev.date);
+      return { kind: 'meta', day: null,
+        label: when
+          ? <><b>Promise date set</b> to {when}</>
+          : <><b>Promise date cleared</b></> };
+    }
     case 'reclaimed':
       return { kind: 'meta', day: null, label: <>Taken back to your list</> };
     case 'created':
       return null;
     default:
-      return { kind: 'meta', day: null, label: <>{ev.type}</> };
+      // Unknown event types are skipped rather than leaking the raw enum
+      // string into the activity log — the previous fallback rendered
+      // "expiry-set today" / "blocked today" etc.
+      return null;
   }
 }
 
@@ -343,7 +361,23 @@ export function ActivityLog({
                   .find(t => t && !t.done);
                 if (text) addNote(task.id, text);
                 if (pendingCheckIn) onCheckIn?.(pendingCheckIn.id, 'heard-back');
-                else onUpdate?.(task.id, { delegationStatus: 'heard-back', lastContactAt: new Date().toISOString() });
+                else {
+                  // No pending check-in: log a heard-back activity entry
+                  // ourselves. Otherwise the cooldown reads stale lastNudge
+                  // and mislabels the cooldown as "Nudged" instead of
+                  // "Heard back".
+                  const now = new Date().toISOString();
+                  const daysIn = task.delegatedAt
+                    ? Math.max(0, Math.floor((Date.now() - new Date(task.delegatedAt).getTime()) / 86400000))
+                    : null;
+                  const activity = [...(task.activity || []),
+                    { type: 'heard-back', day: daysIn, at: now }];
+                  onUpdate?.(task.id, {
+                    delegationStatus: 'heard-back',
+                    lastContactAt: now,
+                    activity,
+                  });
+                }
                 setComposerText('');
                 showToast?.(`Marked heard back${task.delegatedTo ? ' from ' + task.delegatedTo : ''}`, { undoable: true, timeout: 3500 });
               }}>
