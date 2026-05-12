@@ -55,20 +55,29 @@ function RoutineStripItem({ task, colKey, onToggle, onOpen, onContextMenu }) {
       { duration: 240, easing: 'ease-out' }
     );
   };
+  // Click semantics:
+  //   • Click the dot → toggle done (stopPropagation so body doesn't react).
+  //   • Click the body (name) → open drawer. Single-click for speed; no
+  //     double-click required. This means body-clicks NEVER toggle complete,
+  //     which avoids the "double-click marks complete then unmarks then opens
+  //     drawer" flicker the previous wiring produced.
+  //   • Right-click → ContextMenu.
+  //   • Enter (when focused) → open drawer.
   return (
     <button
       ref={setRefs}
       className={`crs-item${task.done ? ' done' : ''}${isDragging ? ' is-dragging' : ''}`}
       data-routine-id={task.id}
-      onClick={(e) => { e.stopPropagation(); onToggle?.(task.id); }}
-      onDoubleClick={(e) => { e.stopPropagation(); e.preventDefault(); onOpen?.(task.id); }}
+      onClick={(e) => { e.stopPropagation(); onOpen?.(task.id); }}
       onContextMenu={(e) => { if (onContextMenu) { e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}
       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); onOpen?.(task.id); } }}
       onPointerDown={onPointerDownDone}
-      title={`${task.title} — tap to ${task.done ? 'undo' : 'complete'} · double-click to edit · ${task.done ? 'undo first to move' : 'drag to a day to make one-off, drag to another day’s strip to reschedule'}`}
+      title={`${task.title} — click name to edit · click ○ to ${task.done ? 'undo' : 'complete'} · ${task.done ? 'undo first to move' : 'drag to a day to make one-off, or to another day’s strip to reschedule'}`}
       {...(task.done ? {} : listeners)}
       {...(task.done ? {} : attributes)}>
-      <span className="crs-dot" aria-hidden="true"/>
+      <span className="crs-dot" role="button" aria-label={task.done ? 'Mark incomplete' : 'Mark complete'}
+        onClick={(e) => { e.stopPropagation(); onToggle?.(task.id); }}
+        onPointerDown={(e) => e.stopPropagation()}/>
       <span className="crs-name">{task.title}</span>
     </button>
   );

@@ -1859,6 +1859,33 @@ function App() {
       }));
       return;
     }
+    // Date change on a routine instance whose series is freshly auto-spawned.
+    // When a user converts a one-off task to a routine then immediately picks
+    // a different start date, the horizon already populated future days based
+    // on the old date. Drop those horizon-spawned siblings so the series
+    // re-anchors at the new date; extendRoutineHorizon regenerates on the
+    // next render. We only drop siblings that were horizon-spawned (their
+    // activity log entry has reason: 'horizon') so user-created instances
+    // (e.g. drag-out one-offs that stayed in the series) are left alone.
+    if (
+      Object.prototype.hasOwnProperty.call(changes, 'date') &&
+      changes.date !== before.date &&
+      before.recurrence?.recurrenceId
+    ) {
+      const rid = before.recurrence.recurrenceId;
+      const isHorizonSpawned = (t) => Array.isArray(t.activity)
+        && t.activity.length === 1
+        && t.activity[0]?.reason === 'horizon';
+      pushSnapshotUndo();
+      setTasks(prev => prev.flatMap(t => {
+        if (t.id === id) return [applyTaskPatch(t, changes)];
+        if (t.recurrence?.recurrenceId !== rid) return [t];
+        if (t.done || t.archived) return [t];
+        if (isHorizonSpawned(t)) return [];
+        return [t];
+      }));
+      return;
+    }
     setUndoStack(s=>[...s.slice(-9),{id,before}]);
     setTasks(prev=>prev.map(t=>t.id===id ? applyTaskPatch(t, changes) : t));
   };

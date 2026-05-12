@@ -674,12 +674,13 @@ export function StackView({ tasks, allTasks, tweaks, setTweak, onUpdate, onCompl
             {todayRoutines.map(t => (
               <button key={t.id}
                 className={`srs-item${t.done ? ' done' : ''}`}
-                onClick={(e) => { e.stopPropagation(); onComplete?.(t.id); }}
-                onDoubleClick={(e) => { e.stopPropagation(); e.preventDefault(); onOpen?.(t.id); }}
+                onClick={(e) => { e.stopPropagation(); onOpen?.(t.id); }}
                 onContextMenu={(e) => { if (onContextMenu) { e.preventDefault(); e.stopPropagation(); onContextMenu(t, e.clientX, e.clientY); } }}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); onOpen?.(t.id); } }}
-                title={`${t.title} — tap to ${t.done ? 'undo' : 'complete'} · double-click to edit · right-click for more`}>
-                <span className="srs-dot" aria-hidden="true"/>
+                title={`${t.title} — click name to edit · click ○ to ${t.done ? 'undo' : 'complete'} · right-click for more`}>
+                <span className="srs-dot" role="button"
+                  aria-label={t.done ? 'Mark incomplete' : 'Mark complete'}
+                  onClick={(e) => { e.stopPropagation(); onComplete?.(t.id); }}/>
                 <span className="srs-name">{t.title}</span>
               </button>
             ))}

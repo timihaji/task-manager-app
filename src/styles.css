@@ -1136,6 +1136,8 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
   border:1.5px solid var(--t3);box-sizing:border-box;flex-shrink:0;
   transition:background .12s,border-color .12s}
 .crs-item:hover .crs-dot{border-color:var(--t1)}
+.crs-item .crs-dot{cursor:pointer}
+.crs-item .crs-dot:hover{transform:scale(1.15)}
 .crs-item .crs-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   max-width:130px;min-width:0}
 .crs-item.done{color:var(--t4)}
