@@ -8,6 +8,7 @@ import {
 } from './data.js';
 import { CheckGlyph } from './components/CheckGlyph.jsx';
 import { ActivityLog } from './components/ActivityLog.jsx';
+import { I } from './utils/icons.jsx';
 
 // Task Manager — right drawer task editor (560px)
 // Requires: tm-data.jsx loaded first (PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_NAMES, LIFE_AREA_DARK, LIFE_AREA_LIGHT, D on window)
@@ -67,7 +68,7 @@ function AddTaxonomyChip({ kind, onAdd }) {
   );
 }
 
-function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDelete, onDuplicate, onMoveToInbox, fromLeft, onSetBlocked, onClearBlocked, recentBlockReasons, blockingCountFor, onJumpTo, onCheckIn, onGoToCard, secs: secsProp, onSecsChange, initialFocus, onInitialFocusConsumed }) {
+function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDelete, onDuplicate, onMoveToInbox, fromLeft, onSetBlocked, onClearBlocked, recentBlockReasons, blockingCountFor, onJumpTo, onCheckIn, onGoToCard, secs: secsProp, onSecsChange, initialFocus, onInitialFocusConsumed, showToast, showConfirm }) {
   const [localTitle, setLocalTitle] = useState('');
   const [localDesc,  setLocalDesc]  = useState('');
   const [localReason,setLocalReason]= useState('');
@@ -799,10 +800,10 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                   </DRow>
                   <DRow label="Action">
                     <div className="dr-pickrow">
-                      <button className="dr-pick" style={{borderColor:'#f59e0b66',color:'#f59e0b',background:'rgba(245,158,11,.10)'}}
+                      <button className="dr-pick" style={{borderColor:'#a78bfa66',color:'#a78bfa',background:'rgba(167,139,250,.10)'}}
                         onClick={()=>onCheckIn?.(task.id, 'sent-nudge')}
-                        title="Log that you chased them on this check-in day">
-                        Chased
+                        title="Log that you nudged them on this check-in day">
+                        Nudged
                       </button>
                       <button className="dr-pick" style={{borderColor:'#22c55e66',color:'#22c55e',background:'rgba(34,197,94,.10)'}}
                         onClick={()=>onCheckIn?.(task.id, 'heard-back')}>
@@ -863,17 +864,42 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                   </DRow>
                   {task.delegatedTo && (
                     <>
+                      <DRow label="Promised by">
+                        <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                          <input type="date" className="dr-inp" value={task.expiryDate||''}
+                            onChange={e=>upd({expiryDate: e.target.value || null})}
+                            title="What they said by — surfaces the card if the date slips"/>
+                          {task.expiryDate && (() => {
+                            const due = new Date(task.expiryDate + 'T00:00:00');
+                            const overdue = task.expiryDate < new Date().toISOString().slice(0,10);
+                            return (
+                              <span className={`dvv-pr-due${overdue?' is-overdue':''}`}>
+                                <I.Cal/>
+                                <b>DUE</b>
+                                <span>{due.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }).toUpperCase()}</span>
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </DRow>
+                      <DRow label="Remind me">
+                        <input type="date" className="dr-inp" value={task.personalReminderDate||''}
+                          onChange={e=>upd({personalReminderDate: e.target.value || null})}
+                          title="Your own follow-up reminder — surfaces the card on this date regardless of cadence"/>
+                      </DRow>
                       <DRow label="Cadence">
                         <div className="dr-pickrow">
                           {presets.map(p => {
                             const act = matched === p;
+                            const vals = CHECKIN_PRESETS[p].join('·');
+                            const name = CHECKIN_PRESET_LABELS[p].replace(/\s+\d.*$/, '');
                             return <button key={p} className={`dr-pick${act?' act':''}`}
                               style={act?{borderColor:'var(--accent)',color:'var(--accent)',background:'var(--accent-dim)'}:{}}
                               onClick={()=>upd({checkInSchedule: CHECKIN_PRESETS[p].slice()})}>
-                              {CHECKIN_PRESET_LABELS[p]}
+                              {name} <span style={{opacity:.6,fontFamily:'var(--mono)',fontSize:'10.5px',marginLeft:4}}>{vals}d</span>
                             </button>;
                           })}
-                          <input className="dr-inp" style={{maxWidth:120}} placeholder="custom: 2,5,10"
+                          <input className="dr-inp" style={{maxWidth:130}} placeholder="custom: 2, 5, 10"
                             value={cadenceCustom}
                             onChange={e=>setCadenceCustom(e.target.value)}
                             onBlur={()=>{
@@ -884,16 +910,6 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                               setCadenceCustom('');
                             }}/>
                         </div>
-                      </DRow>
-                      <DRow label="Promised by">
-                        <input type="date" className="dr-inp" value={task.expiryDate||''}
-                          onChange={e=>upd({expiryDate: e.target.value || null})}
-                          title="What they said by — surfaces the card if the date slips"/>
-                      </DRow>
-                      <DRow label="Remind me">
-                        <input type="date" className="dr-inp" value={task.personalReminderDate||''}
-                          onChange={e=>upd({personalReminderDate: e.target.value || null})}
-                          title="Your own follow-up reminder — surfaces the card on this date regardless of cadence"/>
                       </DRow>
                       <DRow label="Status">
                         <span className="dr-pick" style={{cursor:'default',color:statusColor||'var(--t3)',borderColor:(statusColor||'#71717a')+'66',background:(statusColor||'#71717a')+'18'}}>
@@ -906,7 +922,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                             {upcoming.map(c => (
                               <div key={c.id} style={{display:'flex',alignItems:'center',gap:6}}>
                                 <button className="dr-pick" onClick={()=>onJumpTo?.(c.id)}>
-                                  d{c.checkInDayOffset} · {c.date}
+                                  Day {c.checkInDayOffset} · {c.date}
                                 </button>
                                 <button className="dr-time-clear" onClick={()=>onDelete(c.id)} title="Skip this one">Skip</button>
                               </div>
@@ -915,10 +931,23 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                         )}
                       </DRow>
                       <DRow label="Take back">
-                        <button className="dr-pick" style={{borderColor:'#ef444466',color:'#ef4444'}}
-                          onClick={()=>{ if(confirm(`Take back from ${task.delegatedTo}? The task lands on today's list and pending check-ins are removed.`)) upd({delegatedTo:null}); }}
+                        <button className="dvv-pr-takeback"
+                          onClick={()=>{
+                            const doTakeBack = () => upd({delegatedTo:null});
+                            if (showConfirm) {
+                              showConfirm({
+                                message: `Take back from ${task.delegatedTo}? The task lands on today's list and pending check-ins are removed.`,
+                                destructive: true,
+                                confirmLabel: 'Take back',
+                                onConfirm: () => { doTakeBack(); showConfirm(null); },
+                                onCancel: () => showConfirm(null),
+                              });
+                            } else if (confirm(`Take back from ${task.delegatedTo}?`)) {
+                              doTakeBack();
+                            }
+                          }}
                           title="Move this task back to today's list">
-                          ↶ Take back to today
+                          <I.Undo/> Take back to today
                         </button>
                       </DRow>
                       {(task.delegationHistory||[]).length > 0 && (
@@ -968,6 +997,8 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
               allTasks={tasks}
               onUpdate={(id, changes) => onUpdate?.(id, changes)}
               onCheckIn={onCheckIn}
+              showToast={showToast}
+              showConfirm={showConfirm}
               variant="full"
             />
           </div>

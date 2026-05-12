@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   D, isStale, peopleRollup, personKey,
+  CHECKIN_PRESETS, CHECKIN_PRESET_LABELS, matchPreset,
 } from './data.js';
 import { I } from './utils/icons.jsx';
 import { ActivityLog, lastNoteFor as sharedLastNoteFor, fmtAgo as sharedFmtAgo } from './components/ActivityLog.jsx';
@@ -73,10 +74,13 @@ function DelegationsView({
   onTakeBack,
   onAddNote,
   onAddDelegation,
+  onCreateDelegation,
   onShowOnTimeline,
   showToast,
+  showConfirm,
   statusFilter, onStatusFilterChange,
   personFilter, onPersonFilterChange,
+  dayFilter, onDayFilterChange,
   selectedId, onSelectId,
 }) {
   const [search, setSearch] = useState('');
@@ -92,6 +96,15 @@ function DelegationsView({
   const kebabRef = useRef(null);
   const composerRef = useRef(null);
   const reminderInputRef = useRef(null);
+
+  // Inline new-delegation composer state.
+  const [newTitle, setNewTitle] = useState('');
+  const [newPerson, setNewPerson] = useState('');
+  const [newPersonPopOpen, setNewPersonPopOpen] = useState(false);
+  const newTitleRef = useRef(null);
+  const newPersonRef = useRef(null);
+  const newPersonPopRef = useRef(null);
+  const [titleShake, setTitleShake] = useState(false);
 
   const statusF = STATUS_FILTERS.some(s => s.id === statusFilter) ? statusFilter : 'all';
   const personF = Array.isArray(personFilter) ? personFilter : [];
@@ -121,6 +134,37 @@ function DelegationsView({
   // lastNoteFor re-exported from shared ActivityLog so view + drawer agree.
   const lastNoteFor = sharedLastNoteFor;
 
+  // Inline-composer submit. If person is empty, focus the picker instead
+  // of submitting — title-only delegations would orphan a task in the inbox
+  // without a delegatee. If title is empty, shake the input.
+  const submitNewDelegation = () => {
+    const title = newTitle.trim();
+    const person = newPerson.trim();
+    if (!title) {
+      setTitleShake(true);
+      setTimeout(() => setTitleShake(false), 400);
+      newTitleRef.current?.focus();
+      return;
+    }
+    if (!person) {
+      setNewPersonPopOpen(true);
+      newPersonRef.current?.focus();
+      return;
+    }
+    onCreateDelegation?.({ title, delegatedTo: person });
+    setNewTitle('');
+    setNewPerson('');
+    setNewPersonPopOpen(false);
+    setTimeout(() => newTitleRef.current?.focus(), 0);
+  };
+  // Filter the person picker as the user types into it.
+  const newPersonMatches = useMemo(() => {
+    const q = newPerson.trim().toLowerCase();
+    if (!q) return allPeople;
+    return allPeople.filter(p => p.name.toLowerCase().includes(q));
+  }, [allPeople, newPerson]);
+  const newPersonIsNew = newPerson.trim() && !allPeople.some(p => p.name.toLowerCase() === newPerson.trim().toLowerCase());
+
   // Apply filters.
   const filtered = useMemo(() => {
     let list = allDelegated;
@@ -137,13 +181,29 @@ function DelegationsView({
       const set = new Set(personF.map(personKey));
       list = list.filter(t => set.has(personKey(t.delegatedTo)));
     }
+    if (dayFilter) {
+      // Match anything with an event on the selected day. Includes expiry,
+      // pending check-ins, personal reminder, or a heard-back recorded that day.
+      list = list.filter(t => {
+        if (t.expiryDate === dayFilter) return true;
+        if (t.personalReminderDate === dayFilter) return true;
+        const hasCheckIn = (t.checkInTaskIds || []).some(cid => {
+          const ci = (tasks || []).find(x => x.id === cid);
+          return ci && !ci.done && ci.date === dayFilter;
+        });
+        if (hasCheckIn) return true;
+        const hasHeard = (t.activity || []).some(ev => ev.type === 'heard-back' && (ev.at || '').slice(0,10) === dayFilter);
+        if (hasHeard) return true;
+        return false;
+      });
+    }
     // Sort by most overdue / most stale first.
     return list.slice().sort((a, b) => {
       const sa = ageDays(a.lastContactAt || a.delegatedAt) || 0;
       const sb = ageDays(b.lastContactAt || b.delegatedAt) || 0;
       return sb - sa;
     });
-  }, [allDelegated, search, statusF, personF]);
+  }, [allDelegated, search, statusF, personF, dayFilter, tasks]);
 
   // Status counts (for chip badges) — count across all, not filtered.
   const counts = useMemo(() => {
@@ -187,10 +247,13 @@ function DelegationsView({
       if (kebabOpen && kebabRef.current && !kebabRef.current.contains(e.target)) {
         setKebabOpen(false);
       }
+      if (newPersonPopOpen && newPersonPopRef.current && !newPersonPopRef.current.contains(e.target)) {
+        setNewPersonPopOpen(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [personPopOpen, kebabOpen]);
+  }, [personPopOpen, kebabOpen, newPersonPopOpen]);
 
   // Keyboard shortcuts — scoped to the delegations view via document-level
   // handler that bails when the user is typing in an input/textarea/contenteditable.
@@ -253,20 +316,36 @@ function DelegationsView({
     return () => document.removeEventListener('keydown', onKey);
   }, [filtered, selected?.id, tasks, onCheckIn, onUpdate, onTakeBack, onJumpTo, onSelectId]);
 
-  // Week-strip day data.
+  // Week-strip day data. Each day collects typed events the user can
+  // act on — chase (cadence check-in or future promise), overdue (promise
+  // date past), heard (heard-back recorded that day), reminder (personal
+  // reminder fires). Each event carries the task ref so click/hover can
+  // surface the title and person.
   const weekDays = useMemo(() => {
     const out = [];
     const todayStr = D.str(D.today());
     for (let i = 0; i < 7; i++) {
       const dt = new Date(weekStart); dt.setDate(weekStart.getDate() + i);
       const ds = D.str(dt);
-      // Mark a day if any delegation has an expiry or pending check-in landing on it.
-      const dots = [];
+      const events = [];
       allDelegated.forEach(t => {
-        if (t.expiryDate === ds) dots.push(ds < todayStr ? 'danger' : 'warn');
+        if (t.expiryDate === ds) {
+          events.push({ kind: ds < todayStr ? 'overdue' : 'chase', taskId: t.id, title: t.title, person: t.delegatedTo, label: ds < todayStr ? 'Promise date passed' : 'Promise due' });
+        }
         (t.checkInTaskIds || []).forEach(cid => {
           const ci = (tasks||[]).find(x => x.id === cid);
-          if (ci && !ci.done && ci.date === ds) dots.push('warn');
+          if (ci && !ci.done && ci.date === ds) {
+            events.push({ kind: 'chase', taskId: t.id, title: t.title, person: t.delegatedTo, label: 'Nudge due' });
+          }
+        });
+        if (t.personalReminderDate === ds) {
+          events.push({ kind: 'reminder', taskId: t.id, title: t.title, person: t.delegatedTo, label: 'Personal reminder' });
+        }
+        // Heard-back activity entry recorded on this day.
+        (t.activity || []).forEach(ev => {
+          if (ev.type === 'heard-back' && (ev.at || '').slice(0, 10) === ds) {
+            events.push({ kind: 'heard', taskId: t.id, title: t.title, person: t.delegatedTo, label: 'Heard back' });
+          }
         });
       });
       out.push({
@@ -275,7 +354,9 @@ function DelegationsView({
         dow: dt.toLocaleDateString(undefined, { weekday: 'short' }),
         num: dt.getDate(),
         isToday: ds === todayStr,
-        dots: dots.slice(0, 3),
+        events,
+        // Up to 3 dot kinds, deduped to keep visual budget small.
+        dots: [...new Set(events.map(e => e.kind))].slice(0, 4),
       });
     }
     return out;
@@ -295,7 +376,7 @@ function DelegationsView({
 
   return (
     <div className="dvv">
-      {/* Top toolbar */}
+      {/* Top toolbar — search + inline new-delegation composer */}
       <div className="dvv-tb">
         <div className="dvv-tb-search">
           <I.Search/>
@@ -305,12 +386,94 @@ function DelegationsView({
             onChange={e => setSearch(e.target.value)}
           />
         </div>
+      </div>
+      <div className={`dvv-new${titleShake?' shake':''}`}>
+        <span className="dvv-new-plus"><I.Plus/></span>
+        <input
+          ref={newTitleRef}
+          className="dvv-new-title"
+          placeholder="Delegate a task… (e.g. Review Q3 deck)"
+          value={newTitle}
+          onChange={e => setNewTitle(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); submitNewDelegation(); }
+            if (e.key === 'Escape') { setNewTitle(''); setNewPerson(''); setNewPersonPopOpen(false); }
+          }}
+        />
+        <span className="dvv-new-sep"/>
+        <span className="dvv-new-person-wrap" ref={newPersonPopRef}>
+          <button
+            ref={newPersonRef}
+            type="button"
+            className={`dvv-new-person${newPerson?' filled':''}`}
+            aria-haspopup="listbox"
+            aria-expanded={newPersonPopOpen}
+            onClick={() => setNewPersonPopOpen(v => !v)}>
+            {newPerson ? (
+              <>
+                <span className="dvv-new-av">{newPerson.charAt(0).toUpperCase()}</span>
+                <span>{newPerson}</span>
+              </>
+            ) : (
+              <>
+                <I.User/>
+                <span>Person…</span>
+              </>
+            )}
+            <span className="dvv-new-caret"><I.ChevDown/></span>
+          </button>
+          {newPersonPopOpen && (
+            <div className="dvv-new-pop" role="listbox" aria-label="Delegate to">
+              <input
+                className="dvv-new-pop-search"
+                autoFocus
+                placeholder="Type a name…"
+                value={newPerson}
+                onChange={e => setNewPerson(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (newPerson.trim()) {
+                      setNewPersonPopOpen(false);
+                      submitNewDelegation();
+                    }
+                  }
+                  if (e.key === 'Escape') { e.preventDefault(); setNewPersonPopOpen(false); }
+                }}/>
+              <div className="dvv-new-pop-list">
+                {newPersonMatches.length === 0 && !newPersonIsNew && (
+                  <div className="dvv-new-pop-empty">No people yet — type a name above</div>
+                )}
+                {newPersonMatches.map(p => (
+                  <button key={p.name}
+                    className="dvv-new-pop-row"
+                    role="option"
+                    aria-selected={false}
+                    onClick={() => { setNewPerson(p.name); setNewPersonPopOpen(false); newTitleRef.current?.focus(); }}>
+                    <span className="dvv-new-pop-av">{p.name.charAt(0).toUpperCase()}</span>
+                    <span className="dvv-new-pop-name">{p.name}</span>
+                    <span className="dvv-new-pop-ct">{p.count}</span>
+                  </button>
+                ))}
+                {newPersonIsNew && (
+                  <button className="dvv-new-pop-row is-new"
+                    onClick={() => { setNewPersonPopOpen(false); newTitleRef.current?.focus(); }}>
+                    <span className="dvv-new-pop-av new">+</span>
+                    <span className="dvv-new-pop-name">Use "<b>{newPerson.trim()}</b>"</span>
+                    <span className="dvv-new-pop-ct"><kbd>↵</kbd></span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </span>
         <button
-          className="dvv-tb-cta"
-          onClick={() => onAddDelegation?.()}
-          data-tooltip="Delegate a new task — opens the task drawer with Delegation expanded"
-        >
-          <I.Plus/> Delegate task
+          type="button"
+          className="dvv-new-send"
+          disabled={!newTitle.trim()}
+          data-tooltip="Create the delegation"
+          onClick={submitNewDelegation}>
+          Delegate
         </button>
       </div>
 
@@ -338,17 +501,54 @@ function DelegationsView({
               </button>
             </div>
             <div className="dvv-dp-week">
-              {weekDays.map(d => (
-                <div key={d.ds} className={`dvv-day${d.isToday?' is-today':''}`}>
-                  <div className="dvv-day-dow">{d.dow}</div>
-                  <div className="dvv-day-num">{d.num}</div>
-                  <div className="dvv-day-dots">
-                    {d.dots.map((kind, i) => (
-                      <span key={i} className={`dvv-day-dot ${kind}`}/>
-                    ))}
-                  </div>
-                </div>
-              ))}
+              {weekDays.map(d => {
+                const isSelected = dayFilter === d.ds;
+                const hasEvents = d.events.length > 0;
+                return (
+                  <button
+                    key={d.ds}
+                    type="button"
+                    className={`dvv-day${d.isToday?' is-today':''}${isSelected?' is-selected':''}${hasEvents?' is-clickable':''}`}
+                    aria-pressed={isSelected}
+                    aria-label={`${d.dow} ${d.num}, ${d.events.length} event${d.events.length===1?'':'s'}`}
+                    onClick={hasEvents ? () => onDayFilterChange?.(isSelected ? null : d.ds) : undefined}>
+                    <div className="dvv-day-dow">{d.dow}</div>
+                    <div className="dvv-day-num">{d.num}</div>
+                    <div className="dvv-day-dots">
+                      {d.dots.map((kind, i) => (
+                        <span key={i} className={`dvv-day-dot ${kind}`}/>
+                      ))}
+                    </div>
+                    {hasEvents && (
+                      <div className="dvv-day-tip" role="tooltip">
+                        <div className="dvv-day-tip-h">
+                          {d.date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}
+                          <small>· {d.events.length} event{d.events.length===1?'':'s'}</small>
+                        </div>
+                        {d.events.slice(0, 6).map((ev, i) => (
+                          <div key={i} className="dvv-day-tip-row">
+                            <span className={`dvv-day-tip-ico ${ev.kind}`}/>
+                            <span className="dvv-day-tip-title">{ev.title}</span>
+                            <small className="dvv-day-tip-person">{ev.person}</small>
+                          </div>
+                        ))}
+                        {d.events.length > 6 && (
+                          <div className="dvv-day-tip-more">+{d.events.length - 6} more</div>
+                        )}
+                        <div className="dvv-day-tip-cta">
+                          {isSelected ? 'Click to clear filter' : 'Click to filter inbox'}
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="dvv-dp-legend">
+              <span><span className="dvv-dp-legend-dot chase"/>Nudge due</span>
+              <span><span className="dvv-dp-legend-dot heard"/>Heard back</span>
+              <span><span className="dvv-dp-legend-dot overdue"/>Overdue</span>
+              <span><span className="dvv-dp-legend-dot reminder"/>Reminder</span>
             </div>
           </div>
 
@@ -425,9 +625,19 @@ function DelegationsView({
           </div>
 
           {/* Applied filters */}
-          {(statusF !== 'all' || personF.length > 0) && (
+          {(statusF !== 'all' || personF.length > 0 || dayFilter) && (
             <div className="dvv-applied">
               <span className="dvv-applied-lbl">Showing</span>
+              {dayFilter && (
+                <span className="dvv-applied-pill">
+                  Events on {(() => {
+                    const dt = new Date(dayFilter + 'T00:00:00');
+                    return dt.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+                  })()}
+                  <button data-tooltip="Remove day filter"
+                    onClick={() => onDayFilterChange?.(null)}><I.X/></button>
+                </span>
+              )}
               {statusF !== 'all' && (
                 <span className="dvv-applied-pill">
                   {STATUS_FILTERS.find(f => f.id === statusF)?.label}
@@ -444,7 +654,7 @@ function DelegationsView({
               ))}
               <button className="dvv-applied-clear"
                 data-tooltip="Clear all filters"
-                onClick={() => { onStatusFilterChange?.('all'); onPersonFilterChange?.([]); }}>
+                onClick={() => { onStatusFilterChange?.('all'); onPersonFilterChange?.([]); onDayFilterChange?.(null); }}>
                 Clear all
               </button>
             </div>
@@ -525,6 +735,7 @@ function DelegationsView({
               onAddNote={onAddNote}
               onShowOnTimeline={onShowOnTimeline}
               showToast={showToast}
+              showConfirm={showConfirm}
               kebabOpen={kebabOpen}
               setKebabOpen={setKebabOpen}
               kebabRef={kebabRef}
@@ -541,14 +752,6 @@ function DelegationsView({
         </section>
       </div>
 
-      <div className="dvv-kbd-hint">
-        <span><kbd>J</kbd><kbd>K</kbd> navigate</span>
-        <span><kbd>N</kbd> add note</span>
-        <span><kbd>H</kbd> heard back</span>
-        <span><kbd>T</kbd> take back</span>
-        <span><kbd>S</kbd> snooze</span>
-        <span><kbd>R</kbd> set reminder</span>
-      </div>
     </div>
   );
 }
@@ -559,7 +762,7 @@ function DelegationsView({
 function RightPane({
   task, allTasks, onUpdate, onJumpTo, onDelete, onCheckIn,
   onChase, onTakeBack, onAddNote,
-  onShowOnTimeline, showToast,
+  onShowOnTimeline, showToast, showConfirm,
   kebabOpen, setKebabOpen, kebabRef,
   hoverStep, setHoverStep,
   composerRef, reminderInputRef,
@@ -567,24 +770,103 @@ function RightPane({
   const chip = statusChip(task);
   const days = ageDays(task.delegatedAt) || 0;
 
-  // Cadence dots — derived from schedule.
+  // Cadence-edit popover state. Custom input mirrors the current schedule
+  // when the popover opens; commit on Enter or preset click.
+  const [cadenceOpen, setCadenceOpen] = useState(false);
+  const cadenceRef = useRef(null);
+  const [customCadence, setCustomCadence] = useState('');
+  const currentScheduleStr = (task.checkInSchedule || []).join(', ');
+  useEffect(() => {
+    if (cadenceOpen) setCustomCadence(currentScheduleStr);
+  }, [cadenceOpen, currentScheduleStr]);
+  useEffect(() => {
+    if (!cadenceOpen) return;
+    const onDown = (e) => {
+      if (cadenceRef.current && !cadenceRef.current.contains(e.target)) setCadenceOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [cadenceOpen]);
+
+  const commitCadence = (next) => {
+    // Validate, sort, dedupe.
+    const arr = (Array.isArray(next) ? next : [])
+      .map(n => Math.round(Number(n)))
+      .filter(n => Number.isFinite(n) && n >= 1 && n <= 60);
+    const uniq = [...new Set(arr)].sort((a, b) => a - b);
+    if (!uniq.length) return;
+    if (uniq.join(',') === (task.checkInSchedule || []).join(',')) {
+      setCadenceOpen(false);
+      return;
+    }
+    onUpdate?.(task.id, { checkInSchedule: uniq });
+    setCadenceOpen(false);
+    showToast?.(`Cadence updated to ${uniq.join('·')}d`, { undoable: true, timeout: 3500 });
+  };
+  const commitCustom = () => {
+    const parsed = customCadence.split(/[\s,]+/).filter(Boolean).map(s => Number(s));
+    commitCadence(parsed);
+  };
+  const activePreset = matchPreset(task.checkInSchedule);
+
+  // Cadence dots — derived from schedule. If there's an expiryDate (Promised by),
+  // its position becomes the final node on the strip, rendered in red.
   const cadenceDots = useMemo(() => {
     const schedule = Array.isArray(task.checkInSchedule) ? task.checkInSchedule : [];
-    const maxDay = Math.max(schedule[schedule.length - 1] || 7, days, 1);
+    // Compute due-day offset (days from delegation to expiry).
+    let dueDay = null;
+    if (task.expiryDate && task.delegatedAt) {
+      const delegated = new Date(task.delegatedAt);
+      const due = new Date(task.expiryDate + 'T00:00:00');
+      dueDay = Math.max(0, Math.round((due.getTime() - delegated.getTime()) / 86400000));
+    }
+    const maxDay = Math.max(schedule[schedule.length - 1] || 7, days, dueDay || 0, 1);
     const dots = [];
     // d0 dot (delegated)
     dots.push({ key: 'd0', pos: 0, day: 0, kind: 'delegated', label: 'Delegated' });
+    // Timeline shows things that *happened* — not pre-scheduled phantoms.
+    // A cadence offset only earns a dot if a corresponding event fired
+    // (the user actioned a check-in as Nudged or Heard back, or logged a
+    // manual nudge). Future check-ins stay invisible until they trigger.
     schedule.forEach(off => {
-      const pos = (off / maxDay) * 100;
-      // Figure dot state: did a check-in at this offset fire?
       const matchingEv = (task.activity || []).find(a => a.day === off && (a.type === 'nudge-sent' || a.type === 'heard-back'));
-      const kind = matchingEv?.type === 'heard-back' ? 'heard'
-                 : matchingEv?.type === 'nudge-sent' ? 'chased' : 'pending';
-      dots.push({ key: `d${off}`, pos, day: off, kind, label: `d${off}` });
+      if (!matchingEv) return;
+      const pos = (off / maxDay) * 100;
+      const kind = matchingEv.type === 'heard-back' ? 'heard' : 'chased';
+      dots.push({ key: `d${off}`, pos, day: off, kind, label: `Day ${off}` });
     });
-    // "now" dot
+    // Also include any manual nudges / heard-backs whose day offset isn't
+    // part of the schedule (ad-hoc events).
+    (task.activity || []).forEach((ev, idx) => {
+      if (ev.type !== 'chased' && ev.type !== 'heard-back') return;
+      if (ev.day == null) return;
+      if (schedule.includes(ev.day)) return; // already drawn above
+      const pos = (ev.day / maxDay) * 100;
+      const kind = ev.type === 'heard-back' ? 'heard' : 'chased';
+      dots.push({ key: `ev-${idx}-d${ev.day}`, pos, day: ev.day, kind, label: `Day ${ev.day}` });
+    });
+    // Due-date dot (red) — placed at the deadline, becomes the visual endpoint.
+    if (dueDay != null) {
+      const duePos = Math.min(100, (dueDay / maxDay) * 100);
+      // If a cadence dot lives at the same offset, replace its kind so the
+      // single dot reads as the deadline (more important than a check-in).
+      const existing = dots.find(d => d.day === dueDay && d.key !== 'd0');
+      if (existing) {
+        existing.kind = 'due';
+        existing.label = `Due (Day ${dueDay})`;
+        existing.key = 'due';
+      } else {
+        dots.push({ key: 'due', pos: duePos, day: dueDay, kind: 'due', label: `Due (Day ${dueDay})` });
+      }
+    }
+    // "now" dot — carries today's day-offset so the label can read "Day N"
+    // matching the rest of the strip. Suppressed only when colliding with
+    // an existing cadence/due dot (within ~3% of the line).
     const nowPos = Math.min(100, (days / maxDay) * 100);
-    dots.push({ key: 'now', pos: nowPos, day: null, kind: 'now', label: 'Now' });
+    const collides = dots.some(d => Math.abs(d.pos - nowPos) < 3);
+    if (!collides) {
+      dots.push({ key: 'now', pos: nowPos, day: days, kind: 'now', label: `Now · Day ${days}` });
+    }
     return { dots, maxDay, progressPct: nowPos };
   }, [task, days]);
 
@@ -665,6 +947,19 @@ function RightPane({
         {task.project && <><span>·</span><span>{task.project}</span></>}
         <span>·</span>
         <span>started {fmtAgo(task.delegatedAt) || 'recently'}</span>
+        {task.expiryDate && (() => {
+          const dueDate = new Date(task.expiryDate + 'T00:00:00');
+          const overdue = task.expiryDate < D.str(D.today());
+          return (
+            <span className={`dvv-pr-due${overdue?' is-overdue':''}`}
+              data-tooltip={overdue ? 'Promise date has passed' : 'Promised by this date'}
+              data-tt-pos="below">
+              <I.Cal/>
+              <b>DUE</b>
+              <span>{dueDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }).toUpperCase()}</span>
+            </span>
+          );
+        })()}
       </div>
 
       {/* Promise + personal-reminder dates */}
@@ -704,12 +999,52 @@ function RightPane({
 
       {/* Cadence */}
       {cadenceDots.dots.length > 1 && (
-        <div className="dvv-cad">
+        <div className={`dvv-cad${cadenceOpen?' is-pop-open':''}`}>
           <div className="dvv-cad-lbl">
-            Cadence
-            <small>
-              {(task.checkInSchedule||[]).join(' · ')}d schedule — hover any dot to highlight the matching log entry
-            </small>
+            <span>Cadence</span>
+            <span className="dvv-cad-edit-wrap" ref={cadenceRef}>
+              <button
+                className={`dvv-cad-pill${cadenceOpen?' open':''}`}
+                aria-haspopup="menu"
+                aria-expanded={cadenceOpen}
+                data-tooltip="Click to change the check-in cadence"
+                onClick={() => setCadenceOpen(v => !v)}>
+                {(task.checkInSchedule||[]).join(' · ')}d schedule
+                <span className="dvv-cad-pill-caret"><I.ChevDown/></span>
+              </button>
+              {cadenceOpen && (
+                <div className="dvv-cad-pop" role="menu" aria-label="Cadence preset">
+                  <div className="dvv-cad-pop-h">Cadence preset</div>
+                  {Object.keys(CHECKIN_PRESETS).map(k => (
+                    <button key={k}
+                      className={`dvv-cad-pop-row${activePreset === k ? ' on' : ''}`}
+                      role="menuitem"
+                      onClick={() => commitCadence(CHECKIN_PRESETS[k].slice())}>
+                      <span>{CHECKIN_PRESET_LABELS[k].replace(/\s+\d.*$/, '')}</span>
+                      <span className="dvv-cad-pop-vals">{CHECKIN_PRESETS[k].join('·')}d</span>
+                    </button>
+                  ))}
+                  <div className="dvv-cad-pop-sep"/>
+                  <div className="dvv-cad-pop-custom">
+                    <label>Custom</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={customCadence}
+                      onChange={e => setCustomCadence(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { e.preventDefault(); commitCustom(); }
+                        if (e.key === 'Escape') { e.preventDefault(); setCadenceOpen(false); }
+                      }}
+                      placeholder="e.g. 2, 5, 10"
+                      aria-label="Custom cadence days"/>
+                    <span className="dvv-cad-pop-unit">d</span>
+                  </div>
+                  <div className="dvv-cad-pop-hint">Comma-separated days. <kbd>↵</kbd> to save.</div>
+                </div>
+              )}
+            </span>
+            <small>hover any dot to highlight the matching log entry</small>
           </div>
           <div className="dvv-cad-line">
             <div className="dvv-cad-progress" style={{ width: `${cadenceDots.progressPct}%` }}/>
@@ -722,10 +1057,25 @@ function RightPane({
                   onMouseLeave={() => setHoverStep(null)}>
                   <span className="dvv-cad-tip">{dot.label}</span>
                 </div>
-                <span className={`dvv-cad-daylbl${hoverStep === dot.key ? ' is-linked' : ''}`}
-                  style={{ left: `${dot.pos}%` }}>
-                  {dot.key === 'now' ? 'now' : dot.key}
-                </span>
+                {dot.key === 'now' ? (
+                  <>
+                    <span className={`dvv-cad-daylbl is-now-above${hoverStep === dot.key ? ' is-linked' : ''}`}
+                      style={{ left: `${dot.pos}%` }}
+                      onMouseEnter={() => setHoverStep(dot.key)}
+                      onMouseLeave={() => setHoverStep(null)}>Now</span>
+                    <span className={`dvv-cad-daylbl is-now-below${hoverStep === dot.key ? ' is-linked' : ''}`}
+                      style={{ left: `${dot.pos}%` }}
+                      onMouseEnter={() => setHoverStep(dot.key)}
+                      onMouseLeave={() => setHoverStep(null)}>Day {dot.day}</span>
+                  </>
+                ) : (
+                  <span className={`dvv-cad-daylbl${hoverStep === dot.key ? ' is-linked' : ''}`}
+                    style={{ left: `${dot.pos}%` }}
+                    onMouseEnter={() => setHoverStep(dot.key)}
+                    onMouseLeave={() => setHoverStep(null)}>
+                    {dot.key === 'due' ? 'Due' : `Day ${dot.day}`}
+                  </span>
+                )}
               </React.Fragment>
             ))}
           </div>
@@ -740,7 +1090,9 @@ function RightPane({
         onChase={onChase}
         onAddNote={onAddNote}
         onCheckIn={onCheckIn}
+        onTakeBack={onTakeBack}
         showToast={showToast}
+        showConfirm={showConfirm}
         hoverStep={hoverStep}
         setHoverStep={setHoverStep}
         composerRef={composerRef}

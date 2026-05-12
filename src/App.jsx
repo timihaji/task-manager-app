@@ -3915,6 +3915,9 @@ function App() {
             }}
             showToast={showToast}
             onAddDelegation={()=>{
+              // Legacy entry point — kept for right-click "Delegate to…" which
+              // still uses the drawer. The Delegations view's inline composer
+              // calls onCreateDelegation instead.
               const nt = makeTask({ title: '', date: D.str(D.today()) });
               setTasks(prev => [nt, ...prev]);
               setDrawerInitialFocus('delegation');
@@ -3922,10 +3925,30 @@ function App() {
               setFocusedId(nt.id);
               setRenamingId(nt.id);
             }}
+            onCreateDelegation={({ title, delegatedTo })=>{
+              // Inline composer flow — create the task and run the delegation
+              // transition in the SAME setTasks closure so applyDelegationChanges
+              // sees the new task in `prev` (calling updateTask afterwards would
+              // read stale closure tasks and bail).
+              const nt = makeTask({ title: (title || '').trim(), date: D.str(D.today()) });
+              const delName = (delegatedTo || '').trim();
+              setTasks(prev => {
+                const withNew = [nt, ...prev];
+                const out = applyDelegationChanges(withNew, nt, { delegatedTo: delName });
+                const base = out.tasks || withNew;
+                return base.map(t => t.id === nt.id ? applyTaskPatch(t, out.mergedChanges) : t);
+              });
+              setUndoStack(s=>[...s.slice(-9),{id:nt.id, before:nt, isCreate:true}]);
+              setFocusedId(nt.id);
+              showToast(`Delegated to ${delName}`, { undoable: true, timeout: 4500 });
+            }}
+            showConfirm={(opts)=>setConfirmDialog(opts)}
             statusFilter={tweaks.delegationsStatusFilter}
             onStatusFilterChange={(v)=>setTweak('delegationsStatusFilter', v)}
             personFilter={tweaks.delegationsPersonFilter}
             onPersonFilterChange={(v)=>setTweak('delegationsPersonFilter', v)}
+            dayFilter={tweaks.delegationsDayFilter}
+            onDayFilterChange={(v)=>setTweak('delegationsDayFilter', v)}
             selectedId={tweaks.delegationsSelectedId}
             onSelectId={(v)=>setTweak('delegationsSelectedId', v)}/>
         </div>
@@ -4111,6 +4134,8 @@ function App() {
       }}
       initialFocus={drawerInitialFocus}
       onInitialFocusConsumed={()=>setDrawerInitialFocus(null)}
+      showToast={showToast}
+      showConfirm={(opts)=>setConfirmDialog(opts)}
       fromLeft={drawerFromLeft}/>}
     {!drawerTask && !settingsOpen && <div className="drawer"/>}
     <SettingsDrawer open={settingsOpen} tweaks={tweaks} setTweak={setTweak} taxonomy={taxonomy} taxonomyActions={taxonomyActions} onClose={()=>setSettingsOpen(false)}/>

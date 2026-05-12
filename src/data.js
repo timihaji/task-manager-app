@@ -765,6 +765,103 @@ const INIT_TASKS = [
     ],
     lastContactAt:__agoIso(6, 15, 0)}),
 
+  // dl12 — Fresh today, no activity yet. Tests the "Day 0 / Now" state.
+  makeTask({id:'dl12', title:'Customer churn analysis — last 90 days', project:'WORK',
+    tags:['focus','docs'], priority:'p2', lifeArea:'career', timeEstimate:'3h',
+    delegatedTo:'Morgan', delegatedAt:__agoIso(0, 1, 0),
+    delegationStatus:'waiting', checkInSchedule:[3,7,14],
+    expiryDate:__relDate(7),
+    description:'Pull from Mixpanel, segment by cohort, write the summary deck.',
+    activity:[
+      {type:'created', at:__agoIso(0, 1, 0)},
+      {type:'delegated', to:'Morgan', at:__agoIso(0, 1, 0)},
+    ]}),
+
+  // dl13 — Heavy nudge history, overdue. Tests the timeline with multiple
+  // real nudge events stacked at different days.
+  makeTask({id:'dl13', title:'Hyperion proposal — pricing slide', project:'WORK',
+    tags:['focus','docs'], priority:'p1', lifeArea:'career', timeEstimate:'1h',
+    delegatedTo:'Sam', delegatedAt:__agoIso(14),
+    delegationStatus:'sent', checkInSchedule:[2,5,10],
+    expiryDate:__relDate(-3),
+    description:'Three nudges in and still no draft. Pricing input for the Hyperion proposal — partner asks weekly.',
+    activity:[
+      {type:'created', at:__agoIso(14)},
+      {type:'delegated', to:'Sam', at:__agoIso(14)},
+      {type:'cadence-changed', schedule:[2,5,10], at:__agoIso(14, 9, 1)},
+      {type:'nudge-sent', day:2, at:__agoIso(12, 10, 0)},
+      {type:'chased', text:'asked again in Slack — "still working on it"', at:__agoIso(10, 14, 0)},
+      {type:'nudge-sent', day:5, at:__agoIso(9, 10, 0)},
+      {type:'note', text:'Sam moved this to next week — partner needs to know', at:__agoIso(7, 11, 0)},
+      {type:'nudge-sent', day:10, at:__agoIso(4, 10, 0)},
+      {type:'chased', text:'flagged to manager — escalating', at:__agoIso(2, 16, 0)},
+    ],
+    lastContactAt:__agoIso(2, 16, 0)}),
+
+  // dl14 — Heard back today, cadence done. Tests the "fresh good news" state.
+  makeTask({id:'dl14', title:'Q3 OKRs — draft for leadership review', project:'WORK',
+    tags:['focus','docs'], priority:'p1', lifeArea:'career', timeEstimate:'2h',
+    delegatedTo:'Riley', delegatedAt:__agoIso(7),
+    delegationStatus:'heard-back', checkInSchedule:[3,7],
+    description:'Riley confirmed the draft this morning. Will land in the leadership review Thursday.',
+    activity:[
+      {type:'created', at:__agoIso(7)},
+      {type:'delegated', to:'Riley', at:__agoIso(7)},
+      {type:'cadence-changed', schedule:[3,7], at:__agoIso(7, 9, 1)},
+      {type:'nudge-sent', day:3, at:__agoIso(4, 10, 0)},
+      {type:'note', text:'first pass landed, looks good', at:__agoIso(4, 16, 0)},
+      {type:'heard-back', day:7, at:__agoIso(0, 9, 0)},
+      {type:'note', text:'final draft confirmed — ready for review', at:__agoIso(0, 9, 5)},
+    ],
+    lastContactAt:__agoIso(0, 9, 5)}),
+
+  // dl15 — Very stale, no contact in weeks. Tests the "stale" classifier.
+  makeTask({id:'dl15', title:'Legacy CRM data export — pull to S3', project:'ADMIN',
+    tags:['admin'], priority:'p3', lifeArea:'career', timeEstimate:'1h',
+    delegatedTo:'Marcus', delegatedAt:__agoIso(28),
+    delegationStatus:'waiting', checkInSchedule:[7,14,21],
+    description:"Background job, no urgency. Marcus said he'd batch this with the Q1 archive work.",
+    activity:[
+      {type:'created', at:__agoIso(28)},
+      {type:'delegated', to:'Marcus', at:__agoIso(28)},
+      {type:'cadence-changed', schedule:[7,14,21], at:__agoIso(28, 9, 1)},
+      {type:'nudge-sent', day:7, at:__agoIso(21, 10, 0)},
+      {type:'note', text:'Marcus said "next week" — that was two weeks ago', at:__agoIso(15, 11, 0)},
+    ],
+    lastContactAt:__agoIso(15, 11, 0)}),
+
+  // dl16 — Reminder coming up in 2 days. Tests the purple reminder dot on the week strip.
+  makeTask({id:'dl16', title:'Vendor onboarding — Snyk security review', project:'WORK',
+    tags:['admin','focus'], priority:'p2', lifeArea:'career', timeEstimate:'45m',
+    delegatedTo:'Devon', delegatedAt:__agoIso(3),
+    delegationStatus:'waiting', checkInSchedule:[3,7],
+    personalReminderDate:__relDate(2),
+    description:'Devon to fill the security questionnaire. Reminder set so I follow up Thursday regardless.',
+    activity:[
+      {type:'created', at:__agoIso(3)},
+      {type:'delegated', to:'Devon', at:__agoIso(3)},
+      {type:'cadence-changed', schedule:[3,7], at:__agoIso(3, 9, 1)},
+    ]}),
+
+  // dl17 — Re-delegated chain, due tomorrow. Tests both delegationHistory and the
+  // "due tomorrow" relative-time label on the badge.
+  makeTask({id:'dl17', title:'Internal handbook — engineering section refresh', project:'WORK',
+    tags:['docs'], priority:'p2', lifeArea:'career', timeEstimate:'2h',
+    delegatedTo:'Pat', delegatedAt:__agoIso(4),
+    delegationStatus:'waiting', checkInSchedule:[2,5],
+    expiryDate:__relDate(1),
+    delegationHistory:[{to:'Casey', at:__agoIso(10, 9, 0)}],
+    description:'Was with Casey, moved to Pat after Casey took parental leave. Due tomorrow for the all-hands.',
+    activity:[
+      {type:'created', at:__agoIso(10, 9, 0)},
+      {type:'delegated', to:'Casey', at:__agoIso(10, 9, 0)},
+      {type:'re-delegated', from:'Casey', to:'Pat', at:__agoIso(4)},
+      {type:'cadence-changed', schedule:[2,5], at:__agoIso(4, 0, 1)},
+      {type:'nudge-sent', day:2, at:__agoIso(2, 10, 0)},
+      {type:'note', text:'Pat: drafting tonight, send tomorrow AM', at:__agoIso(1, 19, 0)},
+    ],
+    lastContactAt:__agoIso(1, 19, 0)}),
+
   // === Blocked task ===
   makeTask({id:'bl1', title:'Acme — flip launch page DNS to live', project:'WORK',
     tags:['focus','blocked'], priority:'p1', timeEstimate:'15m', lifeArea:'career',

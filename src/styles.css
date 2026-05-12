@@ -330,6 +330,42 @@ body.marquee-active *{user-select:none !important}
 .dvv-tb-cta:hover{filter:brightness(1.08)}
 .dvv-tb-cta svg{width:12px;height:12px}
 
+/* Inline new-delegation composer (replaces the toolbar CTA). */
+.dvv-new{display:flex;align-items:center;gap:8px;padding:8px 12px;margin:0 0 14px;background:var(--surface);border:1px solid var(--border-s);border-radius:var(--rk-ctrl,6px);transition:all .15s}
+.dvv-new:focus-within{border-color:var(--accent-border,rgba(15,118,110,.3));box-shadow:0 0 0 3px var(--accent-dim)}
+.dvv-new.shake{animation:dvv-shake .35s cubic-bezier(.36,.07,.19,.97) both;border-color:var(--danger,#ef4444)}
+@keyframes dvv-shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-3px)}40%,80%{transform:translateX(3px)}}
+.dvv-new-plus{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--accent);flex-shrink:0}
+.dvv-new-plus svg{width:13px;height:13px}
+.dvv-new-title{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--t1);font:500 13px var(--font);padding:2px 0}
+.dvv-new-title::placeholder{color:var(--t4);font-weight:400;font-style:italic}
+.dvv-new-sep{width:1px;height:18px;background:var(--border-s);flex-shrink:0}
+.dvv-new-person-wrap{position:relative;display:inline-flex;flex-shrink:0}
+.dvv-new-person{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;font:500 11.5px var(--font);background:var(--surface-2);color:var(--t3);border:1px solid var(--border-s);border-radius:var(--rk-ctrl,4px);cursor:pointer;transition:all .12s}
+.dvv-new-person:hover,.dvv-new-person.filled{background:var(--surface-3,var(--surface-2));color:var(--t1);border-color:var(--accent-border,rgba(15,118,110,.3))}
+.dvv-new-person svg{width:11px;height:11px;color:var(--t4)}
+.dvv-new-person.filled svg{color:var(--accent)}
+.dvv-new-av{width:16px;height:16px;border-radius:50%;background:var(--accent);color:#fff;font:600 9px var(--font);display:inline-flex;align-items:center;justify-content:center}
+.dvv-new-caret{display:inline-flex;color:var(--t4)}
+.dvv-new-caret svg{width:9px;height:9px}
+.dvv-new-send{padding:5px 12px;font:500 12px var(--font);background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:var(--rk-ctrl,4px);cursor:pointer;transition:filter .12s,opacity .12s;flex-shrink:0}
+.dvv-new-send:hover:not(:disabled){filter:brightness(1.08)}
+.dvv-new-send:disabled{opacity:.4;cursor:not-allowed}
+.dvv-new-pop{position:absolute;top:calc(100% + 6px);right:0;z-index:20;width:240px;background:var(--surface-2);border:1px solid var(--accent-border,rgba(15,118,110,.3));border-radius:var(--rk,4px);box-shadow:0 12px 32px rgba(0,0,0,0.45);padding:8px}
+.dvv-new-pop-search{width:100%;background:var(--bg,#0e1411);border:1px solid var(--border-s);border-radius:3px;color:var(--t1);font:500 12px var(--font);padding:5px 9px;outline:none;margin-bottom:6px}
+.dvv-new-pop-search:focus{border-color:var(--accent-border,rgba(15,118,110,.3));box-shadow:0 0 0 2px var(--accent-dim)}
+.dvv-new-pop-list{max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:1px}
+.dvv-new-pop-row{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;border:none;background:transparent;color:var(--t2);font:500 11.5px var(--font);text-align:left;border-radius:3px;cursor:pointer}
+.dvv-new-pop-row:hover{background:var(--surface-3,var(--surface));color:var(--t1)}
+.dvv-new-pop-row.is-new{color:var(--accent)}
+.dvv-new-pop-row.is-new b{color:var(--t1);font-weight:600}
+.dvv-new-pop-av{width:18px;height:18px;border-radius:50%;background:var(--accent-dim);color:var(--accent);font:600 10px var(--font);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.dvv-new-pop-av.new{background:var(--accent);color:#fff}
+.dvv-new-pop-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dvv-new-pop-ct{font:500 10px var(--mono);color:var(--t4)}
+.dvv-new-pop-ct kbd{font:600 9.5px var(--mono);background:var(--surface);border:1px solid var(--border-s);border-bottom-width:2px;color:var(--t2);padding:1px 4px;border-radius:2px}
+.dvv-new-pop-empty{padding:8px;font:italic 400 11px var(--font);color:var(--t4);text-align:center}
+
 /* Two-pane */
 .dvv-pane{display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:stretch}
 @media (max-width: 1100px){.dvv-pane{grid-template-columns:1fr}}
@@ -346,15 +382,73 @@ body.marquee-active *{user-select:none !important}
 .dvv-nav-btn svg{width:11px;height:11px}
 .dvv-nav-today{width:auto;padding:0 8px}
 .dvv-dp-week{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
-.dvv-day{text-align:center;padding:5px 2px 4px;border-radius:var(--rk-ctrl,4px);cursor:pointer;transition:background .12s}
-.dvv-day:hover{background:var(--surface-2)}
+.dvv-day{position:relative;text-align:center;padding:5px 2px 4px;border-radius:var(--rk-ctrl,4px);background:transparent;border:1px solid transparent;cursor:default;transition:background .12s,border-color .12s;font:inherit;color:inherit;width:100%}
+.dvv-day.is-clickable{cursor:pointer}
+.dvv-day.is-clickable:hover{background:var(--surface-2)}
+.dvv-day.is-today{background:var(--accent-dim);border-color:var(--accent-border,rgba(15,118,110,.3))}
 .dvv-day.is-today .dvv-day-num{color:var(--accent);font-weight:700}
+.dvv-day.is-today .dvv-day-dow{color:var(--accent)}
+.dvv-day.is-selected{background:var(--accent);border-color:var(--accent)}
+.dvv-day.is-selected .dvv-day-dow,.dvv-day.is-selected .dvv-day-num{color:#fff !important}
+.dvv-day.is-selected .dvv-day-dot{box-shadow:0 0 0 1.5px rgba(255,255,255,0.85)}
 .dvv-day-dow{font:500 8.5px var(--font);color:var(--t4);text-transform:uppercase;letter-spacing:.06em}
 .dvv-day-num{font:500 11.5px var(--font);color:var(--t2);margin-top:2px}
 .dvv-day-dots{display:flex;gap:2px;justify-content:center;margin-top:3px;min-height:5px}
 .dvv-day-dot{width:4px;height:4px;border-radius:50%;background:var(--t4)}
+.dvv-day-dot.chase{background:var(--purple,#a78bfa)}
+.dvv-day-dot.heard{background:var(--success,#10b981)}
+.dvv-day-dot.overdue{background:var(--danger,#ef4444)}
+.dvv-day-dot.reminder{background:var(--warning,#f59e0b)}
+/* Back-compat with any stale callers using the old warn/danger kinds. */
 .dvv-day-dot.warn{background:var(--warning,#f59e0b)}
 .dvv-day-dot.danger{background:var(--danger,#ef4444)}
+
+/* Hover tooltip on a day with events. CSS-only reveal. Positions ABOVE the
+   day — the chip row sits immediately below the date picker and overlapping
+   it both visually conflicts and steals the chips' click target during hover.
+   Edge days (Mon/Tue first, Sat/Sun last) anchor to their side rather than
+   centering so the tooltip doesn't overflow into the right pane. */
+.dvv-day-tip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:220px;background:var(--surface);border:1px solid var(--accent-border,rgba(15,118,110,.3));border-radius:var(--rk,4px);box-shadow:0 12px 32px rgba(0,0,0,0.6),0 0 0 4px rgba(0,0,0,0.25);padding:8px 10px;z-index:50;text-align:left;pointer-events:none;opacity:0;transition:opacity .12s;isolation:isolate}
+.dvv-day:nth-child(1) .dvv-day-tip,
+.dvv-day:nth-child(2) .dvv-day-tip{left:0;right:auto;transform:none}
+.dvv-day:nth-child(6) .dvv-day-tip,
+.dvv-day:nth-child(7) .dvv-day-tip{left:auto;right:0;transform:none}
+/* Tail — points down to the day's center. Centered by default; offset for
+   edge-anchored days so the tail still aligns with the cell it describes. */
+.dvv-day-tip::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);width:0;height:0;border:5px solid transparent;border-top-color:var(--accent-border,rgba(15,118,110,.3));margin-top:0}
+.dvv-day-tip::before{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);width:0;height:0;border:5px solid transparent;border-top-color:var(--surface);margin-top:-1px;z-index:1}
+.dvv-day:nth-child(1) .dvv-day-tip::after,
+.dvv-day:nth-child(1) .dvv-day-tip::before,
+.dvv-day:nth-child(2) .dvv-day-tip::after,
+.dvv-day:nth-child(2) .dvv-day-tip::before{left:16px;transform:none}
+.dvv-day:nth-child(6) .dvv-day-tip::after,
+.dvv-day:nth-child(6) .dvv-day-tip::before,
+.dvv-day:nth-child(7) .dvv-day-tip::after,
+.dvv-day:nth-child(7) .dvv-day-tip::before{left:auto;right:16px;transform:none}
+/* Stays pointer-events:none on hover — it's read-only, and the actionable
+   target (click to filter / clear) is the day cell itself. */
+.dvv-day:hover .dvv-day-tip{opacity:1}
+.dvv-day-tip-h{font:600 9.5px/1.2 var(--font);text-transform:uppercase;letter-spacing:.07em;color:var(--t4);margin-bottom:6px;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.dvv-day-tip-h small{font:italic 400 10px var(--font);color:var(--t4);text-transform:none;letter-spacing:0}
+.dvv-day-tip-row{display:flex;align-items:center;gap:6px;padding:2px 0;font-size:11px;color:var(--t2)}
+.dvv-day-tip-ico{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dvv-day-tip-ico.chase{background:var(--purple,#a78bfa)}
+.dvv-day-tip-ico.heard{background:var(--success,#10b981)}
+.dvv-day-tip-ico.overdue{background:var(--danger,#ef4444)}
+.dvv-day-tip-ico.reminder{background:var(--warning,#f59e0b)}
+.dvv-day-tip-title{flex:1;min-width:0;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dvv-day-tip-person{color:var(--t4);font-size:10px;flex-shrink:0}
+.dvv-day-tip-more{font:italic 400 10px var(--font);color:var(--t4);padding:2px 0;text-align:center}
+.dvv-day-tip-cta{margin-top:6px;padding-top:6px;border-top:1px solid var(--border-s);font:500 10px var(--font);color:var(--accent);text-align:center}
+
+/* Legend below the week strip */
+.dvv-dp-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;padding:0 2px;font:500 9.5px var(--font);color:var(--t4)}
+.dvv-dp-legend span{display:inline-flex;align-items:center;gap:5px}
+.dvv-dp-legend-dot{width:5px;height:5px;border-radius:50%}
+.dvv-dp-legend-dot.chase{background:var(--purple,#a78bfa)}
+.dvv-dp-legend-dot.heard{background:var(--success,#10b981)}
+.dvv-dp-legend-dot.overdue{background:var(--danger,#ef4444)}
+.dvv-dp-legend-dot.reminder{background:var(--warning,#f59e0b)}
 
 /* Filter chips */
 .dvv-fchip-row{display:flex;flex-wrap:wrap;gap:4px}
@@ -418,6 +512,12 @@ body.marquee-active *{user-select:none !important}
 .dvv-pr-hd{display:flex;align-items:flex-start;gap:12px;margin-bottom:6px}
 .dvv-pr-title{flex:1;font:600 15.5px var(--font);color:var(--t1);line-height:1.3;letter-spacing:-.005em}
 .dvv-pr-actions{display:flex;align-items:center;gap:4px;flex-shrink:0;position:relative}
+/* Take back — destructive accent (warning amber). It's a one-tap reclaim that
+   nukes pending check-ins; the colour reads "be sure" without being so loud
+   it competes with the danger-red used elsewhere. */
+.dvv-pr-takeback{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;font:500 11.5px var(--font);background:rgba(245,158,11,.12);color:#fbbf24;border:1px solid rgba(245,158,11,.35);border-radius:var(--rk-ctrl,4px);cursor:pointer;transition:all .12s;margin-right:4px}
+.dvv-pr-takeback:hover{background:rgba(245,158,11,.22);color:#fff;border-color:rgba(245,158,11,.6)}
+.dvv-pr-takeback svg{width:11px;height:11px}
 .dvv-iconbtn{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent;border-radius:var(--rk-ctrl,4px);color:var(--t3);cursor:pointer;transition:all .12s;padding:0}
 .dvv-iconbtn:hover{background:var(--surface-2);color:var(--t1);border-color:var(--border-s)}
 .dvv-iconbtn.active{background:var(--surface-2);color:var(--t1);border-color:var(--border-s)}
@@ -447,6 +547,14 @@ body.marquee-active *{user-select:none !important}
 
 /* Status chip */
 .dvv-schip{display:inline-flex;align-items:center;gap:4px;font:500 10.5px var(--font);padding:2px 9px;border-radius:var(--rk-pill,999px);border:1px solid var(--border-s);background:var(--surface-2);color:var(--t3);white-space:nowrap}
+/* Due-date badge — red box shown when expiryDate is set. In the right-pane
+   meta row it floats to the right (margin-left:auto) so it's always visible.
+   Colour palette matches the .dvv-schip.overdue status chip exactly; only
+   the corner radius differs — subtle var(--rk-ctrl) instead of pill. */
+.dvv-pr-meta .dvv-pr-due{margin-left:auto}
+.dvv-pr-due{display:inline-flex;align-items:center;gap:5px;font:600 10.5px var(--font);letter-spacing:.05em;padding:3px 9px 3px 8px;border-radius:var(--rk-ctrl,4px);background:var(--danger-bg,rgba(239,68,68,.14));color:var(--danger-fg,#fca5a5);border:1px solid var(--danger-border,rgba(239,68,68,.35));white-space:nowrap}
+.dvv-pr-due b{font-weight:700;letter-spacing:.08em}
+.dvv-pr-due svg{width:11px;height:11px;flex-shrink:0}
 .dvv-schip.heard{color:var(--success-fg,#6ee7b7);background:var(--success-bg,rgba(16,185,129,.1));border-color:var(--success-border,rgba(16,185,129,.25))}
 .dvv-schip.stale{color:var(--warning-fg,#fcd34d);background:var(--warning-bg,rgba(245,158,11,.14));border-color:var(--warning-border,rgba(245,158,11,.35))}
 .dvv-schip.overdue{color:var(--danger-fg,#fca5a5);background:var(--danger-bg,rgba(239,68,68,.14));border-color:var(--danger-border,rgba(239,68,68,.35))}
@@ -469,47 +577,93 @@ body.marquee-active *{user-select:none !important}
 
 /* Cadence track */
 .dvv-cad{margin:4px 0 12px;padding:12px 16px 22px;background:color-mix(in srgb, var(--surface-2) 50%, transparent);border-radius:var(--rk,4px);border:1px solid var(--border-s);position:relative}
+/* When the cadence popover is open, elevate the whole .dvv-cad stacking
+   context so the popover floats above the activity log (a later sibling
+   with its own stacking context). */
+.dvv-cad.is-pop-open{z-index:30}
 .dvv-cad-lbl{display:flex;align-items:center;gap:10px;margin-bottom:18px;font:600 9.5px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--t4)}
 .dvv-cad-lbl small{text-transform:none;letter-spacing:0;color:var(--t3);font:italic 400 10.5px var(--font)}
+.dvv-cad-edit-wrap{position:relative;display:inline-flex}
+.dvv-cad-pill{display:inline-flex;align-items:center;gap:5px;font:500 11px var(--mono);background:var(--surface-2);color:var(--t2);padding:3px 8px;border-radius:var(--rk-ctrl,4px);border:1px solid var(--border-s);text-transform:none;letter-spacing:.02em;cursor:pointer;transition:all .12s}
+.dvv-cad-pill:hover,.dvv-cad-pill.open{background:var(--surface-3,var(--surface-2));color:var(--t1);border-color:var(--accent-border,rgba(15,118,110,.3));box-shadow:0 0 0 3px var(--accent-dim)}
+.dvv-cad-pill-caret{display:inline-flex;color:var(--t4)}
+.dvv-cad-pill-caret svg{width:9px;height:9px}
+.dvv-cad-pop{position:absolute;top:calc(100% + 6px);left:0;z-index:20;width:240px;background:var(--surface);border:1px solid var(--accent-border,rgba(15,118,110,.3));border-radius:var(--rk,4px);box-shadow:0 16px 40px rgba(0,0,0,0.7),0 0 0 4px rgba(0,0,0,0.25);padding:8px 8px 10px;text-transform:none;letter-spacing:0;isolation:isolate}
+.dvv-cad-pop-h{font:600 9.5px var(--font);text-transform:uppercase;letter-spacing:.08em;color:var(--t4);padding:4px 8px 6px}
+.dvv-cad-pop-row{display:flex;align-items:center;justify-content:space-between;width:100%;padding:6px 8px;border-radius:3px;background:transparent;border:none;color:var(--t2);font:500 11.5px var(--font);cursor:pointer;text-align:left}
+.dvv-cad-pop-row:hover{background:var(--surface-3,var(--surface));color:var(--t1)}
+.dvv-cad-pop-row.on{background:var(--accent-dim);color:var(--accent)}
+.dvv-cad-pop-row.on .dvv-cad-pop-vals{color:var(--accent)}
+.dvv-cad-pop-vals{font:500 10.5px var(--mono);color:var(--t4);letter-spacing:.02em}
+.dvv-cad-pop-sep{height:1px;background:var(--border-s);margin:6px 4px}
+.dvv-cad-pop-custom{display:flex;align-items:center;gap:6px;padding:4px 8px}
+.dvv-cad-pop-custom label{font:500 11px var(--font);color:var(--t3);min-width:46px}
+.dvv-cad-pop-custom input{flex:1;min-width:0;background:var(--bg,#0e1411);border:1px solid var(--border-s);border-radius:3px;color:var(--t1);font:500 11px var(--mono);padding:4px 7px;outline:none}
+.dvv-cad-pop-custom input:focus{border-color:var(--accent-border,rgba(15,118,110,.3));box-shadow:0 0 0 2px var(--accent-dim)}
+.dvv-cad-pop-unit{font:500 10.5px var(--mono);color:var(--t4)}
+.dvv-cad-pop-hint{font:italic 400 10px var(--font);color:var(--t4);padding:6px 8px 0;line-height:1.4}
+.dvv-cad-pop-hint kbd{font:600 9.5px var(--mono);background:var(--surface-3,var(--surface));color:var(--t2);padding:1px 4px;border-radius:2px;border:1px solid var(--border-s);border-bottom-width:2px;font-style:normal}
 .dvv-cad-line{position:relative;height:22px;margin:0 12px}
 .dvv-cad-line::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--border-s);transform:translateY(-50%)}
 .dvv-cad-progress{position:absolute;left:0;top:50%;height:2px;background:var(--accent);transform:translateY(-50%);border-radius:1px}
 .dvv-cad-dot{position:absolute;top:50%;transform:translate(-50%,-50%);width:11px;height:11px;border-radius:50%;background:var(--surface);border:2px solid var(--border);cursor:pointer;transition:transform .18s cubic-bezier(0.34,1.56,0.64,1),box-shadow .18s;z-index:2}
 .dvv-cad-dot.delegated{background:var(--t3);border-color:var(--t3)}
-.dvv-cad-dot.chased{background:var(--warning,#f59e0b);border-color:var(--warning,#f59e0b)}
+.dvv-cad-dot.chased{background:var(--purple,#a78bfa);border-color:var(--purple,#a78bfa)}
 .dvv-cad-dot.heard{background:var(--success,#10b981);border-color:var(--success,#10b981)}
 .dvv-cad-dot.now{background:var(--accent);border-color:var(--accent);width:13px;height:13px;box-shadow:0 0 0 5px var(--accent-dim)}
+.dvv-cad-dot.due{background:var(--danger,#ef4444);border-color:var(--danger,#ef4444);width:13px;height:13px;box-shadow:0 0 0 5px rgba(239,68,68,0.16)}
 .dvv-cad-dot.pending{background:var(--surface);border-style:dashed;border-color:var(--t4)}
 .dvv-cad-dot:hover,.dvv-cad-dot.is-linked{transform:translate(-50%,-50%) scale(1.5);box-shadow:0 0 0 5px var(--accent-dim),0 4px 12px rgba(0,0,0,0.25);z-index:3}
-.dvv-cad-daylbl{position:absolute;top:calc(50% + 14px);transform:translateX(-50%);font:500 9.5px var(--mono);color:var(--t4);letter-spacing:.02em;white-space:nowrap;transition:color .15s}
+/* Labels are interactive — hovering one fires the same hoverStep as the dot,
+   so the tooltip + log-row cross-highlight surface from either target. */
+.dvv-cad-daylbl{position:absolute;top:calc(50% + 14px);transform:translateX(-50%);font:500 9.5px var(--mono);color:var(--t4);letter-spacing:.02em;white-space:nowrap;transition:color .15s;cursor:default}
 .dvv-cad-daylbl.is-linked{color:var(--accent);font-weight:700}
-.dvv-cad-tip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);padding:5px 9px;background:var(--surface-3);color:var(--t1);border-radius:var(--rk-ctrl,4px);font:500 10.5px var(--font);white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s .1s;border:1px solid var(--border-s);box-shadow:var(--shadow-lg);z-index:4}
+/* "Now" is split across the dot — "Now" rides above, "Day N" sits below.
+   Both share the same X with the dot via the inline left:Npercent. */
+.dvv-cad-daylbl.is-now-above{top:auto;bottom:calc(50% + 14px);font:600 9.5px var(--font);color:var(--accent);letter-spacing:.03em}
+.dvv-cad-daylbl.is-now-below{top:calc(50% + 14px);font:500 9px var(--mono);color:var(--t4);letter-spacing:.04em}
+.dvv-cad-tip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);padding:5px 9px;background:var(--surface-3);color:var(--t1);border-radius:var(--rk-ctrl,4px);font:500 10.5px var(--font);white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s;border:1px solid var(--border-s);box-shadow:var(--shadow-lg);z-index:40}
 .dvv-cad-dot:hover .dvv-cad-tip,.dvv-cad-dot.is-linked .dvv-cad-tip{opacity:1}
+/* CSS-only fallback for the Now stacked labels: hovering any cad-daylbl
+   inside the cad-line shows the matching dot's tooltip via :has(). Avoids
+   the React state hop being raced by transition timing. */
+.dvv-cad-line:has(.dvv-cad-daylbl.is-now-above:hover) .dvv-cad-dot.now .dvv-cad-tip,
+.dvv-cad-line:has(.dvv-cad-daylbl.is-now-below:hover) .dvv-cad-dot.now .dvv-cad-tip{opacity:1}
 
 /* Activity log */
 .dvv-log-hd{display:flex;align-items:baseline;gap:8px;padding:6px 0 8px;font:600 9.5px var(--font);text-transform:uppercase;letter-spacing:.07em;color:var(--t4)}
 .dvv-log-hd small{text-transform:none;letter-spacing:0;color:var(--t4);font:italic 400 10px var(--font)}
 .dvv-log{margin-bottom:14px;position:relative;padding-left:4px}
-.dvv-log::before{content:"";position:absolute;left:11px;top:12px;bottom:12px;width:1px;background:var(--border-s);z-index:0}
+/* Line runs through dot centers. Dot center sits at: .dvv-log padding-left (4)
+   + row border (1) + .dvv-log-row padding-left (5) + half dot width (5.5) = 15.5px. */
+.dvv-log::before{content:"";position:absolute;left:15.5px;top:12px;bottom:12px;width:1px;background:var(--border-s);z-index:0}
 .dvv-log-empty{padding:12px;text-align:center;font-size:11px;color:var(--t4);font-style:italic}
 .dvv-log-row{display:flex;align-items:flex-start;gap:12px;padding:7px 10px 7px 5px;color:var(--t3);line-height:1.4;position:relative;z-index:1;border-radius:var(--rk-ctrl,4px);cursor:pointer;transition:background .12s,border-color .12s;border:1px solid transparent}
 .dvv-log-row:hover,.dvv-log-row.is-linked{background:var(--accent-dim);border-color:var(--accent-border,rgba(15,118,110,.3))}
 .dvv-log-dot{width:11px;height:11px;border-radius:50%;background:var(--surface);border:2px solid var(--border);margin-top:3px;flex-shrink:0;position:relative;z-index:2;transition:transform .18s cubic-bezier(0.34,1.56,0.64,1),box-shadow .18s}
 .dvv-log-dot.delegated{background:var(--t3);border-color:var(--t3)}
-.dvv-log-dot.chased{background:var(--warning,#f59e0b);border-color:var(--warning,#f59e0b)}
+.dvv-log-dot.chased{background:var(--purple,#a78bfa);border-color:var(--purple,#a78bfa)}
 .dvv-log-dot.note{background:var(--accent);border-color:var(--accent)}
 .dvv-log-dot.heard{background:var(--success,#10b981);border-color:var(--success,#10b981)}
 .dvv-log-dot.meta{background:var(--t5,#4a5f59);border-color:var(--t5,#4a5f59)}
+.dvv-log-dot.now{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-dim)}
 .dvv-log-row:hover .dvv-log-dot,.dvv-log-row.is-linked .dvv-log-dot{transform:scale(1.3);box-shadow:0 0 0 4px var(--accent-dim)}
+/* Now row picks up the same hover + .is-linked treatment as every other
+   activity row — that's the cross-highlight Tim expected. Body/time stay
+   accent-tinted so the row still reads as a special marker. */
+.dvv-log-now-row .dvv-log-body{color:var(--accent);font-size:11px;letter-spacing:.02em}
+.dvv-log-now-row .dvv-log-time{color:var(--accent);opacity:.85}
 .dvv-log-body{flex:1;min-width:0;font-size:11.5px;color:var(--t3)}
 .dvv-log-body b{color:var(--t1);font-weight:600}
 .dvv-log-body small{font-size:10px}
-.dvv-log-time{font:500 10px var(--mono);color:var(--t4);white-space:nowrap;flex-shrink:0;margin-top:4px;letter-spacing:.02em}
+.dvv-log-time{font:500 10px var(--mono);color:var(--t4);white-space:nowrap;flex-shrink:0;margin-top:4px;letter-spacing:.02em;min-width:54px;text-align:right}
 .dvv-log-badge{display:inline-block;padding:0 5px;font:500 9px var(--mono);color:var(--t4);background:var(--surface-2);border-radius:var(--rk-ctrl,4px);border:1px solid var(--border-s);margin-right:6px;letter-spacing:.04em;transition:all .15s}
 .dvv-log-row:hover .dvv-log-badge,.dvv-log-row.is-linked .dvv-log-badge{color:var(--accent);background:var(--accent-dim);border-color:var(--accent-border,rgba(15,118,110,.3))}
 
-/* Edit/delete actions on user-typed log entries (notes + chases-with-text) */
-.dvv-log-actions{display:flex;align-items:center;gap:1px;opacity:0;transition:opacity .12s;flex-shrink:0;margin-left:4px}
+/* Edit/delete actions on log entries. Min-width holds two buttons' worth of
+   space whether or not both are rendered, so timestamps stay in the same
+   column regardless of which actions an entry exposes. */
+.dvv-log-actions{display:flex;align-items:center;gap:1px;opacity:0;transition:opacity .12s;flex-shrink:0;margin-left:4px;min-width:45px;justify-content:flex-end}
 .dvv-log-row:hover .dvv-log-actions{opacity:1}
 .dvv-log-acn-btn{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent;border-radius:3px;color:var(--t4);cursor:pointer;padding:0;transition:all .12s}
 .dvv-log-acn-btn:hover{background:var(--surface);color:var(--t1);border-color:var(--border-s)}
@@ -521,15 +675,21 @@ body.marquee-active *{user-select:none !important}
 .dvv-log-edit-input{flex:1;min-width:0;padding:5px 9px;background:var(--surface);border:1px solid var(--accent-border,rgba(15,118,110,.3));border-radius:var(--rk-ctrl,4px);font:400 11.5px var(--font);color:var(--t1);outline:none}
 .dvv-log-edit-input:focus{box-shadow:0 0 0 2px var(--accent-dim)}
 
-/* Composer */
-.dvv-composer{margin-top:auto;padding:12px 14px 10px;background:var(--surface);border:1px solid var(--border-s);border-radius:var(--rk,4px);transition:border-color .15s,box-shadow .15s}
+/* Composer — sits directly under the activity log. Previously had
+   margin-top:auto which pushed it to the bottom of the right pane,
+   leaving a tall blank gap below the log on shorter content. */
+.dvv-composer{margin-top:12px;padding:12px 14px 10px;background:var(--surface);border:1px solid var(--border-s);border-radius:var(--rk,4px);transition:border-color .15s,box-shadow .15s}
 .dvv-composer:hover,.dvv-composer:focus-within{border-color:var(--accent-border,rgba(15,118,110,.3));box-shadow:0 0 0 3px var(--accent-dim)}
 .dvv-cmp-hd{display:flex;align-items:center;gap:8px;margin-bottom:4px}
 .dvv-cmp-label{font:600 9.5px var(--font);text-transform:uppercase;letter-spacing:.07em;color:var(--t3)}
 .dvv-cmp-help{width:15px;height:15px;display:inline-flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:50%;color:var(--t4);cursor:help;transition:all .12s}
 .dvv-cmp-help:hover{color:var(--accent);background:var(--accent-dim)}
 .dvv-cmp-help svg{width:10px;height:10px}
-.dvv-cmp-instr{font:italic 400 10.5px var(--font);color:var(--t4);line-height:1.4;margin-bottom:8px}
+.dvv-cmp-instr{font:italic 400 10.5px var(--font);color:var(--t4);line-height:1.4;margin-bottom:8px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.dvv-cmp-instr kbd{font:600 9px var(--mono);background:var(--surface-2);color:var(--t2);padding:1px 5px;border-radius:3px;border:1px solid var(--border-s);border-bottom-width:2px;font-style:normal}
+.dvv-cmp-kbd{display:flex;flex-wrap:wrap;gap:4px 10px;margin-bottom:8px;font:500 10px var(--font);color:var(--t4);line-height:1.6}
+.dvv-cmp-kbd span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.dvv-cmp-kbd kbd{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;font:600 9.5px var(--mono);color:var(--t2);background:var(--surface-2);border:1px solid var(--border-s);border-bottom-width:2px;border-radius:3px;letter-spacing:0}
 .dvv-cmp-input{width:100%;font:400 12px var(--font);color:var(--t1);background:transparent;border:none;outline:none;padding:6px 0;line-height:1.5;resize:vertical;min-height:44px;border-top:1px dashed var(--border-s);border-bottom:1px dashed var(--border-s);margin-bottom:10px}
 .dvv-cmp-input::placeholder{color:var(--t4);font-style:italic}
 .dvv-cmp-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
@@ -539,6 +699,10 @@ body.marquee-active *{user-select:none !important}
 .dvv-cmp-btn.success{color:var(--success-fg,#6ee7b7);border-color:var(--success-border,rgba(16,185,129,.25));background:var(--success-bg,rgba(16,185,129,.1))}
 .dvv-cmp-btn.success:hover{background:color-mix(in srgb,var(--success-bg) 50%,var(--success));color:#fff}
 .dvv-cmp-btn.warning{color:var(--warning-fg,#fcd34d);border-color:var(--warning-border,rgba(245,158,11,.35));background:var(--warning-bg,rgba(245,158,11,.14))}
+.dvv-cmp-btn.nudge{color:#c4b5fd;border-color:rgba(167,139,250,.35);background:rgba(167,139,250,.14)}
+.dvv-cmp-btn.nudge:hover{background:rgba(167,139,250,.28);color:#fff}
+.dvv-cmp-btn.takeback{color:#fbbf24;border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.12)}
+.dvv-cmp-btn.takeback:hover{background:rgba(245,158,11,.28);color:#fff;border-color:rgba(245,158,11,.6)}
 .dvv-cmp-cooldown{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;font:italic 400 10.5px var(--font);color:var(--t4);background:transparent;border:1px dashed var(--border);border-radius:var(--rk-ctrl,4px)}
 .dvv-cmp-cooldown svg{width:11px;height:11px}
 .dvv-cmp-spacer{flex:1}
