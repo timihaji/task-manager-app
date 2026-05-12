@@ -2890,6 +2890,30 @@ function App() {
       // Filter-aware: if active filter would hide the resulting card on the
       // target column, the drop still succeeds (Q3-B) and a toast surfaces
       // with an Undo affordance.
+      // Regular card dropped onto a column's routines strip → convert to a
+      // routine on that day. The drawer opens scrolled to the Repeats row so
+      // the user can refine the cadence. Default cadence is daily; the
+      // ensureRecurrenceFields helper auto-derives isRoutine=true.
+      // Tasks already in a routine series are no-op (we'd just be moving them
+      // within their own strip; the routine-instance branch covers that).
+      if (aData.kind === 'task' && oData.kind === 'routine-strip') {
+        const targetDate = oData.date;
+        if (!targetDate) return;
+        const t = taskById(activeId);
+        if (!t || t.recurrence?.isRoutine) return;
+        pushSnapshotUndo();
+        const rec = ensureRecurrenceFields({ freq: 'daily', interval: 1 }, t.recurrence?.recurrenceId);
+        setTasks(prev => prev.map(x => x.id === t.id
+          ? syncTaskSnooze({ ...x, date: targetDate, recurrence: rec, activity: [...(x.activity||[]), { type: 'converted-to-routine', at: new Date().toISOString() }] })
+          : x
+        ));
+        setDrawerId(t.id);
+        setFocusedId(t.id);
+        setDrawerInitialFocus('recurrence');
+        showToast(`"${t.title}" is now a daily routine — adjust cadence in the drawer`, { undoable: true });
+        return;
+      }
+
       if (aData.kind === 'routine-instance') {
         const taskId = aData.taskId || activeId.replace(/^routine:/, '');
         const task = taskById(taskId);

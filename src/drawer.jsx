@@ -29,9 +29,9 @@ function DrSection({ title, open, onToggle, children }) {
   );
 }
 
-function DRow({ label, children }) {
+function DRow({ label, children, ...rest }) {
   return (
-    <div className="dr-row">
+    <div className="dr-row" {...rest}>
       <div className="dr-row-lbl">{label}</div>
       <div className="dr-row-val">{children}</div>
     </div>
@@ -133,6 +133,20 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
       // "Delegate to…" wants the Delegation section expanded even on a fresh task).
       if (initialFocus === 'delegation') {
         setSecs(s => ({...s, dele:true, log:true}));
+        onInitialFocusConsumed?.();
+      }
+      // Card→routine drop opens the drawer with focus on the Repeats row.
+      // Scroll it into view and flash an outline so the user knows where
+      // to refine the cadence we auto-applied.
+      if (initialFocus === 'recurrence') {
+        requestAnimationFrame(() => {
+          const row = document.querySelector('.dr-body .dr-row[data-recur-row]');
+          if (row) {
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.classList.add('dr-row-flash');
+            setTimeout(() => row.classList.remove('dr-row-flash'), 1400);
+          }
+        });
         onInitialFocusConsumed?.();
       }
     }
@@ -788,7 +802,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
               )}
             </div>
           </DRow>
-          <DRow label="Repeats">
+          <DRow label="Repeats" data-recur-row>
             <div className="dr-recur-chips">
               {RECUR_PRESETS.map(p => {
                 const active = matchRecurPreset(task.recurrence) === p.id && !customRecurOpen;

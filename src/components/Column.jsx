@@ -162,7 +162,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
       </div>
       <div className="col-divider"/>
       <ColDroppable id={`col:${colKey}`} data={{ kind: 'column', date: colKey }} className="col-body"
-        onDoubleClick={e=>{ if(!e.target.closest('.card,.grp-hdr,.done-grp-hdr,.routines-grp-hdr,.card-add-zone')) onAdd(colKey,date); }}>
+        onDoubleClick={e=>{ if(!e.target.closest('.card,.grp-hdr,.done-grp-hdr,.routines-grp-hdr,.card-add-zone,.col-routines-strip,.crs-item,.crs-hdr')) onAdd(colKey,date); }}>
         {/* Routines strip — pinned at the top of each day column. Wrapped in
             a .grp-free + phantom .card-add-zone so its TOP sits at the same
             y as a regular first card in adjacent columns (the card-add-zone
