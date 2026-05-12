@@ -2834,28 +2834,21 @@ function App() {
           ? [...selectedIds]
           : [activeId];
         const anchorId = oData.kind === 'task' ? String(over.id) : null;
-        // Determine "drop after" direction. Two paths:
-        // 1. Cross-context drops (different column/group): dndOnDragOver
-        //    stamps data-drop-line on the over-card based on cursor-Y vs
-        //    midpoint. Read it directly.
-        // 2. Same-context drops (within the same column+group): dnd-kit's
-        //    sortable doesn't stamp data-drop-line (it relies on transform
-        //    shifts instead). Infer direction from the active item's current
-        //    position vs the anchor's — if active is above anchor and the user
-        //    dragged down onto it, that's "drop after". Without this, every
-        //    in-column reorder inserts before the over-card, so dragging a
-        //    top card to the bottom lands second-to-last (felt like snap-back).
+        // Determine drop direction (before/after anchor) from the cursor's
+        // actual Y position vs the anchor card's vertical midpoint. This is
+        // the universal signal — works for both cross-context drops (which
+        // dndOnDragOver stamps via data-drop-line) and same-context drops
+        // (which it intentionally skips to avoid fighting sortable's CSS
+        // transforms). dragPointerY.current is kept fresh by the pointermove
+        // listener installed in dndOnDragStart, so it reflects the final
+        // drop position even when dndOnDragOver hasn't refreshed yet.
         let insertAfter = false;
         if (anchorId) {
           const anchorEl = document.querySelector(`.card[data-card-id="${anchorId}"]`);
-          const stamped = anchorEl?.getAttribute('data-drop-line');
-          if (stamped === 'after') insertAfter = true;
-          else if (stamped !== 'before') {
-            const activeTask = taskById(activeId);
-            const anchorTask = taskById(anchorId);
-            const aPos = Number.isFinite(activeTask?.position) ? activeTask.position : null;
-            const oPos = Number.isFinite(anchorTask?.position) ? anchorTask.position : null;
-            if (aPos != null && oPos != null && aPos < oPos) insertAfter = true;
+          const y = dragPointerY.current;
+          if (anchorEl && y != null) {
+            const r = anchorEl.getBoundingClientRect();
+            insertAfter = y >= r.top + r.height / 2;
           }
         }
         if (targetDate == null) {
