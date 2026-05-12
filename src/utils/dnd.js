@@ -32,7 +32,11 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 //      drags) → resolve to the closest card in that container so the sortable
 //      strategy can shift items smoothly across gaps.
 //   3. Outside everything → closestCenter / rectIntersection fallback.
-const SPECIFIC_KINDS = new Set(['task', 'stack-task']);
+// routine-strip is the per-column routines pill area. It sits geometrically
+// inside col-body so without registering it as specific, the column always
+// wins collision. Drops on it would silently demote the routine (column-body
+// path) instead of routing through the reschedule branch.
+const SPECIFIC_KINDS = new Set(['task', 'stack-task', 'routine-strip']);
 const CONTAINER_KINDS = new Set(['column', 'group-target', 'project-body']);
 const NEST_EDGE_PX = 8;     // top strip inside body → nest as first child
 

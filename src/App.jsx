@@ -23,6 +23,7 @@ import {
   nextOccurrence,
   recurrenceLabel,
   ensureRecurrenceFields,
+  mkRecurrenceId,
   migrateRecurrence,
   syncTaskSnooze,
   rollTaskDateForward,
@@ -195,6 +196,11 @@ function App() {
   const boardRef = useRef(null);
   const boardShellRef = useRef(null);
   const panState = useRef({isPanning:false,startX:0,scrollLeft:0});
+  // Tracks the mousedown coordinates for the app-body click handler. If the
+  // user releases >4px away from the start, the click was actually a drag
+  // (canvas pan, etc.) and we suppress the "close drawer / clear focus"
+  // logic. Otherwise pure background-clicks still close.
+  const bodyClickGuard = useRef(null);
   const boardRaf = useRef(null);
   const pendingTodayJump = useRef(true);
   const pendingTodayJumpBehavior = useRef('auto');
@@ -1809,6 +1815,186 @@ function App() {
       setTasks(prev=>prev.map(t=>t.id===id ? applyTaskPatch(t, {...changes, childOrder:t.childOrder||[]}) : t));
       return;
     }
+    // Cadence re-alignment. If the user is setting/changing a recurrence
+    // with a freq that doesn't match the card's current date (e.g. card on
+    // Thursday, recurrence "weekly on Tuesday"), move the card to the next
+    // valid cadence date >= card.date. Past dates are left alone — they're
+    // history, not future-facing. Inbox tasks (no date) get nothing changed.
+    const newRecForAlign = Object.prototype.hasOwnProperty.call(changes, 'recurrence') ? changes.recurrence : undefined;
+    if (newRecForAlign?.freq && before.date) {
+      const todayForAlign = D.str(D.today());
+      if (before.date >= todayForAlign) {
+        const dayCodes = ['sun','mon','tue','wed','thu','fri','sat'];
+        const matchesCadence = (dateStr, rec) => {
+          if (!rec?.freq) return true;
+          const d = D.parse(dateStr); const dow = d.getDay();
+          if (rec.freq === 'daily') return true;
+          if (rec.freq === 'weekdays') return dow >= 1 && dow <= 5;
+          if (rec.freq === 'weekly') {
+            if (Array.isArray(rec.byDay) && rec.byDay.length) return rec.byDay.includes(dayCodes[dow]);
+            return true;
+          }
+          if (rec.freq === 'monthly') {
+            if (rec.byMonthDay) return d.getDate() === rec.byMonthDay;
+            return true;
+          }
+          return true;
+        };
+        if (!matchesCadence(before.date, newRecForAlign)) {
+          // Walking nextOccurrence from yesterday-of-start finds the next
+          // valid date >= startDate (returns start if it matches, else next).
+          const aligned = nextOccurrence(
+            { recurrence: newRecForAlign },
+            D.str(D.add(D.parse(before.date), -1))
+          );
+          if (aligned && aligned !== before.date) {
+            changes = { ...changes, date: aligned };
+          }
+        }
+      }
+    }
+    // Series propagation for recurrence edits. When the user changes a
+    // routine's recurrence in the drawer, the change should affect more than
+    // just this instance — otherwise the series silently desyncs. Rules:
+    //   • pure isRoutine flip → copy flag to all non-archived siblings.
+    //   • pattern change → drop open siblings (today + future); past
+    //     done/archived stay frozen as historical record (Q1-B).
+    //   • recurrence removed → drop future open siblings, this task becomes a
+    //     one-off; past instances keep their recurrence shape.
+    // extendRoutineHorizon next render regenerates the future on the new
+    // schedule, walking forward from the edited instance's date.
+    const beforeRec = before.recurrence;
+    const recurrenceTouched =
+      Object.prototype.hasOwnProperty.call(changes, 'recurrence') &&
+      !!beforeRec?.recurrenceId;
+    if (recurrenceTouched) {
+      const rid = beforeRec.recurrenceId;
+      const newRec = changes.recurrence;
+      const patternKeys = ['freq','interval','byDay','byMonthDay','until'];
+      const sameVal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+      const isPatternChange = !newRec || patternKeys.some(k => !sameVal(beforeRec[k], newRec[k]));
+      const todayStr = D.str(D.today());
+      pushSnapshotUndo();
+      setTasks(prev => prev.flatMap(t => {
+        if (t.id === id) return [applyTaskPatch(t, changes)];
+        if (t.recurrence?.recurrenceId !== rid) return [t];
+        if (!newRec) {
+          // None on instance X: split-point semantics. The edited X becomes a
+          // one-off (recurrence:null via applyTaskPatch above). Other siblings
+          // dated AFTER X.date AND open are dropped — these are the "ones
+          // ahead of it" the user wants gone. Siblings dated at-or-before X
+          // (past done/archived, today, intermediate open) are left intact
+          // EXCEPT they get `until: dayBefore(X.date)` added to their
+          // recurrence so extendRoutineHorizon won't keep regenerating the
+          // future. Series effectively ends at the previous occurrence.
+          // Q1-B (history-honest): past recurrence shape kept, only the
+          // until field is appended.
+          const cutoffDate = before.date;
+          if (!cutoffDate) return t.done || t.archived ? [t] : [];
+          const dayBefore = D.str(D.add(D.parse(cutoffDate), -1));
+          if (!t.done && !t.archived && t.date && t.date > cutoffDate) return [];
+          if (t.recurrence) return [{ ...t, recurrence: { ...t.recurrence, until: dayBefore } }];
+          return [t];
+        }
+        if (isPatternChange) {
+          // Pattern change. Drop other open today/future siblings;
+          // extendRoutineHorizon regenerates them on the new schedule next
+          // render. Past done/archived siblings keep their existing
+          // recurrence shape (Q1-B).
+          if (!t.done && !t.archived && t.date && t.date >= todayStr) return [];
+          return [t];
+        }
+        // Pure isRoutine flip — propagate the flag to all non-archived
+        // siblings so strip / dashboard / rollup all read consistently.
+        if (t.archived) return [t];
+        return [{ ...t, recurrence: { ...t.recurrence, isRoutine: !!newRec.isRoutine } }];
+      }));
+      return;
+    }
+    // Date change on a routine instance whose series is freshly auto-spawned.
+    // When a user converts a one-off task to a routine then immediately picks
+    // a different start date, the horizon already populated future days based
+    // on the old date. Drop those horizon-spawned siblings so the series
+    // re-anchors at the new date; extendRoutineHorizon regenerates on the
+    // next render. We only drop siblings that were horizon-spawned (their
+    // activity log entry has reason: 'horizon') so user-created instances
+    // (e.g. drag-out one-offs that stayed in the series) are left alone.
+    if (
+      Object.prototype.hasOwnProperty.call(changes, 'date') &&
+      changes.date !== before.date &&
+      before.recurrence?.recurrenceId
+    ) {
+      const rid = before.recurrence.recurrenceId;
+      const isHorizonSpawned = (t) => Array.isArray(t.activity)
+        && t.activity.length === 1
+        && t.activity[0]?.reason === 'horizon';
+      pushSnapshotUndo();
+      setTasks(prev => prev.flatMap(t => {
+        if (t.id === id) return [applyTaskPatch(t, changes)];
+        if (t.recurrence?.recurrenceId !== rid) return [t];
+        if (t.done || t.archived) return [t];
+        if (isHorizonSpawned(t)) return [];
+        return [t];
+      }));
+      return;
+    }
+    // First-add path: recurrence is going from null (or no recurrenceId) to
+    // a full recurrence shape (freq + recurrenceId). When the source task is
+    // already DONE and dated in the PAST, back-fill the gap from its date to
+    // yesterday with done siblings — per user request, "if a user has a card
+    // that has been complete in the past and makes it a routine, it should
+    // make completed instances in the past, and uncompleted instances in
+    // the present and future." extendRoutineHorizon handles today+future
+    // (undone) on the next render; archiveStaleRoutines skips done siblings,
+    // so the back-filled history sticks.
+    const todayStr = D.str(D.today());
+    if (
+      Object.prototype.hasOwnProperty.call(changes, 'recurrence') &&
+      changes.recurrence?.freq &&
+      changes.recurrence?.recurrenceId &&
+      !beforeRec?.freq &&
+      before.done &&
+      before.date &&
+      before.date < todayStr
+    ) {
+      const newRec = changes.recurrence;
+      const backfill = [];
+      let cur = before.date;
+      let pastDoneCount = 0;
+      let presentCount = 0;
+      for (let i = 0; i < 400; i++) {
+        const nextDate = nextOccurrence({ recurrence: newRec }, cur);
+        if (!nextDate || nextDate > todayStr) break;
+        const isPast = nextDate < todayStr;
+        const now = new Date().toISOString();
+        backfill.push(syncTaskSnooze({
+          ...before,
+          id: mkid(),
+          date: nextDate,
+          done: isPast,
+          completedAt: isPast ? (before.completedAt || now) : null,
+          archived: false,
+          subtasks: (before.subtasks || []).map(s => ({ ...s, done: isPast })),
+          activity: [{ type: 'created', at: now, reason: 'back-fill' }],
+          createdAt: now,
+          recurrence: newRec,
+        }));
+        if (isPast) pastDoneCount++; else presentCount++;
+        cur = nextDate;
+      }
+      if (backfill.length) {
+        pushSnapshotUndo();
+        setTasks(prev => [
+          ...prev.map(t => t.id === id ? applyTaskPatch(t, changes) : t),
+          ...backfill,
+        ]);
+        const parts = [];
+        if (pastDoneCount) parts.push(`${pastDoneCount} past as done`);
+        if (presentCount) parts.push(`today undone`);
+        showToast(`Back-filled ${parts.join(' + ')}`, { undoable: true });
+        return;
+      }
+    }
     setUndoStack(s=>[...s.slice(-9),{id,before}]);
     setTasks(prev=>prev.map(t=>t.id===id ? applyTaskPatch(t, changes) : t));
   };
@@ -2407,10 +2593,19 @@ function App() {
       }
       return next;
     });
-    if(nowDone && task.recurrence && task.date) {
+    // Spawn-on-completion for recurring tasks. Skip for routines — those are
+    // pre-generated by extendRoutineHorizon (which runs idempotently on the
+    // tasks effect), so completing a routine MUST NOT spawn a duplicate of
+    // tomorrow's instance that horizon already created. Also dedup against
+    // existing siblings at nextDate so toggling done→undone→done doesn't
+    // pile up future copies.
+    if(nowDone && task.recurrence && task.date && !task.recurrence.isRoutine) {
       const nextDate=nextOccurrence(task,task.date);
       if(nextDate) {
         setTasks(prev => {
+          const rid = task.recurrence?.recurrenceId;
+          const dupe = rid && prev.some(t => t.id !== task.id && t.recurrence?.recurrenceId === rid && t.date === nextDate && !t.archived);
+          if (dupe) return prev;
           const additions = spawnRecurrence(task, nextDate, prev);
           additions.forEach(a => setSpawning(s=>new Set([...s,a.id])));
           setToast(`↻ Recurring · next: ${nextDate}`);
@@ -2672,21 +2867,31 @@ function App() {
     // ghost — chips, priority bars, project progress, the whole thing — rather
     // than a stub with just the title.
     let srcHTML = null;
+    let routineGhost = null;
     try {
-      const el = document.querySelector(`[data-card-id="${srcId}"]`);
-      if (el) {
-        // Measure the source card so the destination gap is exactly its height.
-        document.body.style.setProperty('--drag-card-h', el.offsetHeight + 'px');
-        const clone = el.cloneNode(true);
-        clone.removeAttribute('style');
-        clone.classList.remove('is-dragging','dragging','focused','selected','spawning','card-drop-target');
-        srcHTML = clone.outerHTML;
+      if (data.kind === 'routine-instance') {
+        // Routine strip pills aren't cards — build a card-shaped ghost from
+        // the task itself so the morph reads as pill → card during drag.
+        const t = taskById(data.taskId);
+        if (t) {
+          routineGhost = { title: t.title, date: t.date, project: t.project };
+        }
+      } else {
+        const el = document.querySelector(`[data-card-id="${srcId}"]`);
+        if (el) {
+          // Measure the source card so the destination gap is exactly its height.
+          document.body.style.setProperty('--drag-card-h', el.offsetHeight + 'px');
+          const clone = el.cloneNode(true);
+          clone.removeAttribute('style');
+          clone.classList.remove('is-dragging','dragging','focused','selected','spawning','card-drop-target');
+          srcHTML = clone.outerHTML;
+        }
       }
     } catch {}
     // fromCol mirrors the card's column for the §09 cross-column arming check.
     // null date → inbox; 'stack-task' source has no date so we fall back to inbox.
     const fromCol = data.date != null ? data.date : 'inbox';
-    setActiveDrag({ id: srcId, kind: data.kind || 'task', fromCol, srcHTML });
+    setActiveDrag({ id: srcId, kind: data.kind || 'task', fromCol, srcHTML, routineGhost });
     document.body.dataset.dndActive = 'true';
     document.body.dataset.fromCol = fromCol;
     // Pointer-Y tracker: keeps dragPointerY fresh between dndOnDragOver fires.
@@ -2782,6 +2987,150 @@ function App() {
     try {
       if (!over) return;
       haptics.drop();
+
+      // Routine strip pill dragged out of the strip.
+      // - Drop on a column body / task / completed-task → demote: clear
+      //   recurrence, set date to the target's date. Card becomes a one-off.
+      // - Drop on another column's routine-strip (kind: 'routine-strip') →
+      //   reschedule: keep recurrence, change date to that day. Refuse if
+      //   target already has a sibling of same series, or target date is in
+      //   the past (would auto-archive next render).
+      // - Drop on inbox column → demote with date=null.
+      // Filter-aware: if active filter would hide the resulting card on the
+      // target column, the drop still succeeds (Q3-B) and a toast surfaces
+      // with an Undo affordance.
+      // Regular card dropped onto a column's routines strip → mark the task
+      // as a "pending routine" (isRoutine=true + new recurrenceId, no freq
+      // yet) so it shows up immediately in the strip as a single instance.
+      // extendRoutineHorizon skips series with no freq (nextOccurrence
+      // returns null), so no phantom future instances spawn until the user
+      // picks a cadence in the drawer. Repeats row opens emphasized purple.
+      // If the user picks a preset → horizon kicks in and future spawns. If
+      // they close the drawer without picking → the task stays in the strip
+      // as a pending routine; they can finish later or click None to demote.
+      // Tasks already in a routine series are no-op.
+      if (aData.kind === 'task' && oData.kind === 'routine-strip') {
+        const targetDate = oData.date;
+        if (!targetDate) return;
+        const t = taskById(activeId);
+        if (!t || t.recurrence?.isRoutine) return;
+        pushSnapshotUndo();
+        const pendingRec = { recurrenceId: mkRecurrenceId(), isRoutine: true };
+        setTasks(prev => prev.map(x => x.id === t.id
+          ? syncTaskSnooze({
+              ...x,
+              date: targetDate,
+              recurrence: pendingRec,
+              activity: [...(x.activity||[]), { type: 'queued-for-routine', at: new Date().toISOString() }],
+            })
+          : x
+        ));
+        setDrawerId(t.id);
+        setFocusedId(t.id);
+        setDrawerInitialFocus('recurrence');
+        showToast(`Pick a cadence to make "${t.title}" a routine`, { undoable: true });
+        return;
+      }
+
+      if (aData.kind === 'routine-instance') {
+        const taskId = aData.taskId || activeId.replace(/^routine:/, '');
+        const task = taskById(taskId);
+        if (!task) return;
+        let targetDate = null;
+        let intent = 'demote';
+        if (oData.kind === 'routine-strip') {
+          targetDate = oData.date;
+          intent = 'reschedule';
+        } else if (oData.kind === 'column') {
+          targetDate = oData.date === undefined ? null : oData.date;
+        } else if (oData.kind === 'task' || oData.kind === 'completed-task' || oData.kind === 'stack-task') {
+          const overTask = taskById(String(over.id));
+          targetDate = oData.date === undefined ? (overTask?.date || null) : oData.date;
+        } else {
+          return;
+        }
+        // Reschedule path (Q2-B). Refuse same-day, past-day, or duplicate-sibling.
+        if (intent === 'reschedule') {
+          if (!targetDate || targetDate === task.date) return;
+          const todayStr = D.str(D.today());
+          if (targetDate < todayStr) {
+            showToast('Can’t reschedule a routine to a past day', { timeout: 1800 });
+            return;
+          }
+          const conflict = tasks.some(t =>
+            t.id !== task.id &&
+            t.recurrence?.recurrenceId === task.recurrence?.recurrenceId &&
+            t.date === targetDate &&
+            !t.archived);
+          if (conflict) {
+            showToast(`${task.title}: already an instance on that day`, { timeout: 1800 });
+            return;
+          }
+          pushSnapshotUndo();
+          setTasks(prev => prev.map(t => t.id === task.id ? syncTaskSnooze({ ...t, date: targetDate }) : t));
+          showToast(`Routine moved to ${targetDate}`, { undoable: true });
+          return;
+        }
+        // Block demote when the series has active future instances. Dragging
+        // a single instance out of a live routine into the column body would
+        // turn it into a one-off and leave the rest of the series intact —
+        // probably not what the user wants. Shake the source pill, toast a
+        // warning, and auto-open the drawer so the user can decide whether
+        // to stop the whole series (None preset) or rebase its cadence.
+        // Drop on another day's strip (reschedule) is unaffected — handled
+        // earlier in the routine-strip branch above.
+        if (task.recurrence?.recurrenceId) {
+          const todayStr = D.str(D.today());
+          const hasActiveFutureSiblings = tasks.some(t =>
+            t.id !== task.id &&
+            t.recurrence?.recurrenceId === task.recurrence.recurrenceId &&
+            !t.done && !t.archived &&
+            t.date && t.date > todayStr
+          );
+          if (hasActiveFutureSiblings) {
+            setTimeout(() => {
+              const sourceEl = document.querySelector(`[data-routine-id="${CSS.escape(task.id)}"]`);
+              sourceEl?.animate(
+                [
+                  { transform: 'translateX(0)' },
+                  { transform: 'translateX(-5px)' },
+                  { transform: 'translateX(5px)' },
+                  { transform: 'translateX(-3px)' },
+                  { transform: 'translateX(0)' },
+                ],
+                { duration: 260, easing: 'ease-out' }
+              );
+            }, 40);
+            setDrawerId(task.id);
+            setFocusedId(task.id);
+            setDrawerInitialFocus('recurrence');
+            showToast(`"${task.title}" is part of a live routine — edit the cadence in the drawer instead`, { timeout: 4500 });
+            return;
+          }
+        }
+        // Demote path: clear recurrence, set date.
+        const ts = new Date().toISOString();
+        const seriesId = task.recurrence?.recurrenceId || null;
+        pushSnapshotUndo();
+        setTasks(prev => prev.map(t => t.id === task.id ? syncTaskSnooze({
+          ...t,
+          recurrence: null,
+          date: targetDate,
+          activity: [...(t.activity || []), { type: 'demoted-from-routine', at: ts, fromSeries: seriesId }],
+        }) : t));
+        // Filtered-drop toast (Q3-B): warn if filters would hide the new card.
+        const wouldBeFiltered = (() => {
+          if (!targetDate) return false; // inbox-bound card; inbox view has its own visibility
+          const mock = { ...task, recurrence: null, date: targetDate };
+          return !taskOwnFilters(mock);
+        })();
+        if (wouldBeFiltered) {
+          showToast(`Card created on ${targetDate} — clear filters to see it`, { undoable: true });
+        } else {
+          showToast(targetDate ? `One-off card on ${targetDate}` : 'Moved to inbox', { undoable: true });
+        }
+        return;
+      }
 
       // Stack reorder — both source and target are stack tasks.
       // Multi-select: when the dragged card is part of a multi-selection, every
@@ -3482,6 +3831,45 @@ function App() {
   };
 
   const openTask = (id) => { setSettingsOpen(false); setRenamingId(null); setDrawerFromLeft(false); setDrawerId(id); setFocusedId(id); };
+
+  // Jump to a task by id, switch to a view that should make it visible,
+  // animate-scroll it to center, and highlight it until the user clicks
+  // elsewhere. Used by "Go to first instance" in the drawer's recurrence
+  // section. View choice:
+  //   • done task → 'completed' view (shows past completed instances)
+  //   • else → 'week' (Timeline)
+  const jumpToTaskHighlighted = (id) => {
+    const t = taskById(id);
+    if (!t) return;
+    setDrawerId(id);
+    setFocusedId(id);
+    if (t.archived) setView('archived');
+    else if (t.done) setView('completed');
+    else setView('week');
+    // Retry-find the element across a few frames so the view-switch render
+    // can settle (especially Timeline which virtualises). Once found, scroll
+    // into view + apply the persistent highlight.
+    const sel = `[data-card-id="${CSS.escape(id)}"], .list-item[data-list-id="${CSS.escape(id)}"]`;
+    let tries = 0;
+    const findAndHighlight = () => {
+      tries += 1;
+      const el = document.querySelector(sel);
+      if (!el) {
+        if (tries < 30) setTimeout(findAndHighlight, 40);
+        return;
+      }
+      el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      el.classList.add('routine-jump-highlight');
+      const clear = (e) => {
+        if (e && el.contains(e.target)) return;
+        el.classList.remove('routine-jump-highlight');
+        document.removeEventListener('click', clear, true);
+      };
+      setTimeout(() => document.addEventListener('click', clear, true), 300);
+      setTimeout(() => clear(null), 12000);
+    };
+    setTimeout(findAndHighlight, 40);
+  };
   const openSettings = () => { setDrawerId(null); setRenamingId(null); setSettingsOpen(s=>!s); };
   const drawerTask = drawerId ? taskById(drawerId) : null;
 
@@ -3526,7 +3914,7 @@ function App() {
   // board pan-to-scroll — attach move/up to document so fast drags don't lose events
   const onBoardMouseDown = e => {
     if (e.button !== 0) return;
-    if (e.target.closest('.card,.col-add,.col-groupby,.col-groupby-wrap,.card-add-zone,.side-panel,.col-hdr,.grp-hdr,.done-grp-hdr,.tb-btn,.lnav-item,.drawer')) return;
+    if (e.target.closest('.card,.col-add,.col-groupby,.col-groupby-wrap,.card-add-zone,.side-panel,.col-hdr,.grp-hdr,.done-grp-hdr,.tb-btn,.lnav-item,.drawer,.col-routines-strip,.crs-item')) return;
     const el = boardRef.current; if (!el) return;
     if (e.shiftKey) { startMarquee(e, el); return; }
     userScrolledRef.current = true;
@@ -3883,7 +4271,19 @@ function App() {
 
     {/* BODY */}
     <div className="app-shell">
-    <div className={`app-body${isNarrowScreen?' is-mobile':''}${filtersActive?' chk-mode':''}${selectedIds.size?' chk-mode':''}`} onClick={e=>{ setFilterOpen(false); setGroupOpen(false); setTbOverflowOpen(false); if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar,.dvv,.rt-view')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); } }}>
+    <div className={`app-body${isNarrowScreen?' is-mobile':''}${filtersActive?' chk-mode':''}${selectedIds.size?' chk-mode':''}`}
+      onMouseDown={e=>{ bodyClickGuard.current = { x: e.clientX, y: e.clientY }; }}
+      onClick={e=>{
+        setFilterOpen(false); setGroupOpen(false); setTbOverflowOpen(false);
+        // Only treat as a "close-the-drawer click" if the pointer didn't
+        // drift significantly between mousedown and mouseup. Pans on the
+        // timeline canvas register as drags (>4px move) and should not
+        // close the drawer/focus/selection.
+        const a = bodyClickGuard.current;
+        bodyClickGuard.current = null;
+        if (a && (Math.abs(e.clientX - a.x) > 4 || Math.abs(e.clientY - a.y) > 4)) return;
+        if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar,.dvv,.rt-view')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); }
+      }}>
       <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false); if (isNarrowScreen) setNavCollapsed(true);}} collapsed={navCollapsed} theme={theme}
         activeLifeAreas={filters.lifeAreas}
         onLifeAreaToggle={id=>toggleFilter('lifeAreas',id)}/>
@@ -4158,7 +4558,7 @@ function App() {
       onClearBlocked={clearBlocked}
       recentBlockReasons={recentBlockReasons}
       blockingCountFor={blockingCountFor}
-      onJumpTo={(id)=>{ setDrawerId(id); setFocusedId(id); }}
+      onJumpTo={jumpToTaskHighlighted}
       onCheckIn={(id, mode)=>{ const t=taskById(id); if(t && !t.done) completeTask(id, t.date||'inbox', mode); }}
       onGoToCard={(id)=>{
         const t = taskById(id);
@@ -4339,7 +4739,12 @@ function App() {
         card flies from somewhere above into position". Killing the overlay
         animation leaves only the source's slide, which is the polished part. */}
     <DragOverlay zIndex={9999} dropAnimation={null}>
-      {activeDrag?.srcHTML ? (
+      {activeDrag?.routineGhost ? (
+        <div className="dnd-overlay-routine">
+          <div className="dnd-or-title">{activeDrag.routineGhost.title}</div>
+          <div className="dnd-or-meta">↻ → one-off · drop on a day</div>
+        </div>
+      ) : activeDrag?.srcHTML ? (
         <div className="dnd-overlay-ghost" dangerouslySetInnerHTML={{ __html: activeDrag.srcHTML }} />
       ) : null}
     </DragOverlay>

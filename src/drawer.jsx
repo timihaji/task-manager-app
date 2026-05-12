@@ -29,9 +29,9 @@ function DrSection({ title, open, onToggle, children }) {
   );
 }
 
-function DRow({ label, children }) {
+function DRow({ label, children, className, ...rest }) {
   return (
-    <div className="dr-row">
+    <div className={`dr-row${className ? ' ' + className : ''}`} {...rest}>
       <div className="dr-row-lbl">{label}</div>
       <div className="dr-row-val">{children}</div>
     </div>
@@ -108,6 +108,15 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
   };
   const [cadenceCustom, setCadenceCustom] = useState('');
   const [delegateName, setDelegateName] = useState('');
+  // When the drawer is opened via card→routine drop, this is set to the
+  // task's id. The Repeats + Treat-as rows get a purple emphasis (background
+  // tint + left border + initial pulse) until the user opens a different
+  // task or closes the drawer. Telegraphs "we queued this for a routine —
+  // pick a cadence here". Keyed on task.id (not recurrenceId) because the
+  // drop no longer pre-fills a default cadence — the task has no recurrence
+  // until the user picks one.
+  const [recurEmphasisTaskId, setRecurEmphasisTaskId] = useState(null);
+  const recurEmphasized = !!recurEmphasisTaskId && recurEmphasisTaskId === task?.id;
   const titleRef = useRef(null);
   const timeMoreRef = useRef(null);
   useEffect(() => {
@@ -134,6 +143,20 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
       if (initialFocus === 'delegation') {
         setSecs(s => ({...s, dele:true, log:true}));
         onInitialFocusConsumed?.();
+      }
+      // Card→routine drop opens the drawer with focus on the Repeats row.
+      // Scroll it into view and apply purple emphasis to the routine rows so
+      // the user knows where to refine the cadence we auto-applied.
+      // Emphasis persists until they open another task / close the drawer.
+      if (initialFocus === 'recurrence') {
+        setRecurEmphasisTaskId(task.id);
+        requestAnimationFrame(() => {
+          const row = document.querySelector('.dr-body .dr-row[data-recur-row]');
+          if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        onInitialFocusConsumed?.();
+      } else {
+        setRecurEmphasisTaskId(null);
       }
     }
   }, [task?.id]);
@@ -292,6 +315,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
 
   const matchRecurPreset = (r) => {
     if (!r) return 'none';
+    if (!r.freq) return null; // pending routine — no preset matches yet
     if (r.freq === 'daily' && (r.interval || 1) === 1 && !r.byDay) return 'daily';
     if (r.freq === 'weekdays') return 'weekdays';
     if (r.freq === 'weekly' && (r.interval || 1) === 1) {
@@ -788,7 +812,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
               )}
             </div>
           </DRow>
-          <DRow label="Repeats">
+          <DRow label="Repeats" data-recur-row className={recurEmphasized ? 'dr-row-recur-emphasis' : ''}>
             <div className="dr-recur-chips">
               {RECUR_PRESETS.map(p => {
                 const active = matchRecurPreset(task.recurrence) === p.id && !customRecurOpen;
@@ -798,7 +822,13 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                     onClick={() => {
                       setCustomRecurOpen(false);
                       if (!p.value) { upd({ recurrence: null }); return; }
-                      upd({ recurrence: ensureRecurrenceFields(p.value, task.recurrence?.recurrenceId) });
+                      // Preserve existing isRoutine flag if the task already
+                      // has one (e.g. pending routine from strip-drop, or
+                      // user previously flipped Treat-as). For a fresh
+                      // recurrence, default to false — the user decides via
+                      // the Treat-as toggle. No auto-derive based on freq.
+                      const explicitIsRoutine = task.recurrence?.isRoutine ?? false;
+                      upd({ recurrence: ensureRecurrenceFields({ ...p.value, isRoutine: explicitIsRoutine }, task.recurrence?.recurrenceId) });
                     }}>
                     {p.label}
                   </button>
@@ -817,6 +847,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                       // becomes weekly + Mon..Fri byDay; weekly w/o byDay
                       // becomes weekly + empty byDay so the grid renders.)
                       let cur = task.recurrence;
+                      const explicitIsRoutine = task.recurrence?.isRoutine ?? false;
                       if (!cur) {
                         cur = { freq:'weekly', interval:1, byDay:[] };
                       } else if (cur.freq === 'weekdays') {
@@ -824,7 +855,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                       } else if (cur.freq === 'weekly' && !Array.isArray(cur.byDay)) {
                         cur = { ...cur, byDay: [] };
                       }
-                      upd({ recurrence: ensureRecurrenceFields(cur, task.recurrence?.recurrenceId) });
+                      upd({ recurrence: ensureRecurrenceFields({ ...cur, isRoutine: explicitIsRoutine }, task.recurrence?.recurrenceId) });
                       setCustomRecurOpen(true);
                     }}>
                     {isCustomMatch ? `Custom · ${recurrenceLabel(task.recurrence)}` : 'Custom…'}
@@ -922,35 +953,61 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
             })()}
           </DRow>
 
-          {task.recurrence && (
-            <DRow label="Treat as">
-              {/* Segmented control — both states always visible so it's obvious
-                  what's currently on. Replaces an earlier toggle pill that was
-                  ambiguous about ON / OFF. */}
-              <div className="dr-recur-mode-seg" role="group" aria-label="Routine or recurring task">
-                <button
-                  className={task.recurrence.isRoutine ? 'act' : ''}
-                  onClick={() => upd({ recurrence: { ...task.recurrence, isRoutine: true } })}>
-                  <I.Flame/><span>Routine</span>
-                </button>
-                <button
-                  className={!task.recurrence.isRoutine ? 'act' : ''}
-                  onClick={() => upd({ recurrence: { ...task.recurrence, isRoutine: false } })}>
-                  <I.Recur/><span>Recurring</span>
-                </button>
+          {/* Treat-as toggle always renders so users know the option exists.
+              When recurrence is null, the buttons are visually disabled and a
+              hint nudges them to pick a cadence above. Once recurrence is set
+              (including the "pending routine" state from strip-drop), the
+              buttons become live and reflect task.recurrence.isRoutine. */}
+          <DRow label="Treat as" className={recurEmphasized ? 'dr-row-recur-emphasis' : ''}>
+            <div className={`dr-recur-mode-seg${!task.recurrence ? ' is-disabled' : ''}`} role="group" aria-label="Routine or recurring task">
+              <button
+                disabled={!task.recurrence}
+                className={task.recurrence?.isRoutine ? 'act' : ''}
+                onClick={() => task.recurrence && upd({ recurrence: { ...task.recurrence, isRoutine: true } })}>
+                <I.Flame/><span>Routine</span>
+              </button>
+              <button
+                disabled={!task.recurrence}
+                className={task.recurrence && !task.recurrence.isRoutine ? 'act' : ''}
+                onClick={() => task.recurrence && upd({ recurrence: { ...task.recurrence, isRoutine: false } })}>
+                <I.Recur/><span>Recurring</span>
+              </button>
+            </div>
+            {!task.recurrence ? (
+              <div className="dr-recur-mode-desc dr-recur-mode-desc-muted">
+                Pick a cadence above to choose how missed instances behave.
               </div>
+            ) : (
               <div className="dr-recur-mode-desc">
                 {task.recurrence.isRoutine
                   ? <><strong>Rolls forward silently if missed.</strong> Streak tracks consecutive days; missed days break the streak but don't pile up as overdue.</>
                   : <><strong>Missed instances stay as overdue cards.</strong> Use this for real obligations (rent, taxes) that don't go away when you miss them.</>}
               </div>
-              {deriveIsRoutine(task.recurrence) !== !!task.recurrence.isRoutine && (
-                <div className="dr-routine-hint">
-                  Default for <em>{recurrenceLabel(task.recurrence)}</em> is <strong>{deriveIsRoutine(task.recurrence) ? 'Routine' : 'Recurring task'}</strong>. You overrode it.
-                </div>
-              )}
-            </DRow>
-          )}
+            )}
+            {task.recurrence?.freq && deriveIsRoutine(task.recurrence) !== !!task.recurrence.isRoutine && (
+              <div className="dr-routine-hint">
+                Suggested for <em>{recurrenceLabel(task.recurrence)}</em>: <strong>{deriveIsRoutine(task.recurrence) ? 'Routine' : 'Recurring task'}</strong>.
+              </div>
+            )}
+            {(() => {
+              // "Go to first instance" — jump to the earliest sibling of the
+              // series. Useful when the user is editing a future or past
+              // instance and wants the head of the series. Hidden when
+              // there's only one instance or the current task is the first.
+              const rid = task.recurrence?.recurrenceId;
+              if (!rid) return null;
+              const dated = (tasks || []).filter(t => t.recurrence?.recurrenceId === rid && t.date);
+              if (dated.length < 2) return null;
+              const first = dated.reduce((a, b) => (a.date < b.date ? a : b));
+              if (first.id === task.id) return null;
+              return (
+                <button className="dr-jump-first" onClick={() => onJumpTo?.(first.id)}
+                        title={`Jump to ${first.date}`}>
+                  ↶ Go to first instance · <span className="dr-jump-first-date">{first.date}</span>
+                </button>
+              );
+            })()}
+          </DRow>
           <DRow label="Someday">
             <button className={`dr-pick${task.someday?' act':''}`}
               style={task.someday?{background:'rgba(139,92,246,.12)',color:'#8b5cf6',borderColor:'rgba(139,92,246,.45)'}:{}}

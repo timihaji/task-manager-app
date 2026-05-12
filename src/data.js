@@ -380,6 +380,13 @@ const routinesRollup = (tasks, todayStr = D.str(D.today())) => {
     const siblings = g.tasks;
     // Title from the most recent instance (handles renames over time).
     const newest = siblings.reduce((a, b) => (a.createdAt > b.createdAt ? a : b), siblings[0]);
+    // Series "current" recurrence: latest-dated open sibling if any, otherwise
+    // fall back to newest. Picking from open siblings keeps the dashboard chip
+    // honest when the user changes the cadence (past done/archived instances
+    // keep their historical recurrence shape — see Q1 in the fix plan).
+    const newestOpen = siblings.filter(t => !t.done && !t.archived && t.date)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+    const currentRecurrence = newestOpen?.recurrence || newest?.recurrence || g.recurrence;
     // Sort by task.date (the scheduled day), then completedAt as tiebreak.
     // task.date is the authoritative "this is the day it was done" for routines.
     const lastDoneTask = siblings.filter(t => t.done && t.date)
@@ -394,7 +401,7 @@ const routinesRollup = (tasks, todayStr = D.str(D.today())) => {
     const last30Done = last30.filter(t => t.done).length;
     rows.push({
       recurrenceId: g.recurrenceId,
-      recurrence: g.recurrence,
+      recurrence: currentRecurrence,
       displayTitle: newest.title || g.displayTitle,
       project: newest.project || g.project,
       lifeArea: newest.lifeArea || g.lifeArea,
