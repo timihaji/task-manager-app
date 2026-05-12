@@ -279,6 +279,7 @@ function App() {
     delegationsPersonFilter: [],    // array of person names
     showDelegationsOnTimeline: false, // top-nav toggle: surface delegated cards on stack/timeline
     showCheckInsOnTimeline: false,    // top-nav toggle: surface synthetic check-in reminders too
+    showRoutinesOnTimeline: true,     // top-nav toggle: show/hide routine strips on each day column
   };
   const defaultTaxonomy = () => ({
     contexts: PROJ.map(p=>({...p})),
@@ -3956,6 +3957,7 @@ function App() {
     const pinClass = colKey===todayStr ? `today-pinned${todayPin ? ` pin-${todayPin}` : ''}` : '';
     return <Column key={`${keyPrefix}${colKey}`} className={pinClass} date={date} tasks={colTasks}
       focusedCardId={focusedId} selectedIds={selectedIds} spawning={spawning} theme={theme} tweaks={tweaks}
+      showRoutines={tweaks.showRoutinesOnTimeline !== false}
       renamingId={renamingId}
       groupBy={globalGroupBy}
       collapsedGrps={collapsedGrps}
@@ -4152,6 +4154,10 @@ function App() {
           aria-label="Open delegations dashboard"
           style={view==='delegations'?{color:'var(--accent)'}:undefined}><I.Deleg/>Delegations</button>
       </div>
+      {view==='week' && <button className={`tb-btn${tweaks.showRoutinesOnTimeline===false?' tb-btn-inactive':''}`}
+        onClick={()=>setTweak('showRoutinesOnTimeline', tweaks.showRoutinesOnTimeline===false ? true : false)}
+        title={tweaks.showRoutinesOnTimeline===false?'Show routines on timeline':'Hide routines on timeline'}
+        aria-pressed={tweaks.showRoutinesOnTimeline!==false}><I.Recur/>Routines</button>}
       <button className="tb-btn" onClick={()=>setTweak('inboxCollapsed',!tweaks.inboxCollapsed)} title="Toggle inbox panel"><I.Inbox/>Inbox</button>
       <button className="tb-btn" onClick={openSettings} title="Settings">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -4193,6 +4199,10 @@ function App() {
               <div className="fdd-item" onClick={()=>setTweak('showCheckInsOnTimeline', !tweaks.showCheckInsOnTimeline)}
                 title="When off, synthetic 'Check in with X' reminders stay hidden until their day">
                 <input type="checkbox" readOnly checked={!!tweaks.showCheckInsOnTimeline}/>Show check-in reminders on timeline
+              </div>
+              <div className="fdd-item" onClick={()=>setTweak('showRoutinesOnTimeline', !tweaks.showRoutinesOnTimeline)}
+                title="Hide or show the routines strip at the top of each day column">
+                <input type="checkbox" readOnly checked={tweaks.showRoutinesOnTimeline !== false}/>Show routines on timeline
               </div>
               <div className="fdd-item" onClick={()=>{setShowStaleOnly(v=>!v);setTbOverflowOpen(false);}}>
                 <input type="checkbox" readOnly checked={showStaleOnly}/>Stale only

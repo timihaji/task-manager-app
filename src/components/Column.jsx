@@ -103,6 +103,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
   onFocus, onSelect, renamingId, onRename, onRenameDone,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
   blockingCountFor, taskTitleById,
+  showRoutines=true,
   cardExtras, className='', style }) {
   const addTap = useTapSpring();
   const [addBtnRef, addMagnet] = useMagnet({ range: 80, pull: 0.4 });
@@ -168,7 +169,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
             contributes ~17px of vertical offset that an unwrapped strip
             would otherwise miss). Strip is chrome — it never participates in
             drag/FLIP and is filtered out of the priority/active card list. */}
-        {routines.length > 0 && (
+        {showRoutines && routines.length > 0 && (
           <div className="grp-free col-routines-grp">
             <div className="card-add-zone col-routines-spacer" aria-hidden="true"/>
             <RoutineStripDropZone colKey={colKey}>
