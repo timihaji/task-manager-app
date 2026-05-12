@@ -28,9 +28,9 @@ function GrpDroppable({ id, data, baseClass, isCustom, children }) {
   );
 }
 
-// Routine strip pill — draggable so the user can pull it out of the strip into
-// a column body (demote to one-off card) or onto another day's strip
-// (reschedule the routine instance, see Q2-B in docs/routines-fix-and-drag-plan).
+// Routine strip pill — draggable so the user can move a routine instance to
+// another day. Drop on any part of a target column (body, strip, card)
+// reschedules the instance to that date and keeps it as a routine.
 // Done pills are not draggable and shake on pointerdown (Q4-A).
 function RoutineStripItem({ task, colKey, onToggle, onOpen, onContextMenu }) {
   const btnRef = useRef(null);
@@ -72,7 +72,7 @@ function RoutineStripItem({ task, colKey, onToggle, onOpen, onContextMenu }) {
       onContextMenu={(e) => { if (onContextMenu) { e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}
       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); onOpen?.(task.id); } }}
       onPointerDown={onPointerDownDone}
-      title={`${task.title} — click name to edit · click ○ to ${task.done ? 'undo' : 'complete'} · ${task.done ? 'undo first to move' : 'drag to a day to make one-off, or to another day’s strip to reschedule'}`}
+      title={`${task.title} — click name to edit · click ○ to ${task.done ? 'undo' : 'complete'} · ${task.done ? 'undo first to move' : 'drag to another day to reschedule'}`}
       {...(task.done ? {} : listeners)}
       {...(task.done ? {} : attributes)}>
       <span className="crs-dot" role="button" aria-label={task.done ? 'Mark incomplete' : 'Mark complete'}
@@ -83,10 +83,9 @@ function RoutineStripItem({ task, colKey, onToggle, onOpen, onContextMenu }) {
   );
 }
 
-// Drop target wrapping the routine strip — used for Q2-B (drop on strip
-// reschedules the routine instance to that column's date, keeps it in the
-// series). Body-drop in the column itself demotes to a one-off card and is
-// handled by ColDroppable above.
+// Drop target wrapping the routine strip — gives the strip its own
+// highlight when hovered during a routine-pill drag, but reschedule
+// semantics are identical to dropping anywhere else on the column.
 function RoutineStripDropZone({ colKey, children }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `col-strip:${colKey}`,

@@ -2989,13 +2989,12 @@ function App() {
       haptics.drop();
 
       // Routine strip pill dragged out of the strip.
-      // - Drop on a column body / task / completed-task → demote: clear
-      //   recurrence, set date to the target's date. Card becomes a one-off.
-      // - Drop on another column's routine-strip (kind: 'routine-strip') →
+      // - Drop on a column (body, strip, task, or completed-task) →
       //   reschedule: keep recurrence, change date to that day. Refuse if
-      //   target already has a sibling of same series, or target date is in
-      //   the past (would auto-archive next render).
-      // - Drop on inbox column → demote with date=null.
+      //   target already has a sibling of same series, target date is in
+      //   the past, or target is the same day.
+      // - Drop on inbox column → ignored (unscheduling a routine doesn't
+      //   make sense; the drawer's None preset is the way to stop a series).
       // Filter-aware: if active filter would hide the resulting card on the
       // target column, the drop still succeeds (Q3-B) and a toast surfaces
       // with an Undo affordance.
@@ -3037,10 +3036,8 @@ function App() {
         const task = taskById(taskId);
         if (!task) return;
         let targetDate = null;
-        let intent = 'demote';
         if (oData.kind === 'routine-strip') {
           targetDate = oData.date;
-          intent = 'reschedule';
         } else if (oData.kind === 'column') {
           targetDate = oData.date === undefined ? null : oData.date;
         } else if (oData.kind === 'task' || oData.kind === 'completed-task' || oData.kind === 'stack-task') {
@@ -3049,85 +3046,31 @@ function App() {
         } else {
           return;
         }
-        // Reschedule path (Q2-B). Refuse same-day, past-day, or duplicate-sibling.
-        if (intent === 'reschedule') {
-          if (!targetDate || targetDate === task.date) return;
-          const todayStr = D.str(D.today());
-          if (targetDate < todayStr) {
-            showToast('Can’t reschedule a routine to a past day', { timeout: 1800 });
-            return;
-          }
-          const conflict = tasks.some(t =>
-            t.id !== task.id &&
-            t.recurrence?.recurrenceId === task.recurrence?.recurrenceId &&
-            t.date === targetDate &&
-            !t.archived);
-          if (conflict) {
-            showToast(`${task.title}: already an instance on that day`, { timeout: 1800 });
-            return;
-          }
-          pushSnapshotUndo();
-          setTasks(prev => prev.map(t => t.id === task.id ? syncTaskSnooze({ ...t, date: targetDate }) : t));
-          showToast(`Routine moved to ${targetDate}`, { undoable: true });
+        // Reschedule — keep recurrence, change date. Refuse same-day,
+        // past-day, duplicate-sibling, or inbox (no date).
+        if (!targetDate || targetDate === task.date) return;
+        const todayStr = D.str(D.today());
+        if (targetDate < todayStr) {
+          showToast('Can’t reschedule a routine to a past day', { timeout: 1800 });
           return;
         }
-        // Block demote when the series has active future instances. Dragging
-        // a single instance out of a live routine into the column body would
-        // turn it into a one-off and leave the rest of the series intact —
-        // probably not what the user wants. Shake the source pill, toast a
-        // warning, and auto-open the drawer so the user can decide whether
-        // to stop the whole series (None preset) or rebase its cadence.
-        // Drop on another day's strip (reschedule) is unaffected — handled
-        // earlier in the routine-strip branch above.
-        if (task.recurrence?.recurrenceId) {
-          const todayStr = D.str(D.today());
-          const hasActiveFutureSiblings = tasks.some(t =>
-            t.id !== task.id &&
-            t.recurrence?.recurrenceId === task.recurrence.recurrenceId &&
-            !t.done && !t.archived &&
-            t.date && t.date > todayStr
-          );
-          if (hasActiveFutureSiblings) {
-            setTimeout(() => {
-              const sourceEl = document.querySelector(`[data-routine-id="${CSS.escape(task.id)}"]`);
-              sourceEl?.animate(
-                [
-                  { transform: 'translateX(0)' },
-                  { transform: 'translateX(-5px)' },
-                  { transform: 'translateX(5px)' },
-                  { transform: 'translateX(-3px)' },
-                  { transform: 'translateX(0)' },
-                ],
-                { duration: 260, easing: 'ease-out' }
-              );
-            }, 40);
-            setDrawerId(task.id);
-            setFocusedId(task.id);
-            setDrawerInitialFocus('recurrence');
-            showToast(`"${task.title}" is part of a live routine — edit the cadence in the drawer instead`, { timeout: 4500 });
-            return;
-          }
+        const conflict = tasks.some(t =>
+          t.id !== task.id &&
+          t.recurrence?.recurrenceId === task.recurrence?.recurrenceId &&
+          t.date === targetDate &&
+          !t.archived);
+        if (conflict) {
+          showToast(`${task.title}: already an instance on that day`, { timeout: 1800 });
+          return;
         }
-        // Demote path: clear recurrence, set date.
-        const ts = new Date().toISOString();
-        const seriesId = task.recurrence?.recurrenceId || null;
         pushSnapshotUndo();
-        setTasks(prev => prev.map(t => t.id === task.id ? syncTaskSnooze({
-          ...t,
-          recurrence: null,
-          date: targetDate,
-          activity: [...(t.activity || []), { type: 'demoted-from-routine', at: ts, fromSeries: seriesId }],
-        }) : t));
-        // Filtered-drop toast (Q3-B): warn if filters would hide the new card.
-        const wouldBeFiltered = (() => {
-          if (!targetDate) return false; // inbox-bound card; inbox view has its own visibility
-          const mock = { ...task, recurrence: null, date: targetDate };
-          return !taskOwnFilters(mock);
-        })();
+        setTasks(prev => prev.map(t => t.id === task.id ? syncTaskSnooze({ ...t, date: targetDate }) : t));
+        // Filter-aware toast (Q3-B): warn if filters would hide the rescheduled card.
+        const wouldBeFiltered = !taskOwnFilters({ ...task, date: targetDate });
         if (wouldBeFiltered) {
-          showToast(`Card created on ${targetDate} — clear filters to see it`, { undoable: true });
+          showToast(`Routine moved to ${targetDate} — clear filters to see it`, { undoable: true });
         } else {
-          showToast(targetDate ? `One-off card on ${targetDate}` : 'Moved to inbox', { undoable: true });
+          showToast(`Routine moved to ${targetDate}`, { undoable: true });
         }
         return;
       }
