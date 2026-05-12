@@ -743,6 +743,16 @@ body[data-look="glass"] .dvv-log-row:hover,
 body[data-look="glass"] .dvv-log-row.is-linked{
   backdrop-filter:blur(8px);
 }
+/* Glass overrides for .dvv-item interactive states — base rule above sets the
+   frosted bg with higher specificity than .dvv-item:hover/.sel, so hover and
+   selection lose their visual feedback unless we re-state them with the same
+   data-look prefix. Mirrors the .card glass treatment in this file. */
+body[data-look="glass"] .dvv-item:hover{
+  background:color-mix(in srgb, var(--surface-2) 78%, transparent);
+}
+body[data-look="glass"] .dvv-item.sel{
+  background:color-mix(in srgb, var(--accent) 18%, transparent);
+}
 
 /* Sharp look strips shadows on popovers — match overall app behavior */
 body[data-look="sharp"] .dvv-km,
