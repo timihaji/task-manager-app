@@ -55,6 +55,10 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
   const priRef = useRef(null);
   const snoozeRef = useRef(null);
   const editRef = useRef(null);
+  // Tracks whether THIS card's `focused` state was set by mouse hover. Used by
+  // onMouseLeave to clear focus only for hover-induced focus, leaving focus
+  // set by click or keyboard nav alone.
+  const hoverFocusRef = useRef(false);
 
   // External keyboard-driven popover open requests
   useEffect(() => {
@@ -130,10 +134,11 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
       style={{...dragStyle, ...cardColorVars(task.cardColor, tweaks, theme)}}
       data-card-id={task.id}
       title={task.blocked ? (task.blockedReason || 'Blocked') + ((task.blockedBy||[]).length && taskTitleById ? '\nWaiting on: ' + (task.blockedBy||[]).map(id=>taskTitleById(id)).filter(Boolean).join(', ') : '') : undefined}
-      onClick={()=>!renaming&&onFocus(task.id)}
+      onClick={()=>{ if(renaming) return; hoverFocusRef.current=false; onFocus(task.id); }}
       onDoubleClick={()=>!renaming&&!openPop&&onOpen(task.id)}
       onContextMenu={e=>{ if(onContextMenu){ e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}
-      onMouseEnter={()=>onFocus(task.id)}
+      onMouseEnter={()=>{ if(renaming) return; if(!focused) hoverFocusRef.current=true; onFocus(task.id); }}
+      onMouseLeave={()=>{ if(hoverFocusRef.current && focused) onFocus(null); hoverFocusRef.current=false; }}
       onMouseDown={useExtDrag ? (e)=>onExternalDrag(e, task) : undefined}
       {...(isSortable ? sortable.attributes : {})}
       {...(isSortable && !useExtDrag ? sortable.listeners : {})}

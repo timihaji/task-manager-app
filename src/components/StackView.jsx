@@ -224,6 +224,10 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
   const [draft, setDraft] = useState(task.title || '');
   const [menuOpen, setMenuOpen] = useState(false);
   const inputRef = useRef(null);
+  // Tracks whether THIS card's `focused` state was set by mouse hover. Used by
+  // onMouseLeave to clear hover-induced focus while leaving click/keyboard
+  // focus alone. Mirrors the pattern in TaskCard.jsx.
+  const hoverFocusRef = useRef(false);
   useEffect(()=>{ setDraft(task.title || ''); }, [task.id, task.title]);
   useEffect(()=>{
     if (renaming) requestAnimationFrame(()=>{ inputRef.current?.focus(); inputRef.current?.select(); });
@@ -281,6 +285,7 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
   const handleCardClick = (e) => {
     if (!isCardSurface(e)) return;
     if (e.shiftKey && onSelect) { e.preventDefault(); onSelect(task.id); return; }
+    hoverFocusRef.current = false;
     onFocus?.(task.id);
   };
   const handleCardDoubleClick = (e) => { if (isCardSurface(e)) onOpen?.(task.id); };
@@ -295,7 +300,8 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
          {...listeners}
          onClick={handleCardClick}
          onDoubleClick={handleCardDoubleClick}
-         onMouseEnter={()=>!renaming && onFocus?.(task.id)}
+         onMouseEnter={()=>{ if (renaming) return; if (!focused) hoverFocusRef.current = true; onFocus?.(task.id); }}
+         onMouseLeave={()=>{ if (hoverFocusRef.current && focused) onFocus?.(null); hoverFocusRef.current = false; }}
          onContextMenu={(e)=>{ if (onContextMenu) { e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}>
 
       {menuOpen && (
