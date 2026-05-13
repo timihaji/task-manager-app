@@ -3817,7 +3817,7 @@ function App() {
     };
     setTimeout(findAndHighlight, 40);
   };
-  const openSettings = () => { setDrawerId(null); setRenamingId(null); setSettingsOpen(s=>!s); };
+  const openSettings = () => { setDrawerId(null); setRenamingId(null); if (!settingsOpen) setTweak('calendarOpen', false); setSettingsOpen(s=>!s); };
   const drawerTask = drawerId ? taskById(drawerId) : null;
 
   // Shift+drag marquee selection — works on board AND stack-body backgrounds.
@@ -4080,7 +4080,7 @@ function App() {
         </div>
         <button
           className={`tb-btn cal-toggle${tweaks.calendarOpen?' active':''}`}
-          onClick={()=>setTweak('calendarOpen', !tweaks.calendarOpen)}
+          onClick={()=>{ const next=!tweaks.calendarOpen; setTweak('calendarOpen',next); if(next) setSettingsOpen(false); }}
           title={tweaks.calendarOpen ? 'Close calendar' : 'Open day calendar'}
           aria-pressed={!!tweaks.calendarOpen}
         ><I.Cal/></button>
@@ -4179,14 +4179,13 @@ function App() {
         title={tweaks.showRoutinesOnTimeline===false?'Show routines on timeline':'Hide routines on timeline'}
         aria-pressed={tweaks.showRoutinesOnTimeline!==false}><I.Recur/>Routines</button>}
       <button className="tb-btn" onClick={()=>setTweak('inboxCollapsed',!tweaks.inboxCollapsed)} title="Toggle inbox panel"><I.Inbox/>Inbox</button>
-      <button className="tb-btn" onClick={openSettings} title="Settings">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        Settings
-      </button>
       <button className="tb-btn" onClick={()=>setPalette(true)}><I.Search/>⌘K</button>
       <div className="tb-sep"/>
       <button className="tb-icon-btn" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')} title="Toggle theme (L)">
         {theme==='dark'?<I.Sun/>:<I.Moon/>}
+      </button>
+      <button className="tb-icon-btn" onClick={openSettings} title="Settings" aria-pressed={settingsOpen}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
       </div>{/* /tb-secondary-right */}
       <div className="filter-dd-wrap tb-overflow-wrap" onClick={e=>e.stopPropagation()}>
@@ -4255,7 +4254,7 @@ function App() {
         const a = bodyClickGuard.current;
         bodyClickGuard.current = null;
         if (a && (Math.abs(e.clientX - a.x) > 4 || Math.abs(e.clientY - a.y) > 4)) return;
-        if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar,.dvv,.rt-view')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); }
+        if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar,.dvv,.rt-view')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); setTweak('calendarOpen',false); }
       }}>
       <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false); if (isNarrowScreen) setNavCollapsed(true);}} collapsed={navCollapsed} theme={theme}
         activeLifeAreas={filters.lifeAreas}
@@ -4596,6 +4595,8 @@ function App() {
         onNext={()=>setCalendarDateStr(D.str(D.add(D.parse(calendarDateStr) || D.today(), 1)))}
         onToday={()=>setCalendarDateStr(D.str(D.today()))}
         onClose={()=>setTweak('calendarOpen', false)}
+        calendarWidth={Number(tweaks.calendarWidth)||460}
+        onWidthChange={w=>setTweak('calendarWidth',w)}
       />
     )}
     {extDrag && extDragRef.current && (

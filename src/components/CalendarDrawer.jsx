@@ -140,11 +140,28 @@ export default function CalendarDrawer({
   onCancelExternal,
   onAutoPlan,
   onPrev, onNext, onToday, onClose,
+  calendarWidth, onWidthChange,
 }) {
   const scrollRef = useRef(null);
   const gridRef = useRef(null);
   const drawerRef = useRef(null);
   const [drag, setDrag] = useState(null);
+
+  const onResizeMouseDown = useCallback((e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = calendarWidth || 460;
+    const onMove = (mv) => {
+      const newW = Math.max(360, Math.min(900, startW - (mv.clientX - startX)));
+      onWidthChange && onWidthChange(newW);
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [calendarWidth, onWidthChange]);
   const [hoverMin, setHoverMin] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
 
@@ -539,7 +556,8 @@ export default function CalendarDrawer({
   const numLabel = `${moLabel} ${dateObj.getDate()}`;
 
   return (
-    <section className="cal-drawer is-open" ref={drawerRef}>
+    <section className="cal-drawer is-open" ref={drawerRef} style={{width: calendarWidth || 460}}>
+      <div className="cal-resize-handle" onMouseDown={onResizeMouseDown}/>
       <header className="cal-hdr">
         <div className="cal-hdr-left">
           <button className="icon-btn" title="Previous day" onClick={onPrev}><Chev dir="left" /></button>
