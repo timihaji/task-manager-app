@@ -536,6 +536,7 @@ function App() {
   const setSnapOn = (v) => setTweak('calendarSnapOn', typeof v === 'function' ? v(snapOn) : !!v);
 
   const [view,setView]       = useState(() => readSavedView() || 'week');
+  const [preDeleg,setPreDeleg] = useState(null); // view to return to when toggling Delegations off
   const sidePanelView = tweaks.sidePanelView || 'inbox';
   const setSidePanelView = (v) => setTweak('sidePanelView', v);
   const [drawerId,setDrawerId]= useState(null);
@@ -4164,11 +4165,14 @@ function App() {
         )}
       </div>
       <div className="tb-btn-group" title="Delegations">
-        <button className="tb-btn" onClick={()=>setView('delegations')}
-          title="Delegations dashboard"
+        <button className={`tb-btn${view==='delegations'?' tb-btn-pressed':''}`}
+          onClick={()=>{
+            if(view==='delegations'){setView(preDeleg||'week');setPreDeleg(null);}
+            else{setPreDeleg(view);setView('delegations');}
+          }}
+          title={view==='delegations'?'Back to previous view':'Delegations dashboard'}
           aria-pressed={view==='delegations'}
-          aria-label="Open delegations dashboard"
-          style={view==='delegations'?{color:'var(--accent)'}:undefined}><I.Deleg/>Delegations</button>
+          aria-label="Open delegations dashboard"><I.Deleg/>Delegations</button>
       </div>
       {view==='week' && <button className={`tb-btn${tweaks.showRoutinesOnTimeline===false?' tb-btn-inactive':''}`}
         onClick={()=>setTweak('showRoutinesOnTimeline', tweaks.showRoutinesOnTimeline===false ? true : false)}
