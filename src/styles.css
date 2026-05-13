@@ -2570,9 +2570,19 @@ button:active:not(:disabled):not(.no-press),
 }
 .cal-drawer .cal-event-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
 .cal-drawer .cal-event-title{font:500 12px/1.3 var(--font);color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cal-drawer .cal-event-title-input{
+  font:500 12px/1.3 var(--font);color:var(--t1);
+  background:color-mix(in srgb,var(--ev-color) 18%,var(--bg));
+  border:1.5px solid color-mix(in srgb,var(--ev-color) 70%,transparent);
+  border-radius:3px;
+  width:100%;box-sizing:border-box;
+  padding:1px 4px;margin:-1px -4px;
+  outline:none;
+}
 .cal-drawer .cal-event-meta{font:10.5px var(--mono);color:var(--t3);display:flex;align-items:center;gap:0;font-feature-settings:"tnum";}
 .cal-drawer .cal-event.is-small{padding-top:2px;padding-bottom:2px;}
 .cal-drawer .cal-event.is-small .cal-event-title{font-size:11px;}
+.cal-drawer .cal-event.is-renaming{cursor:default;}
 .cal-drawer .cal-event-resize{
   position:absolute;left:0;right:0;bottom:0;height:7px;
   cursor:ns-resize;

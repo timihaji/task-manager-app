@@ -56,7 +56,8 @@ function EventBlock({
   ev, task, color, pxh, layout, selected, dimmed, small,
   dragView, settle,
   isUnscheduling,
-  onStartDrag, onSelect,
+  isRenaming,
+  onStartDrag, onSelect, onRename,
 }) {
   const declTop    = (ev.startMin / 60) * pxh;
   const declHeight = Math.max(14, (ev.durationMin / 60) * pxh);
@@ -74,6 +75,30 @@ function EventBlock({
   const liftTilt  = -0.5 + (1.6 - clamp(mass, 0.6, 2.6)) * 0.15;
 
   const tinyHeight = height < 36;
+  const canRename = !ev.taskId;
+
+  const [editTitle, setEditTitle] = useState(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (isRenaming && editTitle === null) setEditTitle(ev.title || '');
+  }, [isRenaming]);
+
+  useEffect(() => {
+    if (editTitle !== null && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editTitle !== null]);
+
+  const commitRename = () => {
+    const val = editTitle?.trim();
+    onRename && onRename(ev.id, val || 'Time block');
+    setEditTitle(null);
+  };
+
+  const displayTitle = task?.title || ev.title || 'Time block';
+
   return (
     <div
       key={settle?.key}
@@ -84,7 +109,8 @@ function EventBlock({
         (isUnscheduling ? ' is-unscheduling' : '') +
         (selected ? ' is-selected' : '') +
         (dimmed ? ' is-dimmed' : '') +
-        (tinyHeight ? ' is-small' : '')
+        (tinyHeight ? ' is-small' : '') +
+        (editTitle !== null ? ' is-renaming' : '')
       }
       style={{
         top, height,
@@ -95,7 +121,7 @@ function EventBlock({
         '--lift-scale': liftScale.toFixed(3),
         '--lift-tilt':  liftTilt.toFixed(2) + 'deg',
       }}
-      onMouseDown={(e) => onStartDrag(e, 'move', ev)}
+      onMouseDown={(e) => { if (editTitle !== null) return; onStartDrag(e, 'move', ev); }}
       onClick={(e) => { e.stopPropagation(); onSelect && onSelect(ev.id); }}
     >
       <div className="cal-event-stripe" />
@@ -105,8 +131,34 @@ function EventBlock({
         title="Drag to change start time"
       />
       <div className="cal-event-body">
-        <div className="cal-event-title">{task?.title || ev.title || 'Time block'}</div>
-        {!tinyHeight && (
+        {editTitle !== null ? (
+          <input
+            ref={inputRef}
+            className="cal-event-title-input"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
+              if (e.key === 'Escape') { setEditTitle(null); onRename && onRename(ev.id, null); }
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <div
+            className="cal-event-title"
+            onDoubleClick={(e) => {
+              if (!canRename) return;
+              e.stopPropagation();
+              setEditTitle(ev.title || '');
+            }}
+            title={canRename ? 'Double-click to rename' : undefined}
+          >
+            {displayTitle}
+          </div>
+        )}
+        {!tinyHeight && editTitle === null && (
           <div className="cal-event-meta">
             <span>{minToCompact(ev.startMin)} – {minToCompact(ev.startMin + ev.durationMin)}</span>
             <span className="dotsep">·</span>
@@ -164,6 +216,7 @@ export default function CalendarDrawer({
   }, [calendarWidth, onWidthChange]);
   const [hoverMin, setHoverMin] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+  const [renamingId, setRenamingId] = useState(null);
 
   // Live "now" line — minute resolution is fine.
   const [nowMin, setNowMin] = useState(currentMinOfDay());
@@ -371,6 +424,7 @@ export default function CalendarDrawer({
           startMin: drag.startMin, durationMin: drag.durationMin,
         }]);
         setSelectedId(id);
+        setRenamingId(id);
         markSettle(id, massFor(drag.durationMin), 'create');
       }
       setDrag(null);
@@ -696,8 +750,13 @@ export default function CalendarDrawer({
                   isUnscheduling={ev._unscheduling}
                   dragView={ev._dragView}
                   settle={settle[ev.id]}
+                  isRenaming={renamingId === ev.id}
                   onStartDrag={startEventDrag}
                   onSelect={setSelectedId}
+                  onRename={(id, title) => {
+                    setRenamingId(null);
+                    if (title !== null) setEvents(ev => ev.map(x => x.id === id ? { ...x, title } : x));
+                  }}
                 />
               );
             })}
