@@ -4030,6 +4030,13 @@ function App() {
           if (t.parentId) { setToast('Already inside a project'); setTimeout(()=>setToast(null),1400); return; }
           updateTask(t.id, {cardType: t.cardType==='project' ? 'task' : 'project'});
         }, kbd:'⇧G'},
+      ...(t.groupId ? [{label:'Ungroup', onClick:()=>{
+        setUndoStack(s=>[...s.slice(-9),{bulk:true,before:tasks,beforeGroups:tweaks.customGroups||[]}]);
+        const nextTasks = tasks.map(tk => tk.id===t.id ? {...tk, groupId:null} : tk);
+        setTasks(nextTasks);
+        pruneEmptyGroups(nextTasks);
+        setToast('Ungrouped'); setTimeout(()=>setToast(null), 1200);
+      }}] : []),
       {type:'sep'},
       {label:'Archive', onClick:()=>archiveTask(t.id), kbd:'C'},
       {label:'Delete',  onClick:()=>deleteTask(t.id), danger:true, kbd:'⌫'},
