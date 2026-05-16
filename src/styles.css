@@ -1852,7 +1852,9 @@ body[data-density] .scard{padding-top:var(--stack-pad-y, 7px);padding-bottom:var
 
 /* === Mobile responsive (≤640px) === */
 .stack-burger{display:none}
-.app-burger{display:none}
+.app-burger{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border-radius:3px;background:transparent;border:none;cursor:pointer;flex-direction:column;gap:3px;flex-shrink:0}
+.app-burger:hover{background:var(--surface-2)}
+.app-burger span{display:block;width:14px;height:1.5px;background:var(--t3);border-radius:1px}
 .tb-overflow-btn{display:none}
 .tb-overflow-wrap{display:none}
 .tb-hide-mobile{}
@@ -1862,13 +1864,8 @@ body[data-density] .scard{padding-top:var(--stack-pad-y, 7px);padding-bottom:var
 @media (max-width: 640px){
   /* --- Topbar mobile: burger + logo + spacer + overflow + new --- */
   .topbar{padding:0 8px;gap:4px}
-  .app-burger{
-    display:inline-flex;align-items:center;justify-content:center;
-    width:36px;height:36px;padding:0;border-radius:6px;
-    background:transparent;border:1px solid var(--border-s);
-    cursor:pointer;flex-direction:column;gap:3px;flex-shrink:0;
-  }
-  .app-burger span{display:block;width:16px;height:2px;background:var(--t2);border-radius:1px}
+  .app-burger{width:36px;height:36px;border-radius:6px;border:1px solid var(--border-s)}
+  .app-burger span{width:16px;height:2px;background:var(--t2)}
   .tb-hide-mobile{display:none!important}
   .tb-secondary{display:none!important}
   .tb-overflow-wrap{display:inline-block;position:relative;flex-shrink:0}
