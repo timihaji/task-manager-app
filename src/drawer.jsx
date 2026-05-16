@@ -1007,6 +1007,19 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                 </button>
               );
             })()}
+            {(() => {
+              const rid = task.recurrence?.recurrenceId;
+              if (!rid) return null;
+              const siblings = (tasks || []).filter(t => t.recurrence?.recurrenceId === rid);
+              if (siblings.length === 0) return null;
+              const done = siblings.filter(t => t.done).length;
+              const open = siblings.length - done;
+              return (
+                <div className="dr-recur-instance-count">
+                  {siblings.length} instance{siblings.length !== 1 ? 's' : ''} · {done} completed · {open} open
+                </div>
+              );
+            })()}
           </DRow>
           <DRow label="Someday">
             <button className={`dr-pick${task.someday?' act':''}`}

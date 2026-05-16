@@ -1230,6 +1230,7 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 }
 .dr-jump-first:hover{text-decoration:underline}
 .dr-jump-first-date{color:var(--t3); font-family:var(--font-mono,var(--font))}
+.dr-recur-instance-count{font-size:11px;color:var(--t4);padding:6px 0 0;letter-spacing:.01em}
 /* Highlight applied to a card or list-item when the user clicks "Go to first
    instance" in the drawer. Glowing indigo outline + persistent ring until the
    user clicks elsewhere (or a 12s timeout). Survives re-renders because the

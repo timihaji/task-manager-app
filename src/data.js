@@ -599,6 +599,45 @@ const pruneOrphanCheckIns = (tasks = []) => {
   return changed ? next : tasks;
 };
 
+// Regenerate check-in tasks that are missing from the tasks array for
+// delegation parents that still have checkInSchedule set. This repairs
+// state corrupted by the realtime race condition where check-ins were
+// created locally but never synced to Supabase — on next load they were
+// absent, pruneOrphanCheckIns cleared the stale IDs, and the parent was
+// left with checkInTaskIds:[] and no way to complete the cadence.
+//
+// Must be called AFTER syncUidFromTasks so generated IDs don't collide.
+const repairMissingCheckIns = (tasks = []) => {
+  const additions = [];
+  const repaired = tasks.map(t => {
+    if (!t?.delegatedTo || t.done || t.archived) return t;
+    if (!Array.isArray(t.checkInSchedule) || !t.checkInSchedule.length) return t;
+    // Find all existing check-in tasks for this parent (done or pending).
+    const existing = tasks.filter(c => c?.checkInOf === t.id);
+    const coveredOffsets = new Set(existing.map(c => c.checkInDayOffset).filter(o => o != null));
+    if (t.checkInSchedule.every(o => coveredOffsets.has(o))) return t;
+    const fromDay = t.delegatedAt ? new Date(t.delegatedAt) : new Date();
+    fromDay.setHours(0, 0, 0, 0);
+    const newCheckIns = t.checkInSchedule
+      .filter(o => !coveredOffsets.has(o))
+      .map(o => makeTask({
+        title: `Check in with ${t.delegatedTo} re: ${t.title}`,
+        project: t.project,
+        tags: ['comm'],
+        priority: t.priority || 'p3',
+        date: D.str(D.add(fromDay, o)),
+        timeEstimate: '5m',
+        checkInOf: t.id,
+        checkInDayOffset: o,
+        delegationStatus: 'waiting',
+      }));
+    if (!newCheckIns.length) return t;
+    additions.push(...newCheckIns);
+    return { ...t, checkInTaskIds: [...(t.checkInTaskIds || []), ...newCheckIns.map(c => c.id)] };
+  });
+  return additions.length ? [...repaired, ...additions] : repaired;
+};
+
 // === Delegation: presets, spawn helpers, staleness, people store ===
 
 const CHECKIN_PRESETS = {
@@ -1316,6 +1355,7 @@ export {
   archiveStaleRoutines,
   extendRoutineHorizon,
   pruneOrphanCheckIns,
+  repairMissingCheckIns,
   makeTask,
   migrateTasks,
   syncTaskSnooze,

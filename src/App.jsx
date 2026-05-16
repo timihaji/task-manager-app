@@ -31,6 +31,7 @@ import {
   archiveStaleRoutines,
   extendRoutineHorizon,
   pruneOrphanCheckIns,
+  repairMissingCheckIns,
   makeTask,
   migrateTasks,
   parseTimeEst,
@@ -449,7 +450,10 @@ function App() {
         setTasks(prev => {
           if (!prev.some(t => t.id === id)) return prev;
           const next = prev.filter(t => t.id !== id);
-          lastSyncedTasksRef.current = next;
+          // Surgically remove from the synced ref — don't claim the rest of
+          // `next` (which may include locally-created unsynchronised tasks) is
+          // already in Supabase.
+          lastSyncedTasksRef.current = lastSyncedTasksRef.current.filter(t => t.id !== id);
           return next;
         });
         return;
@@ -460,7 +464,12 @@ function App() {
         const idx = prev.findIndex(t => t.id === incoming.id);
         if (idx === -1) {
           const next = [...prev, incoming];
-          lastSyncedTasksRef.current = next;
+          // Surgically add only this task to the synced ref so other locally-
+          // created tasks (e.g. delegation check-ins) stay pending.
+          const cur = lastSyncedTasksRef.current;
+          lastSyncedTasksRef.current = cur.some(t => t.id === incoming.id)
+            ? cur.map(t => t.id === incoming.id ? incoming : t)
+            : [...cur, incoming];
           return next;
         }
         // Merge incoming over local instead of replacing. rowToTask only sets
@@ -473,7 +482,11 @@ function App() {
         }
         const next = prev.slice();
         next[idx] = merged;
-        lastSyncedTasksRef.current = next;
+        // Surgically update the synced ref for just this task — replacing the
+        // whole array would mark locally-created unsynchronised tasks as synced.
+        lastSyncedTasksRef.current = lastSyncedTasksRef.current.map(
+          t => t.id === incoming.id ? merged : t
+        );
         return next;
       });
     });
@@ -689,7 +702,7 @@ function App() {
     setToast(msg);
     setToastUndoable(!!opts.undoable);
     if (opts.timeout !== 0) {
-      const t = opts.timeout || 4500;
+      const t = opts.timeout || 7500;
       setTimeout(() => { setToast(null); setToastUndoable(false); }, t);
     }
   };
@@ -714,8 +727,9 @@ function App() {
         if (raw) saved = JSON.parse(raw);
       } catch {}
       const seed = Array.isArray(saved) && saved.length ? saved : INIT_TASKS;
-      const merged = pruneOrphanCheckIns(extendRoutineHorizon(archiveStaleRoutines(rollIncompleteTasksToToday(migrateRecurrence(migrateTasks(seed))))));
-      syncUidFromTasks(merged);
+      const pruned = pruneOrphanCheckIns(extendRoutineHorizon(archiveStaleRoutines(rollIncompleteTasksToToday(migrateRecurrence(migrateTasks(seed))))));
+      syncUidFromTasks(pruned);
+      const merged = repairMissingCheckIns(pruned);
       lastSyncedTasksRef.current = merged;
       setTasks(merged);
       setTasksReady(true);
@@ -731,8 +745,9 @@ function App() {
       try {
         const fetched = await fetchTasks(workspaceId);
         if (cancelled) return;
-        const merged = pruneOrphanCheckIns(extendRoutineHorizon(archiveStaleRoutines(rollIncompleteTasksToToday(migrateRecurrence(migrateTasks(fetched))))));
-        syncUidFromTasks(merged);
+        const pruned = pruneOrphanCheckIns(extendRoutineHorizon(archiveStaleRoutines(rollIncompleteTasksToToday(migrateRecurrence(migrateTasks(fetched))))));
+        syncUidFromTasks(pruned);
+        const merged = repairMissingCheckIns(pruned);
         lastSyncedTasksRef.current = merged;
         setTasks(merged);
         setTasksReady(true);
@@ -2895,7 +2910,8 @@ function App() {
     // fromCol mirrors the card's column for the §09 cross-column arming check.
     // null date → inbox; 'stack-task' source has no date so we fall back to inbox.
     const fromCol = data.date != null ? data.date : 'inbox';
-    setActiveDrag({ id: srcId, kind: data.kind || 'task', fromCol, srcHTML, routineGhost });
+    const altCopy = !!(event.activatorEvent?.altKey);
+    setActiveDrag({ id: srcId, kind: data.kind || 'task', fromCol, srcHTML, routineGhost, altCopy });
     document.body.dataset.dndActive = 'true';
     document.body.dataset.fromCol = fromCol;
     // Pointer-Y tracker: keeps dragPointerY fresh between dndOnDragOver fires.
@@ -3272,6 +3288,28 @@ function App() {
             const r = anchorEl.getBoundingClientRect();
             insertAfter = y >= r.top + r.height / 2;
           }
+        }
+        // Alt+drag: copy to destination, leave originals at source.
+        if (activeDrag?.altCopy) {
+          const snapshots = srcIds.map(id => taskById(id)).filter(Boolean);
+          pushSnapshotUndo();
+          if (targetDate == null) {
+            reorderManyToInbox(srcIds, anchorId, insertAfter);
+          } else {
+            reorderManyInDate(srcIds, targetDate, anchorId, insertAfter);
+          }
+          // Re-add originals at their source positions (new IDs = fresh copies left behind).
+          setTasks(prev => [
+            ...prev,
+            ...snapshots.map(t => ({
+              ...t,
+              id: mkid(),
+              createdAt: new Date().toISOString(),
+              activity: [...(t.activity || []), { type: 'copied', at: new Date().toISOString() }],
+            })),
+          ]);
+          showToast(snapshots.length > 1 ? `Copied ${snapshots.length} tasks` : 'Copied task');
+          return;
         }
         if (targetDate == null) {
           reorderManyToInbox(srcIds, anchorId, insertAfter);
@@ -4181,6 +4219,11 @@ function App() {
       <button className="tb-btn" onClick={()=>setTweak('inboxCollapsed',!tweaks.inboxCollapsed)} title="Toggle inbox panel"><I.Inbox/>Inbox</button>
       <button className="tb-btn" onClick={()=>setPalette(true)}><I.Search/>⌘K</button>
       <div className="tb-sep"/>
+      {undoStack.length > 0 && (
+        <button className="tb-icon-btn" onClick={undo} title={`Undo (${undoStack.length})`} aria-label="Undo">
+          <I.Undo/>
+        </button>
+      )}
       <button className="tb-icon-btn" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')} title="Toggle theme (L)">
         {theme==='dark'?<I.Sun/>:<I.Moon/>}
       </button>
