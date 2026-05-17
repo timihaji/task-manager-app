@@ -3327,6 +3327,21 @@ function App() {
             insertAfter = y >= r.top + r.height / 2;
           }
         }
+        // Cross-group patch: when a card is dropped into a different group in
+        // the same date column, update the group-determining attribute so the
+        // card visually lands in the target group. Without this, the card stays
+        // in its source group (its project/priority field is unchanged) and
+        // appears to snap back even though the array splice was correct.
+        const aGrpKey = aData.grpKey || null;
+        const oGrpKey = oData.grpKey || null;
+        let crossGroupPatch = null;
+        if (targetDate !== null && anchorId && aGrpKey && oGrpKey && aGrpKey !== oGrpKey && !oGrpKey.startsWith('__cg__')) {
+          if (globalGroupBy === 'project') {
+            crossGroupPatch = { project: oGrpKey === '_none' ? null : oGrpKey };
+          } else if (globalGroupBy === 'priority') {
+            crossGroupPatch = { priority: oGrpKey };
+          }
+        }
         // Alt+drag: copy to destination, leave originals at source.
         if (activeDrag?.altCopy) {
           const snapshots = srcIds.map(id => taskById(id)).filter(Boolean);
@@ -3334,7 +3349,7 @@ function App() {
           if (targetDate == null) {
             reorderManyToInbox(srcIds, anchorId, insertAfter);
           } else {
-            reorderManyInDate(srcIds, targetDate, anchorId, insertAfter);
+            reorderManyInDate(srcIds, targetDate, anchorId, insertAfter, crossGroupPatch);
           }
           // Re-add originals at their source positions (new IDs = fresh copies left behind).
           setTasks(prev => [
@@ -3355,7 +3370,7 @@ function App() {
           // Detect drag-into-past BEFORE reorder so we read pre-move task state.
           // Skip projects with open kids — completeTask would pop a confirm modal mid-drag.
           const past = D.isPast(targetDate);
-          reorderManyInDate(srcIds, targetDate, anchorId, insertAfter);
+          reorderManyInDate(srcIds, targetDate, anchorId, insertAfter, crossGroupPatch);
           if (past) {
             for (const id of srcIds) {
               const t = taskById(id);
