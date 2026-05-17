@@ -968,6 +968,13 @@ function App() {
   // Shadow runs in both dev-bypass and cloud modes so a refresh restores the
   // last task state (matches the events effect a few lines up). Cloud sync is
   // gated on userId/workspaceId — dev-bypass stops at the shadow.
+  //
+  // Debounce is short (80 ms) — long enough to batch the burst of state updates
+  // from a single user action (drag, multi-edit), short enough that a quick
+  // refresh after creating a delegation doesn't drop the write. Was 500 ms;
+  // that window was wide enough for new tasks to be lost on fast refresh,
+  // because Supabase is the source of truth in production (localStorage is
+  // dev-only) — if the timer was cancelled by unmount, the data was gone.
   useEffect(() => {
     if (!tasksReady) return;
     try { localStorage.setItem('tm_tasks_v2', JSON.stringify(tasks)); } catch {}
@@ -982,8 +989,28 @@ function App() {
       syncTaskDiff(prev, tasks, userId, workspaceId).catch((e) => {
         console.error('[tasks] sync failed', e);
       });
-    }, 500);
+    }, 80);
     return () => clearTimeout(handle);
+  }, [tasks, tasksReady, userId, workspaceId]);
+
+  // Best-effort flush on tab hide / unload. The browser may complete the
+  // request even as the page tears down (HTTP keepalive); if it doesn't,
+  // we at least tried. pagehide fires reliably on mobile Safari where
+  // beforeunload is unreliable.
+  useEffect(() => {
+    if (!tasksReady || !userId || !workspaceId) return;
+    const flush = () => {
+      const prev = lastSyncedTasksRef.current;
+      if (prev === tasks) return;
+      lastSyncedTasksRef.current = tasks;
+      syncTaskDiff(prev, tasks, userId, workspaceId).catch(() => {});
+    };
+    window.addEventListener('beforeunload', flush);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      window.removeEventListener('pagehide', flush);
+    };
   }, [tasks, tasksReady, userId, workspaceId]);
 
   useEffect(()=>{
