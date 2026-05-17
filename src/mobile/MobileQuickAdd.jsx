@@ -33,7 +33,7 @@ export const QuickAddBar = forwardRef(function QuickAddBar(_props, ref) {
 
   const [title,    setTitle]    = useState('');
   const [project,  setProject]  = useState(null);
-  const [priority, setPriority] = useState('p2');
+  const [priority, setPriority] = useState('p3');
   const [date,     setDate]     = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [vvOffset, setVvOffset] = useState(0);
@@ -55,7 +55,7 @@ export const QuickAddBar = forwardRef(function QuickAddBar(_props, ref) {
     if (isOpen) {
       setTitle('');
       setProject(opts.project ?? null);
-      setPriority('p2');
+      setPriority(opts.priority ?? 'p3');
       setDate(opts.date ?? null);
       setExpanded(false);
       setSessionAdds(0);
