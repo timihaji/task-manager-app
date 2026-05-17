@@ -37,6 +37,7 @@ export const QuickAddBar = forwardRef(function QuickAddBar(_props, ref) {
   const [date,     setDate]     = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [vvOffset, setVvOffset] = useState(0);
+  const [sessionAdds, setSessionAdds] = useState(0);
   const inputRef = useRef(null);
   const startYRef = useRef(null);
   const dragYRef  = useRef(0);
@@ -47,7 +48,9 @@ export const QuickAddBar = forwardRef(function QuickAddBar(_props, ref) {
     focus: () => inputRef.current?.focus(),
   }), []);
 
-  // Reset chip state to opts whenever the bar opens. Title always starts empty.
+  // Reset chip state + session counter whenever the bar opens. Title always
+  // starts empty. Chips persist within an open session (brain-dump mode) so
+  // repeated submissions inherit the same metadata.
   useEffect(() => {
     if (isOpen) {
       setTitle('');
@@ -55,6 +58,7 @@ export const QuickAddBar = forwardRef(function QuickAddBar(_props, ref) {
       setPriority('p2');
       setDate(opts.date ?? null);
       setExpanded(false);
+      setSessionAdds(0);
     }
   }, [isOpen, opts.project, opts.date]);
 
@@ -77,6 +81,10 @@ export const QuickAddBar = forwardRef(function QuickAddBar(_props, ref) {
     };
   }, []);
 
+  // Brain-dump mode: each submit clears the title but keeps the bar open,
+  // keyboard up, and chips persisted, so the user can rattle off tasks back
+  // to back. Explicit dismiss via X / backdrop / swipe-down / empty-Enter /
+  // browser back.
   const submit = useCallback(() => {
     if (!title.trim()) return;
     const smartDate = parseSmartDate(title);
@@ -88,8 +96,17 @@ export const QuickAddBar = forwardRef(function QuickAddBar(_props, ref) {
     });
     haptic([6, 12]);
     showToast('Task added ✓');
-    closeQuickAdd();
-  }, [title, project, priority, date, addTask, showToast, closeQuickAdd]);
+    setTitle('');
+    setSessionAdds(n => n + 1);
+    // Refocus in the same microtask so iOS keeps the keyboard up.
+    inputRef.current?.focus();
+  }, [title, project, priority, date, addTask, showToast]);
+
+  // Pressing Enter with an empty title acts as "I'm done" — closes the bar.
+  const onEnter = useCallback(() => {
+    if (!title.trim()) { closeQuickAdd(); return; }
+    submit();
+  }, [title, submit, closeQuickAdd]);
 
   // Swipe down to dismiss
   const onDragStart = (e) => {
@@ -247,8 +264,8 @@ export const QuickAddBar = forwardRef(function QuickAddBar(_props, ref) {
               ref={inputRef}
               value={title}
               onChange={e => setTitle(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }}
-              placeholder="What needs doing?"
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onEnter(); } }}
+              placeholder={sessionAdds > 0 ? `Added ${sessionAdds} — next one…` : 'What needs doing?'}
               tabIndex={isOpen ? 0 : -1}
               enterKeyHint="go"
               autoCapitalize="sentences"
