@@ -20,9 +20,20 @@ export const Ic = {
 // ── TodayScreen ───────────────────────────────────────────────────────────────
 export function TodayScreen() {
   const { views, all, toggleTask, deleteTask, updateTask } = useData();
-  const { openDetail, openQuickAdd, setSearchOpen } = useApp();
+  const { openDetail, openQuickAdd, setSearchOpen, fabDefaultsRef } = useApp();
   const [selDay,   setSelDay]   = useState(TODAY);
   const [showDone, setShowDone] = useState(false);
+
+  // Tell the persistent BottomNav FAB to pre-fill the date with whichever
+  // day the user is currently browsing in the week strip. If they swipe to
+  // tomorrow and tap +, the new task lands on tomorrow — not today.
+  useEffect(() => {
+    if (!fabDefaultsRef) return;
+    fabDefaultsRef.current = { ...(fabDefaultsRef.current || {}), date: selDay };
+    return () => {
+      if (fabDefaultsRef.current?.date === selDay) fabDefaultsRef.current = {};
+    };
+  }, [selDay, fabDefaultsRef]);
 
   const days = useMemo(() => Array.from({ length:7 }, (_, i) => D.str(D.add(D.today(), i-3))), []);
   const { drag, startLongPress } = useReschedule({ updateTask, TODAY });

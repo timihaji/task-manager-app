@@ -10,6 +10,7 @@ import {
 } from './MobileDetails.jsx';
 import { QuickAddBar } from './MobileQuickAdd.jsx';
 import { ACCENT_OPTS, LOOK_OPTS } from './constants.js';
+import { D, TODAY } from './dateUtil.js';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { useWorkspace } from '../lib/WorkspaceProvider.jsx';
 import { saveSettings, fetchSettings } from '../lib/db.js';
@@ -233,15 +234,44 @@ function AppProvider({ children }) {
   // synchronously inside the FAB's click handler (iOS keyboard policy).
   const quickAddBarRef = useRef(null);
 
+  // Per-screen defaults the BottomNav FAB should pick up. Screens with a
+  // local-state context (e.g. TodayScreen's selDay) register into this ref
+  // on mount/update; the FAB reads it on open. Explicit caller opts override.
+  const fabDefaultsRef = useRef({});
+
+  // Screen-derived defaults — driven by the current route, not by any screen's
+  // internal state. fabDefaultsRef (set by individual screens) overrides this.
+  const deriveScreenDefaults = useCallback(() => {
+    const name = currentScreen?.screen;
+    const props = currentScreen?.props || {};
+    if (name === 'inbox' || name === 'backlog')  return { date: null };
+    if (name === 'someday')     return { someday: true };
+    if (name === 'project')     return { project: props.projectId, date: TODAY };
+    if (name === 'tag')         return { tags: [props.tagId], date: TODAY };
+    if (name === 'upcoming')    return { date: D.str(D.add(D.today(), 1)) };
+    if (name === 'blocked')     return { date: TODAY, blocked: true };
+    if (name === 'snoozed')     return { snoozedUntil: D.str(D.add(D.today(), 1)) };
+    if (name === 'completed' || name === 'archived') return {};
+    if (name === 'today')       return { date: TODAY };
+    if (name === 'stack')       return { date: TODAY };
+    return {};
+  }, [currentScreen]);
+
   // ── Open* helpers (always push a history entry first) ───────────────────
   const openDetail = (id) => { pushHistoryLayer('detail'); setActiveTaskId(id); };
-  const openQuickAdd = (opts) => {
+  const openQuickAdd = (callerOpts) => {
     // iOS Safari opens the on-screen keyboard only when .focus() runs inside
     // the user-gesture tick. We focus *before* setting state so the focus
     // call is still part of the original click handler's synchronous frame.
     try { quickAddBarRef.current?.focus(); } catch {}
+    // Layered defaults: screen-derived → screen-registered overrides → caller.
+    const merged = {
+      ...deriveScreenDefaults(),
+      ...(fabDefaultsRef.current || {}),
+      ...(callerOpts || {}),
+    };
     pushHistoryLayer('quickadd');
-    setQuickAddOpts(opts ?? {});
+    setQuickAddOpts(merged);
   };
   const openSearch = () => { pushHistoryLayer('search'); setSearchOpen(true); };
   const push = (screen, props = {}) => {
@@ -282,6 +312,7 @@ function AppProvider({ children }) {
     searchOpen, setSearchOpen: setSearchOpenWrapper, openSearch, closeSearch,
     toast, showToast,
     quickAddBarRef,
+    fabDefaultsRef,
     // Internal — for MobileShell's popstate handler
     _depthRef: depthRef,
     _setActiveTaskId: setActiveTaskId,
