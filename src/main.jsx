@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
+import MobileApp from './mobile/MobileApp.jsx';
 import { AuthProvider, useAuth } from './auth/AuthProvider.jsx';
 import { WorkspaceProvider, useWorkspace } from './lib/WorkspaceProvider.jsx';
 import { LoginPage } from './components/LoginPage.jsx';
@@ -34,17 +35,64 @@ function BootError({ error, onRetry }) {
   );
 }
 
+// Mobile auto-switch: ?mobile=1 forces mobile, ?mobile=0 forces desktop,
+// else picks by viewport width (<=600 → mobile). The result is re-evaluated
+// when the viewport crosses the breakpoint so a window resize across the
+// edge swaps the shell.
+function pickShell() {
+  if (typeof window === 'undefined') return 'desktop';
+  try {
+    const force = new URLSearchParams(window.location.search).get('mobile');
+    if (force === '1') return 'mobile';
+    if (force === '0') return 'desktop';
+  } catch {}
+  return window.innerWidth <= 600 ? 'mobile' : 'desktop';
+}
+
+function useShell() {
+  const [shell, setShell] = useState(() => pickShell());
+  useEffect(() => {
+    let frame = null;
+    const onResize = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        const next = pickShell();
+        setShell(prev => prev === next ? prev : next);
+      });
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (shell === 'mobile') {
+      document.body.dataset.mobile = '1';
+    } else {
+      delete document.body.dataset.mobile;
+    }
+    return () => {};
+  }, [shell]);
+
+  return shell;
+}
+
 function WorkspaceGate() {
   const { workspace, loading, error, supabaseDisabled } = useWorkspace();
+  const shell = useShell();
+  const Shell = shell === 'mobile' ? MobileApp : App;
   // Local-only mode: skip the workspace and render the app with localStorage.
-  if (supabaseDisabled) return <App />;
+  if (supabaseDisabled) return <Shell />;
   if (loading || !workspace) {
     if (error) {
       return <BootError error={error} onRetry={() => window.location.reload()} />;
     }
     return <BootSplash message="Loading your workspace…" />;
   }
-  return <App />;
+  return <Shell />;
 }
 
 function Gate() {

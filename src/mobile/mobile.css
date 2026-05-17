@@ -1,0 +1,200 @@
+/* Mobile-only stylesheet. Scoped under body[data-mobile] so nothing leaks
+   into desktop renders when the user resizes across the breakpoint. */
+
+body[data-mobile] {
+  --font: 'Geist', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', monospace;
+  --accent: #0f766e;
+  --accent-dim: rgba(15,118,110,.10);
+  --accent-border: rgba(15,118,110,.28);
+  --rk: 14px;
+  --shadow-sm: 0 1px 2px rgba(13,23,20,.04);
+  --shadow: 0 1px 3px rgba(13,23,20,.05), 0 4px 12px rgba(13,23,20,.04);
+  --shadow-lg: 0 4px 16px rgba(13,23,20,.08), 0 12px 32px rgba(13,23,20,.06);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --ease-out: cubic-bezier(.32, .72, 0, 1);
+  letter-spacing: -.005em;
+
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv11", "ss01", "ss03";
+  font-variant-numeric: tabular-nums;
+}
+
+body[data-mobile][data-theme="light"] {
+  --bg: #f5f6f4;
+  --surface: #ffffff;
+  --surface-2: #eef2ef;
+  --surface-3: #e3e9e4;
+  --border: #e4e9e5;
+  --border-strong: #d0d8d2;
+  --t1: #0d1714;
+  --t2: #384540;
+  --t3: #6a7872;
+  --t4: #94a09a;
+}
+
+body[data-mobile][data-theme="dark"] {
+  --bg: #0a1816;
+  --surface: #11211e;
+  --surface-2: #172925;
+  --surface-3: #1f3530;
+  --border: #1d332e;
+  --border-strong: #2a443e;
+  --t1: #e6fffb;
+  --t2: #c3ddd7;
+  --t3: #8eada6;
+  --t4: #66837c;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
+  --shadow: 0 1px 3px rgba(0,0,0,.4), 0 4px 12px rgba(0,0,0,.3);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,.5), 0 4px 12px rgba(0,0,0,.35);
+}
+
+body[data-mobile][data-look="minimal"] { --rk: 4px; }
+body[data-mobile][data-look="sharp"]   { --rk: 0px; }
+body[data-mobile][data-look="soft"]    { --rk: 14px; }
+body[data-mobile][data-look="glass"]   { --rk: 14px; }
+
+body[data-mobile] {
+  background: var(--bg);
+  color: var(--t1);
+  overflow: hidden;
+}
+
+body[data-mobile] #root {
+  width: 100%;
+  height: 100dvh;
+  min-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
+}
+
+body[data-mobile] *,
+body[data-mobile] *::before,
+body[data-mobile] *::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body[data-mobile] button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body[data-mobile] ::selection {
+  background: var(--accent-dim);
+  color: var(--t1);
+}
+
+body[data-mobile] button:focus-visible,
+body[data-mobile] input:focus-visible,
+body[data-mobile] textarea:focus-visible,
+body[data-mobile] select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+body[data-mobile] ::-webkit-scrollbar { width: 3px; height: 3px; }
+body[data-mobile] ::-webkit-scrollbar-track { background: transparent; }
+body[data-mobile] ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+body[data-mobile] ::-webkit-scrollbar-thumb:hover { background: var(--t4); }
+
+body[data-mobile] input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0; position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer;
+}
+
+body[data-mobile] textarea { scrollbar-width: none; }
+body[data-mobile] textarea::-webkit-scrollbar { display: none; }
+
+body[data-mobile] input::placeholder,
+body[data-mobile] textarea::placeholder { color: var(--t4); }
+
+/* Press affordance — any tappable surface */
+body[data-mobile] .tap { transition: transform .12s ease, opacity .12s ease; }
+body[data-mobile] .tap:active { transform: scale(.97); opacity: .86; }
+body[data-mobile] .tap-sm:active { transform: scale(.92); }
+
+@keyframes mob-screenSlideIn {
+  from { transform: translateX(100%); opacity: .6; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes mob-screenSlideBack {
+  from { transform: translateX(-30%); opacity: .6; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes mob-fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes mob-fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes mob-checkPop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.45); }
+  65%  { transform: scale(.86); }
+  82%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+@keyframes mob-checkDraw {
+  from { stroke-dashoffset: 20; opacity: 0; }
+  15%  { opacity: 1; }
+  to   { stroke-dashoffset: 0; opacity: 1; }
+}
+@keyframes mob-particleFly {
+  0%   { transform: translate(0, 0) scale(1); opacity: .9; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+}
+@keyframes mob-taskIn {
+  from { opacity: 0; transform: translateY(-10px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes mob-spin { to { transform: rotate(360deg); } }
+@keyframes mob-pillGrow {
+  from { transform: translateX(-50%) scaleX(.5); }
+  to   { transform: translateX(-50%) scaleX(1); }
+}
+@keyframes mob-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes mob-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .55; }
+}
+@keyframes mob-tileIn {
+  from { opacity: 0; transform: translateY(-8px) scale(.94); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes mob-ghostLift {
+  0%   { transform: scale(.98); }
+  40%  { transform: scale(1.07); }
+  100% { transform: scale(1.04); }
+}
+@keyframes mob-hoverPulse {
+  0%, 100% { opacity: .55; }
+  50%      { opacity: .95; }
+}
+@keyframes mob-scrimIn {
+  from { opacity: 0; backdrop-filter: blur(0); }
+  to   { opacity: 1; backdrop-filter: blur(2px); }
+}
+@keyframes mob-bannerIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+body[data-mobile] .task-new {
+  animation: mob-taskIn .32s var(--ease-spring) both;
+}
+
+/* Hide the desktop's auth-page chrome while mobile is rendering */
+body[data-mobile] .auth-page {
+  background: var(--bg);
+  color: var(--t1);
+}
