@@ -6,8 +6,9 @@ import {
   TodayScreen, InboxScreen, StackScreen, MoreScreen, ListScreen, SearchScreen,
 } from './MobileScreens.jsx';
 import {
-  TaskDetailSheet, QuickAddSheet, SettingsScreen,
+  TaskDetailSheet, SettingsScreen,
 } from './MobileDetails.jsx';
+import { QuickAddBar } from './MobileQuickAdd.jsx';
 import { ACCENT_OPTS, LOOK_OPTS } from './constants.js';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { useWorkspace } from '../lib/WorkspaceProvider.jsx';
@@ -28,7 +29,7 @@ function writeSettings(patch) {
 }
 
 // ── BottomNav ─────────────────────────────────────────────────────────────────
-function BottomNav({ activeTab, onNavigate, onQuickAdd }) {
+function BottomNav({ activeTab, onNavigate, onQuickAdd, hidden }) {
   const tabs = [
     { id:'today', label:'Today',  icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
     { id:'inbox', label:'Inbox',  icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg> },
@@ -40,7 +41,13 @@ function BottomNav({ activeTab, onNavigate, onQuickAdd }) {
   const pillLeft = { today:10, inbox:30, stack:70, more:90 }[activeTab];
 
   return (
-    <div style={{ flexShrink:0, background:'var(--surface)', borderTop:'1px solid var(--border)', paddingBottom:'env(safe-area-inset-bottom)', zIndex:100, boxShadow:'0 -1px 0 var(--border)' }}>
+    <div style={{
+      flexShrink:0, background:'var(--surface)', borderTop:'1px solid var(--border)',
+      paddingBottom:'env(safe-area-inset-bottom)', zIndex:100, boxShadow:'0 -1px 0 var(--border)',
+      transform: hidden ? 'translateY(110%)' : 'translateY(0)',
+      transition:'transform .26s var(--ease-out)',
+      pointerEvents: hidden ? 'none' : 'auto',
+    }}>
       <div style={{ display:'flex', alignItems:'center', height:58, position:'relative' }}>
         {pillLeft != null && (
           <div style={{ position:'absolute', top:6, left:`${pillLeft}%`, transform:'translateX(-50%)', width:'13%', height:3, borderRadius:99, background:'var(--accent)', transition:'left .42s var(--ease-spring)', pointerEvents:'none' }}/>
@@ -222,9 +229,20 @@ function AppProvider({ children }) {
     } catch {}
   }, []);
 
+  // Ref the QuickAddBar registers on mount so we can focus its input
+  // synchronously inside the FAB's click handler (iOS keyboard policy).
+  const quickAddBarRef = useRef(null);
+
   // ── Open* helpers (always push a history entry first) ───────────────────
   const openDetail = (id) => { pushHistoryLayer('detail'); setActiveTaskId(id); };
-  const openQuickAdd = (opts) => { pushHistoryLayer('quickadd'); setQuickAddOpts(opts ?? {}); };
+  const openQuickAdd = (opts) => {
+    // iOS Safari opens the on-screen keyboard only when .focus() runs inside
+    // the user-gesture tick. We focus *before* setting state so the focus
+    // call is still part of the original click handler's synchronous frame.
+    try { quickAddBarRef.current?.focus(); } catch {}
+    pushHistoryLayer('quickadd');
+    setQuickAddOpts(opts ?? {});
+  };
   const openSearch = () => { pushHistoryLayer('search'); setSearchOpen(true); };
   const push = (screen, props = {}) => {
     pushHistoryLayer('screen');
@@ -263,6 +281,7 @@ function AppProvider({ children }) {
     openQuickAdd, closeQuickAdd, quickAddOpts,
     searchOpen, setSearchOpen: setSearchOpenWrapper, openSearch, closeSearch,
     toast, showToast,
+    quickAddBarRef,
     // Internal — for MobileShell's popstate handler
     _depthRef: depthRef,
     _setActiveTaskId: setActiveTaskId,
@@ -290,6 +309,7 @@ function MobileShell() {
   const {
     activeTab, navigate, currentScreen, pushAnim, openQuickAdd, openSearch,
     activeTaskId, quickAddOpts, searchOpen, toast,
+    quickAddBarRef,
     _depthRef, _setActiveTaskId, _setQuickAddOpts, _setSearchOpen, _popStack,
   } = ctx;
 
@@ -359,10 +379,15 @@ function MobileShell() {
       <div style={{ flex:1, position:'relative', overflow:'hidden', minHeight:0 }}>
         <ScreenRouter screen={currentScreen} pushAnim={pushAnim} onSettingsBack={ctx.pop}/>
       </div>
-      <BottomNav activeTab={activeTab} onNavigate={navigate} onQuickAdd={() => openQuickAdd({})}/>
+      <BottomNav
+        activeTab={activeTab}
+        onNavigate={navigate}
+        onQuickAdd={() => openQuickAdd({})}
+        hidden={quickAddOpts !== null}
+      />
       {searchOpen && <SearchScreen onClose={ctx.closeSearch}/>}
       {activeTaskId && <TaskDetailSheet taskId={activeTaskId} onClose={ctx.closeDetail}/>}
-      {quickAddOpts !== null && <QuickAddSheet opts={quickAddOpts} onClose={ctx.closeQuickAdd}/>}
+      <QuickAddBar ref={ctx.quickAddBarRef}/>
       {toast && <Toast message={toast}/>}
     </div>
   );

@@ -284,89 +284,9 @@ export function TaskDetailSheet({ taskId, onClose }) {
   );
 }
 
-// ── QuickAddSheet ─────────────────────────────────────────────────────────────
-export function QuickAddSheet({ opts={}, onClose }) {
-  const { addTask, PROJECTS, PRI, D, TODAY } = useData();
-  const { showToast } = useApp();
-  const [title,   setTitle]   = useState('');
-  const [project, setProject] = useState(opts.project||null);
-  const [priority,setPriority]= useState('p2');
-  const [date,    setDate]    = useState(opts.date||null);
-  const inputRef = useRef(null);
-
-  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 120); }, []);
-
-  const parseSmartDate = t => {
-    const l = t.toLowerCase();
-    if (/\btoday\b/.test(l))    return TODAY;
-    if (/\btomorrow\b/.test(l)) return D.str(D.add(D.today(), 1));
-    if (/\bnext week\b/.test(l)) return D.str(D.add(D.today(), 7));
-    return null;
-  };
-
-  const submit = () => {
-    if (!title.trim()) return;
-    const smartDate = parseSmartDate(title) || date;
-    addTask({ title:title.trim(), project, priority, date:smartDate });
-    showToast('Task added ✓');
-    onClose();
-  };
-
-  return (
-    <Sheet open onClose={onClose} maxHeight="80dvh" noPad>
-      <div style={{ padding:'14px 20px 8px' }}>
-        <input ref={inputRef} value={title} onChange={e => setTitle(e.target.value)}
-          onKeyDown={e => { if(e.key==='Enter') submit(); }}
-          placeholder="What needs to get done?"
-          style={{ width:'100%', fontSize:20, fontWeight:600, color:'var(--t1)', border:'none', background:'transparent', outline:'none', fontFamily:'inherit', marginBottom:18, boxSizing:'border-box', letterSpacing:'-.018em' }}/>
-
-        <div style={{ display:'flex', gap:6, marginBottom:12, flexWrap:'wrap' }}>
-          {['Today','Tomorrow','Next week'].map((l,i) => {
-            const d = i===0?TODAY:i===1?D.str(D.add(D.today(),1)):D.str(D.add(D.today(),7));
-            return (
-              <button key={l} onClick={() => setDate(d===date?null:d)}
-                style={{ padding:'6px 13px', borderRadius:99, border:`1px solid ${date===d?'var(--accent-border)':'var(--border)'}`, background: date===d?'var(--accent-dim)':'transparent', color: date===d?'var(--accent)':'var(--t2)', fontSize:12.5, fontWeight:600, cursor:'pointer', transition:'all .15s' }}>
-                {l}
-              </button>
-            );
-          })}
-          <div style={{ position:'relative' }}>
-            <button style={{ padding:'6px 13px', borderRadius:99, border:'1px solid var(--border)', background:'transparent', color:'var(--t3)', fontSize:12.5, cursor:'pointer', fontWeight:600, display:'inline-flex', alignItems:'center', gap:5 }}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              Pick
-            </button>
-            <input type="date" value={date||''} onChange={e => setDate(e.target.value||null)} style={{ position:'absolute', inset:0, opacity:0, width:'100%', cursor:'pointer' }}/>
-          </div>
-        </div>
-
-        <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:14 }}>
-          {PROJECTS.map(p => (
-            <button key={p.id} onClick={() => setProject(project===p.id?null:p.id)}
-              style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 11px', borderRadius:99, border:`1px solid ${project===p.id?p.color:'var(--border)'}`, background: project===p.id?`${p.color}1a`:'transparent', color: project===p.id?p.color:'var(--t3)', fontSize:12.5, fontWeight:600, cursor:'pointer', transition:'all .15s' }}>
-              <span style={{ width:6, height:6, borderRadius:2, background:p.color, display:'inline-block' }}/>
-              {p.label}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ display:'flex', gap:6, marginBottom:20 }}>
-          {Object.entries(PRI).map(([id,info]) => (
-            <button key={id} onClick={() => setPriority(id)}
-              style={{ padding:'6px 14px', borderRadius:8, border:`1px solid ${priority===id?info.color:'var(--border)'}`, background: priority===id?info.dim:'transparent', color: priority===id?info.color:'var(--t3)', fontSize:12.5, fontWeight:700, cursor:'pointer', transition:'all .15s', flex:1 }}>
-              {info.label}
-            </button>
-          ))}
-        </div>
-
-        <button onClick={submit} disabled={!title.trim()} className="tap"
-          style={{ width:'100%', padding:'14px', borderRadius:14, border:'none', background: title.trim()?'var(--accent)':'var(--surface-2)', color: title.trim()?'#fff':'var(--t4)', fontSize:15.5, fontWeight:700, cursor: title.trim()?'pointer':'default', transition:'background .15s', boxShadow: title.trim()?'0 4px 14px var(--accent-dim)':'none', letterSpacing:'-.005em' }}>
-          Add Task
-        </button>
-        <div style={{ height:'max(16px, env(safe-area-inset-bottom))' }}/>
-      </div>
-    </Sheet>
-  );
-}
+// QuickAddSheet moved to MobileQuickAdd.jsx as QuickAddBar — a keyboard-anchored
+// capture bar. The sheet pattern blocked the iOS keyboard because programmatic
+// .focus() outside the user-gesture tick is rejected.
 
 // ── DelegationsScreen ─────────────────────────────────────────────────────────
 export function DelegationsScreen({ onBack }) {
