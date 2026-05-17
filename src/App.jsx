@@ -279,7 +279,7 @@ function App() {
     delegationsStatusFilter: 'all', // all | overdue | waiting | heard | stale
     delegationsPersonFilter: [],    // array of person names
     showDelegationsOnTimeline: false, // top-nav toggle: surface delegated cards on stack/timeline
-    showCheckInsOnTimeline: false,    // top-nav toggle: surface synthetic check-in reminders too
+    showCheckInsOnTimeline: true,     // top-nav toggle: surface check-in reminders on the timeline. Default ON because the delegation parent is auto-snoozed while it has pending check-ins (see isAutoSnoozedDelegation) — if check-ins are also hidden, the user gets zero visibility into the delegation on the timeline and the cadence is invisible until they switch to the Delegations view.
     showRoutinesOnTimeline: true,     // top-nav toggle: show/hide routine strips on each day column
     todayPinned: true,                // today-column sticky pin on/off
   };
@@ -1461,7 +1461,12 @@ function App() {
         if (!t.delegatedTo && !t.checkInOf) return;
       } else {
         if (t.delegatedTo && !showDelegationsOnTimeline && !reminderDue) return;
-        if (t.checkInOf && !showCheckInsOnTimeline) return;
+        // Check-in reminders always surface on the timeline — they're the
+        // actionable nudges, and the delegation parent is auto-snoozed
+        // (isAutoSnoozedDelegation above), so without the check-ins visible
+        // the delegation is invisible from the timeline entirely. The
+        // showCheckInsOnTimeline tweak is kept for back-compat but no
+        // longer gates visibility.
       }
       if(showStaleOnly && !isStale(t)) return;
       const key = t.date || 'inbox';
