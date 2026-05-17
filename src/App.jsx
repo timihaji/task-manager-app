@@ -988,6 +988,12 @@ function App() {
       lastSyncedTasksRef.current = tasks;
       syncTaskDiff(prev, tasks, userId, workspaceId).catch((e) => {
         console.error('[tasks] sync failed', e);
+        // Surface to UI so silent persistence failures don't hide from the
+        // user. The full Postgres error (column missing, RLS denial, etc.)
+        // goes straight to the toast for diagnosis. Long timeout, no auto-
+        // dismiss until they see it.
+        const msg = e?.message || e?.details || e?.hint || String(e);
+        showToast(`Save failed: ${msg}`, { timeout: 0 });
       });
     }, 80);
     return () => clearTimeout(handle);
