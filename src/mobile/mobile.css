@@ -203,8 +203,8 @@ body[data-mobile] .tap-sm:active { transform: scale(.92); }
   50%      { opacity: .95; }
 }
 @keyframes mob-scrimIn {
-  from { opacity: 0; backdrop-filter: blur(0); }
-  to   { opacity: 1; backdrop-filter: blur(2px); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 @keyframes mob-bannerIn {
   from { opacity: 0; transform: translateY(-6px); }

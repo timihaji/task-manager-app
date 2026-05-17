@@ -156,7 +156,7 @@ export function Sheet({ open, onClose, children, title, maxHeight='94dvh', noPad
   if (!visible) return null;
   return (
     <div style={{ position:'fixed', inset:0, zIndex:400, display:'flex', flexDirection:'column', justifyContent:'flex-end' }}>
-      <div onClick={onClose} style={{ position:'absolute', inset:0, background: anim ? 'rgba(0,0,0,0.45)' : 'transparent', transition:'background .3s ease', backdropFilter: anim ? 'blur(1px)' : 'none' }}/>
+      <div onClick={onClose} style={{ position:'absolute', inset:0, background: anim ? 'rgba(0,0,0,0.45)' : 'transparent', transition:'background .3s ease' }}/>
       <div ref={sheetRef} style={{
         position:'relative', background:'var(--surface)', borderRadius:'24px 24px 0 0',
         maxHeight, display:'flex', flexDirection:'column', zIndex:1,

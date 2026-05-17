@@ -162,8 +162,6 @@ export const QuickAddBar = forwardRef(function QuickAddBar(_props, ref) {
           opacity: isOpen ? 1 : 0,
           pointerEvents: isOpen ? 'auto' : 'none',
           transition:'opacity .22s ease',
-          backdropFilter: isOpen ? 'blur(2px)' : 'none',
-          WebkitBackdropFilter: isOpen ? 'blur(2px)' : 'none',
         }}
       />
 

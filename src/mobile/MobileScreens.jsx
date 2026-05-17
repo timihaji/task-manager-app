@@ -132,7 +132,7 @@ export function TodayScreen() {
       {inDrag && (
         <div style={{
           position:'absolute', inset:0, zIndex:998, pointerEvents:'none',
-          background:'rgba(13,23,20,.18)', backdropFilter:'blur(2px)', WebkitBackdropFilter:'blur(2px)',
+          background:'rgba(13,23,20,.18)',
           animation:'mob-scrimIn .28s ease both'
         }}/>
       )}
