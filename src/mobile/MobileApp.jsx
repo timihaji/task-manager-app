@@ -390,7 +390,7 @@ function MobileShell() {
       if (dy > 30) { candidate = false; return; }
       if (dx > 60) {
         fired = true;
-        if (depthRef.current > 0) {
+        if (_depthRef.current > 0) {
           try { window.history.back(); } catch {}
         }
       }
