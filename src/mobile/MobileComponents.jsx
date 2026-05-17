@@ -132,24 +132,34 @@ export function Sheet({ open, onClose, children, title, maxHeight='94dvh', noPad
     dragActiveRef.current = false;
   };
 
-  // Native non-passive touchmove on the body so preventDefault can stop the
-  // scroll while we're claiming the gesture. React's synthetic handlers are
-  // passive in modern browsers.
+  // Native non-passive touchmove on the body AND on the handle/title region so
+  // preventDefault can stop the scroll while we're claiming the gesture. React's
+  // synthetic handlers are passive in modern browsers — using onTouchMove on the
+  // handle spammed "Unable to preventDefault inside passive event listener" on
+  // every pull-down.
+  const handleRef = useRef(null);
+  const titleRef  = useRef(null);
   useEffect(() => {
-    const el = bodyRef.current;
-    if (!el || !visible) return;
-    const start = (e) => onPullStart(e, true);
-    const move  = (e) => onPullMove(e, true);
-    const end   = () => onPullEnd();
-    el.addEventListener('touchstart',  start, { passive: true });
-    el.addEventListener('touchmove',   move,  { passive: false });
-    el.addEventListener('touchend',    end,   { passive: true });
-    el.addEventListener('touchcancel', end,   { passive: true });
+    const els = [bodyRef.current, handleRef.current, titleRef.current].filter(Boolean);
+    if (!visible || !els.length) return;
+    const bindings = els.map(el => {
+      const fromBody = el === bodyRef.current;
+      const start = (e) => onPullStart(e, fromBody);
+      const move  = (e) => onPullMove(e, fromBody);
+      const end   = () => onPullEnd();
+      el.addEventListener('touchstart',  start, { passive: true });
+      el.addEventListener('touchmove',   move,  { passive: false });
+      el.addEventListener('touchend',    end,   { passive: true });
+      el.addEventListener('touchcancel', end,   { passive: true });
+      return { el, start, move, end };
+    });
     return () => {
-      el.removeEventListener('touchstart',  start);
-      el.removeEventListener('touchmove',   move);
-      el.removeEventListener('touchend',    end);
-      el.removeEventListener('touchcancel', end);
+      bindings.forEach(({ el, start, move, end }) => {
+        el.removeEventListener('touchstart',  start);
+        el.removeEventListener('touchmove',   move);
+        el.removeEventListener('touchend',    end);
+        el.removeEventListener('touchcancel', end);
+      });
     };
   }, [visible]);
 
@@ -165,21 +175,17 @@ export function Sheet({ open, onClose, children, title, maxHeight='94dvh', noPad
         boxShadow:'0 -1px 0 var(--border), 0 -12px 48px rgba(0,0,0,.22)',
         touchAction:'pan-y', overflow:'hidden',
       }}>
-        {/* Handle + (optional) title bar both seize the drag immediately. */}
+        {/* Handle + (optional) title bar both seize the drag immediately.
+            Touch listeners are attached natively (non-passive) in the useEffect
+            above so onPullMove can preventDefault without console errors. */}
         <div
-          onTouchStart={e => onPullStart(e, false)}
-          onTouchMove ={e => onPullMove (e, false)}
-          onTouchEnd  ={onPullEnd}
-          onTouchCancel={onPullEnd}
+          ref={handleRef}
           style={{ flexShrink:0, paddingTop:9, paddingBottom:5, display:'flex', justifyContent:'center', cursor:'grab', touchAction:'none' }}>
           <div style={{ width:38, height:5, borderRadius:99, background:'var(--border-strong)' }}/>
         </div>
         {title && (
           <div
-            onTouchStart={e => onPullStart(e, false)}
-            onTouchMove ={e => onPullMove (e, false)}
-            onTouchEnd  ={onPullEnd}
-            onTouchCancel={onPullEnd}
+            ref={titleRef}
             style={{ display:'flex', alignItems:'center', padding:'4px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0, touchAction:'none' }}>
             <span style={{ flex:1, fontSize:17, fontWeight:600, color:'var(--t1)', letterSpacing:'-.012em' }}>{title}</span>
             <button onClick={onClose} className="tap" style={{ width:30, height:30, border:'none', borderRadius:'50%', background:'var(--surface-2)', color:'var(--t3)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
@@ -383,13 +389,13 @@ export function TaskCard({ task, onOpen, onToggle, onDelete, onLongPress, showDa
             })}
           </div>
           <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontSize:14.5, fontWeight:500, color: task.done ? 'var(--t3)' : overdue ? '#ef4444' : 'var(--t1)', lineHeight:1.4, marginBottom: (task.priority!=='p3'||proj||tc||(showDate&&task.date)||task.timeEstimate||task.delegatedTo||task.snoozedUntil||task.dueDate||task.blocked) ? 5 : 0, textDecoration: task.done ? 'line-through' : 'none', textWrap:'pretty', letterSpacing:'-.005em' }}>
+            <div style={{ fontSize:14.5, fontWeight:500, color: task.done ? 'var(--t3)' : overdue ? '#ef4444' : 'var(--t1)', lineHeight:1.4, marginBottom:5, textDecoration: task.done ? 'line-through' : 'none', textWrap:'pretty', letterSpacing:'-.005em' }}>
               {task.recurrence && <span style={{ marginRight:5, opacity:.55, fontSize:11, display:'inline-block', verticalAlign:'1px' }}>↻</span>}
               {task.blocked && <span style={{ marginRight:5, fontSize:11 }}>⏸</span>}
               {task.title}
             </div>
             <div style={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:'4px 8px' }}>
-              {task.priority !== 'p3' && <span style={{ fontSize:11, fontWeight:700, color:priInfo.color, letterSpacing:'.06em' }}>{task.priority==='p1'?'●●●':'●●'}</span>}
+              <span style={{ fontSize:11, fontWeight:700, color:priInfo.color, letterSpacing:'.06em', opacity: task.priority==='p3' ? .42 : 1 }}>{task.priority==='p1'?'●●●':task.priority==='p2'?'●●':'●'}</span>
               {showProject && proj && (
                 <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11.5, color:'var(--t3)', fontWeight:500 }}>
                   <span style={{ width:6, height:6, borderRadius:2, background:proj.color, display:'inline-block', flexShrink:0 }}/>
@@ -553,12 +559,17 @@ export function DetailRow({ label, children, last=false }) {
 export function ProgressBar({ done, total }) {
   const pct = total > 0 ? (done/total)*100 : 0;
   const complete = done === total && total > 0;
+  const label = `${done} of ${total} done`;
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:10, padding:'6px 20px 10px' }}>
+    <div
+      role="progressbar"
+      aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label={label}
+      title={label}
+      style={{ display:'flex', alignItems:'center', gap:10, padding:'6px 20px 10px' }}>
       <div style={{ flex:1, height:4, background:'var(--surface-2)', borderRadius:99, overflow:'hidden', position:'relative' }}>
         <div style={{ width:`${pct}%`, height:'100%', background:complete ? '#10b981' : 'var(--accent)', borderRadius:99, transition:'width .5s var(--ease-out), background .3s' }}/>
       </div>
-      <span style={{ fontSize:10.5, color: complete ? '#10b981' : 'var(--t3)', whiteSpace:'nowrap', fontFamily:'var(--mono)', fontWeight:700, fontVariantNumeric:'tabular-nums', minWidth:32, textAlign:'right' }}>{done}/{total}</span>
+      <span style={{ fontSize:10.5, color: complete ? '#10b981' : 'var(--t3)', whiteSpace:'nowrap', fontFamily:'var(--mono)', fontWeight:700, fontVariantNumeric:'tabular-nums', minWidth:42, textAlign:'right' }}>{done}/{total} <span style={{ color:'var(--t4)', fontWeight:600, marginLeft:1 }}>done</span></span>
     </div>
   );
 }
