@@ -289,7 +289,7 @@ export function DataProvider({ children }) {
   }, [mutate]);
 
   // ── Derived ──────────────────────────────────────────────────────────────
-  const all = useMemo(() => tasks.filter(t => !t.archived && !t.parentId), [tasks]);
+  const all = useMemo(() => tasks.filter(t => !t.archived && !t.parentId).sort((a,b) => (a.position ?? 1e9) - (b.position ?? 1e9)), [tasks]);
   const views = useMemo(() => ({
     today:     all.filter(t => D.isTdy(t.date)),
     inbox:     all.filter(t => !t.date && !t.done && !t.snoozedUntil && !t.someday && !t.blocked && !t.delegatedTo),
