@@ -302,7 +302,7 @@ function DelegationsView({
       }
       if (key === 's') {
         e.preventDefault();
-        onJumpTo?.(selected.id); // delegate to drawer's snooze picker
+        onJumpTo?.(selected.id, 'date'); // delegate to drawer's snooze picker
         return;
       }
       if (key === 'r') {
@@ -816,7 +816,11 @@ function RightPane({
     // Compute due-day offset (days from delegation to expiry).
     let dueDay = null;
     if (task.expiryDate && task.delegatedAt) {
-      const delegated = new Date(task.delegatedAt);
+      // Use local calendar midnight for both ends so the day count is purely
+      // calendar-based and doesn't drift for UTC+ users whose delegatedAt
+      // timestamp falls before local midnight in UTC.
+      const d = new Date(task.delegatedAt);
+      const delegated = new Date(d.getFullYear(), d.getMonth(), d.getDate());
       const due = new Date(task.expiryDate + 'T00:00:00');
       dueDay = Math.max(0, Math.round((due.getTime() - delegated.getTime()) / 86400000));
     }
@@ -879,7 +883,7 @@ function RightPane({
         <div className="dvv-pr-actions">
           <button className="dvv-iconbtn" data-tooltip="Open in drawer for full edit"
             data-tt-pos="below" aria-label="Edit in drawer"
-            onClick={() => onJumpTo?.(task.id)}>
+            onClick={() => onJumpTo?.(task.id, null)}>
             <I.Pencil/>
           </button>
           <div className="dvv-kebab-wrap" ref={kebabRef}>
@@ -899,11 +903,11 @@ function RightPane({
                   <I.Undo/><span>Take back to today</span><span className="dvv-km-kbd">T</span>
                 </div>
                 <div className="dvv-km-item" role="menuitem" tabIndex={0}
-                  onClick={() => { onJumpTo?.(task.id); setKebabOpen(false); }}>
+                  onClick={() => { onJumpTo?.(task.id, 'date'); setKebabOpen(false); }}>
                   <I.Clock/><span>Snooze for…</span><span className="dvv-km-kbd">S</span>
                 </div>
                 <div className="dvv-km-item" role="menuitem" tabIndex={0}
-                  onClick={() => { onJumpTo?.(task.id); setKebabOpen(false); }}>
+                  onClick={() => { onJumpTo?.(task.id, 'delegation'); setKebabOpen(false); }}>
                   <I.User/><span>Re-delegate to…</span>
                 </div>
                 <div className="dvv-km-item" role="menuitem" tabIndex={0}

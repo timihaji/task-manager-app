@@ -144,6 +144,13 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
         setSecs(s => ({...s, dele:true, log:true}));
         onInitialFocusConsumed?.();
       }
+      // 'date' focus: expand Schedule section and open snooze dropdown so the
+      // user can immediately pick a new date (used by Delegations "Snooze for…").
+      if (initialFocus === 'date') {
+        setSecs(s => ({...s, sched: true}));
+        setSnoozeOpen(true);
+        onInitialFocusConsumed?.();
+      }
       // Card→routine drop opens the drawer with focus on the Repeats row.
       // Scroll it into view and apply purple emphasis to the routine rows so
       // the user knows where to refine the cadence we auto-applied.

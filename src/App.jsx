@@ -4410,7 +4410,7 @@ function App() {
         <div className="board-area" style={{padding:'18px 24px'}}>
           <DelegationsView
             tasks={tasks}
-            onJumpTo={(id)=>{ setDrawerInitialFocus('delegation'); setDrawerId(id); setFocusedId(id); }}
+            onJumpTo={(id, focus='delegation')=>{ setDrawerInitialFocus(focus); setDrawerId(id); setFocusedId(id); }}
             onUpdate={updateTask}
             onDelete={deleteTask}
             onCheckIn={(id, mode)=>{ const t=taskById(id); if(t && !t.done) completeTask(id, t.date||'inbox', mode); }}
