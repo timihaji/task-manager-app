@@ -69,7 +69,14 @@ const TASK_DB_COLUMNS = new Set([
   'last_contact_at', 'delegation_history', 'personal_reminder_date',
   'activity', 'archived', 'source', 'source_id',
   'subtasks', 'position', 'card_color',
-  'created_at', 'updated_at',
+  'created_at',
+  // Intentionally NOT including 'updated_at': the schema owns it via
+  // `default now()` + `touch_updated_at` trigger. Sending it from JS broke
+  // batch upserts — Supabase's columns= parameter is the union across all
+  // rows, so a batch like [delegation_parent (has updatedAt from echo),
+  // newly-spawned check-ins (no updatedAt)] would send NULL for check-ins'
+  // updated_at and trip the NOT NULL constraint. Letting the DB own it
+  // means every row gets a consistent fresh timestamp on insert/update.
 ]);
 
 // Defaults for NOT NULL columns. Required because the Supabase client
