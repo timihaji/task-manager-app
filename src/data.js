@@ -515,6 +515,19 @@ const archiveStaleRoutines = (tasks = [], todayStr = D.str(D.today())) => {
 // already exist for that date in the series.
 const extendRoutineHorizon = (tasks = [], daysAhead = 14, todayStr = D.str(D.today())) => {
   const byRecurrence = new Map();
+  // Track dates per recurrence across ALL instances (archived + active). Without
+  // this, the walk re-spawns past dates whose original instance was archived by
+  // archiveStaleRoutines: extend sees no active instance for that date and
+  // creates a new one, archive archives it next tick, extend re-creates it
+  // again — infinite loop that explodes the task table (saw 24k archived
+  // instances of one routine before the fix).
+  const datesPerRec = new Map();
+  for (const t of tasks) {
+    if (!t?.recurrence?.recurrenceId || !t.date) continue;
+    const id = t.recurrence.recurrenceId;
+    if (!datesPerRec.has(id)) datesPerRec.set(id, new Set());
+    datesPerRec.get(id).add(t.date);
+  }
   for (const t of tasks) {
     if (!t?.recurrence?.isRoutine) continue;
     if (!t.recurrence.recurrenceId) continue;
@@ -528,9 +541,11 @@ const extendRoutineHorizon = (tasks = [], daysAhead = 14, todayStr = D.str(D.tod
   const horizonStr = D.str(D.add(D.parse(todayStr), daysAhead));
   const additions = [];
 
-  for (const [, siblings] of byRecurrence) {
-    // Existing dates for this series (so we don't double-create).
-    const existingDates = new Set(siblings.map(t => t.date).filter(Boolean));
+  for (const [recId, siblings] of byRecurrence) {
+    // Existing dates for this series — pulled from ALL instances (archived +
+    // active) so archived past instances suppress re-spawning. Active siblings
+    // still drive template selection and the latestPast walk anchor below.
+    const existingDates = datesPerRec.get(recId) || new Set();
     // Template = the most-recent sibling (carries the latest title/project/tags).
     const dated = siblings.filter(t => t.date);
     if (!dated.length) continue;
