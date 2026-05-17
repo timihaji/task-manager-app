@@ -371,8 +371,9 @@ function MobileShell() {
   }, [activeTaskId, quickAddOpts, searchOpen]);
 
   // Edge-swipe-back: touch starts within 20px of left edge and moves right
-  // > 60px before any meaningful vertical motion → history.back(). Doesn't
-  // interfere with native iOS swipe-back since both go to the same outcome.
+  // > 60px before any meaningful vertical motion → history.back(). Only fires
+  // when there's an in-app layer to pop — otherwise the back call would land
+  // on whatever the browser tab had before the app and silently exit us.
   useEffect(() => {
     let sx = 0, sy = 0, candidate = false, fired = false;
     const onStart = (e) => {
@@ -389,7 +390,9 @@ function MobileShell() {
       if (dy > 30) { candidate = false; return; }
       if (dx > 60) {
         fired = true;
-        try { window.history.back(); } catch {}
+        if (depthRef.current > 0) {
+          try { window.history.back(); } catch {}
+        }
       }
     };
     const onEnd = () => { candidate = false; fired = false; };
