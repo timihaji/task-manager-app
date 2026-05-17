@@ -15,6 +15,7 @@ import {
   subscribeTasks, subscribeTaxonomy,
   rowToTask, normalizeTask,
 } from '../lib/db.js';
+import { computePosition } from '../utils/position.js';
 
 const SEED_KEY = 'tm_mobile_devseed_v1';
 
@@ -51,13 +52,21 @@ function devSeed() {
 }
 
 function loadDevTasks() {
+  let tasks;
   try {
     const raw = localStorage.getItem(SEED_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) tasks = JSON.parse(raw);
   } catch {}
-  const seed = devSeed();
-  try { localStorage.setItem(SEED_KEY, JSON.stringify(seed)); } catch {}
-  return seed;
+  if (!tasks) tasks = devSeed();
+  // Backfill positions for any task missing one — reorder needs neighbors
+  // to have positions for computePosition to produce meaningful values.
+  let needsSave = false;
+  tasks = tasks.map((t, i) => {
+    if (t.position == null) { needsSave = true; return { ...t, position: (i + 1) * 100 }; }
+    return t;
+  });
+  if (needsSave) { try { localStorage.setItem(SEED_KEY, JSON.stringify(tasks)); } catch {} }
+  return tasks;
 }
 
 function saveDevTasks(tasks) {
@@ -229,10 +238,26 @@ export function DataProvider({ children }) {
 
   const addTask = useCallback((data) => {
     const now = new Date().toISOString();
-    const t = { id: mkid(), done: false, tags: [], createdAt: now, ...data };
-    mutate(prev => [t, ...prev]);
-    return t;
-  }, [mutate]);
+    // Compute a position so the new task slots above the existing top of its
+    // bucket (same date / null=inbox). Without this, syncTaskDiff sends a
+    // row with no `position`, so on desktop the task sorts by created_at —
+    // not where the mobile user expects it.
+    let position;
+    setTasks(prev => {
+      const bucket = prev
+        .filter(t => !t.archived && !t.parentId && (t.date || null) === (data.date || null))
+        .sort((a,b) => (a.position ?? 1e9) - (b.position ?? 1e9));
+      const below = bucket[0] || null;
+      position = computePosition(null, below);
+      const t = { id: mkid(), done: false, tags: [], createdAt: now, position, ...data };
+      const next = [t, ...prev];
+      tasksRef.current = next;
+      if (supabaseDisabled) saveDevTasks(next);
+      else scheduleSync();
+      return next;
+    });
+    return { position };
+  }, [supabaseDisabled, scheduleSync]);
 
   const deleteTask = useCallback((id) => {
     mutate(prev => prev.filter(t => t.id !== id));

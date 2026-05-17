@@ -6,6 +6,7 @@ import {
   CaptureBar, ProgressBar,
 } from './MobileComponents.jsx';
 import { useReschedule, DropTile, DragGhost } from './MobileReschedule.jsx';
+import { useReorder, ReorderGhost, InsertionLine, ReorderScrim } from './MobileReorder.jsx';
 import { DelegationsScreen, RoutinesScreen } from './MobileDetails.jsx';
 
 export const Ic = {
@@ -179,10 +180,11 @@ export function TodayScreen() {
 
 // ── InboxScreen ───────────────────────────────────────────────────────────────
 export function InboxScreen() {
-  const { views, addTask, toggleTask, deleteTask, PROJECTS } = useData();
+  const { views, addTask, toggleTask, deleteTask, updateTask, PROJECTS } = useData();
   const { openDetail, setSearchOpen } = useApp();
   const [groupBy, setGroupBy] = useState('none');
   const tasks = views.inbox;
+  const { drag, startReorder } = useReorder({ tasks, updateTask });
 
   const grouped = useMemo(() => {
     if (groupBy === 'none') return [{ key:'all', label:null, tasks }];
@@ -219,21 +221,25 @@ export function InboxScreen() {
                   </div>
                 )}
                 <div style={{ padding:'0 16px' }}>
-                  {g.tasks.map(t => <TaskCard key={t.id} task={t} showProject onOpen={openDetail} onToggle={toggleTask} onDelete={deleteTask}/>)}
+                  {g.tasks.map(t => <TaskCard key={t.id} task={t} showProject hidden={drag?.task?.id===t.id} onLongPress={startReorder} onOpen={openDetail} onToggle={toggleTask} onDelete={deleteTask}/>)}
                 </div>
               </div>
             ))
         }
       </div>
+      <ReorderScrim drag={drag}/>
+      <InsertionLine drag={drag}/>
+      {drag && <ReorderGhost drag={drag}><TaskCard task={drag.task} onLongPress={null} onOpen={()=>{}} onToggle={()=>{}} onDelete={()=>{}}/></ReorderGhost>}
     </div>
   );
 }
 
 // ── StackScreen ───────────────────────────────────────────────────────────────
 export function StackScreen() {
-  const { views, toggleTask, deleteTask } = useData();
+  const { views, toggleTask, deleteTask, updateTask } = useData();
   const { openDetail, openQuickAdd, setSearchOpen } = useApp();
   const [collapsed, setCollapsed] = useState({ DECK:false, LATER:true });
+  const { drag, startReorder } = useReorder({ tasks: views.stack, updateTask });
 
   const now   = useMemo(() => views.stack.filter(t => !t.blocked && !t.delegatedTo && (D.isTdy(t.date)||D.isPst(t.date)||(!t.date && (t.priority==='p1'||t.priority==='p2')))), [views.stack]);
   const deck  = useMemo(() => views.stack.filter(t => !now.includes(t) && t.date && D.isFut(t.date) && D.parse(t.date) <= D.add(D.today(), 7)), [views.stack, now]);
@@ -254,7 +260,7 @@ export function StackScreen() {
           <div style={{ padding:'0 16px', marginBottom:6 }}>
             {tasks.length === 0
               ? <div style={{ textAlign:'center', padding:'18px 0', color:'var(--t4)', fontSize:12.5 }}>Nothing here</div>
-              : tasks.map(t => <TaskCard key={t.id} task={t} showDate={tier!=='NOW'} showProject onOpen={openDetail} onToggle={toggleTask} onDelete={deleteTask}/>)
+              : tasks.map(t => <TaskCard key={t.id} task={t} showDate={tier!=='NOW'} showProject hidden={drag?.task?.id===t.id} onLongPress={startReorder} onOpen={openDetail} onToggle={toggleTask} onDelete={deleteTask}/>)
             }
           </div>
         )}
@@ -277,6 +283,9 @@ export function StackScreen() {
         <Section tier="DECK" label="Deck" tasks={deck}/>
         <Section tier="LATER" label="Later" tasks={later}/>
       </div>
+      <ReorderScrim drag={drag}/>
+      <InsertionLine drag={drag}/>
+      {drag && <ReorderGhost drag={drag}><TaskCard task={drag.task} onLongPress={null} onOpen={()=>{}} onToggle={()=>{}} onDelete={()=>{}}/></ReorderGhost>}
     </div>
   );
 }
@@ -371,7 +380,7 @@ export function MoreScreen() {
 
 // ── ListScreen ────────────────────────────────────────────────────────────────
 export function ListScreen({ type, projectId, tagId }) {
-  const { views, all, toggleTask, deleteTask, PROJECTS, ALL_TAGS } = useData();
+  const { views, all, toggleTask, deleteTask, updateTask, PROJECTS, ALL_TAGS } = useData();
   const { openDetail, openQuickAdd, pop } = useApp();
 
   const config = {
@@ -397,6 +406,7 @@ export function ListScreen({ type, projectId, tagId }) {
     return views[type] || [];
   };
   const tasks = getTaskList();
+  const { drag, startReorder } = useReorder({ tasks, updateTask });
 
   const groupedByDate = useMemo(() => {
     if (!config.groupByDate) return null;
@@ -423,17 +433,20 @@ export function ListScreen({ type, projectId, tagId }) {
                 <div key={g.key}>
                   <SectionHeader label={g.label} count={g.tasks.length}/>
                   <div style={{ padding:'0 16px' }}>
-                    {g.tasks.map(t => <TaskCard key={t.id} task={t} showDate={false} showProject onOpen={openDetail} onToggle={toggleTask} onDelete={deleteTask}/>)}
+                    {g.tasks.map(t => <TaskCard key={t.id} task={t} showDate={false} showProject hidden={drag?.task?.id===t.id} onLongPress={startReorder} onOpen={openDetail} onToggle={toggleTask} onDelete={deleteTask}/>)}
                   </div>
                 </div>
               ))
             ) : (
               <div style={{ padding:'12px 16px' }}>
-                {tasks.map(t => <TaskCard key={t.id} task={t} showDate={config.showDate||type==='completed'} showProject onOpen={openDetail} onToggle={toggleTask} onDelete={deleteTask}/>)}
+                {tasks.map(t => <TaskCard key={t.id} task={t} showDate={config.showDate||type==='completed'} showProject hidden={drag?.task?.id===t.id} onLongPress={startReorder} onOpen={openDetail} onToggle={toggleTask} onDelete={deleteTask}/>)}
               </div>
             )
         }
       </div>
+      <ReorderScrim drag={drag}/>
+      <InsertionLine drag={drag}/>
+      {drag && <ReorderGhost drag={drag}><TaskCard task={drag.task} onLongPress={null} onOpen={()=>{}} onToggle={()=>{}} onDelete={()=>{}}/></ReorderGhost>}
     </div>
   );
 }

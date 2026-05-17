@@ -61,12 +61,25 @@ body[data-mobile] {
   background: var(--bg);
   color: var(--t1);
   overflow: hidden;
+  /* App feel: no system text selection, no callout, no double-tap zoom. Inputs
+     re-enable selection below. Without this the long-press drag spawns iOS's
+     selection magnifier and bottom-bar "Copy/Look Up" tooltip. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 body[data-mobile] #root {
   width: 100%;
-  height: 100dvh;
-  min-height: 100vh;
+  /* 100dvh tracks the visible viewport (URL bar collapsed/expanded). The
+     inline style on #root in index.html sets min-height:100vh which on iOS
+     Safari is TALLER than 100dvh — that pushes the bottom nav below the
+     home indicator. !important is necessary to beat the inline rule. */
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  max-height: 100dvh !important;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -82,6 +95,15 @@ body[data-mobile] *::after {
 
 body[data-mobile] button {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Re-enable text selection inside editable controls only. */
+body[data-mobile] input,
+body[data-mobile] textarea,
+body[data-mobile] [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 
 body[data-mobile] ::selection {

@@ -73,8 +73,10 @@ export function Sheet({ open, onClose, children, title, maxHeight='94dvh', noPad
   const [visible, setVisible] = useState(false);
   const [anim,    setAnim]    = useState(false);
   const sheetRef  = useRef(null);
+  const bodyRef   = useRef(null);
   const startYRef = useRef(null);
   const dragYRef  = useRef(0);
+  const dragActiveRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -95,21 +97,61 @@ export function Sheet({ open, onClose, children, title, maxHeight='94dvh', noPad
     }
   }, [visible]);
 
-  const onHandleTouchStart = e => {
+  // Pull-down-to-dismiss. Engages from the handle/title region ALWAYS, and
+  // from the body when the scroll container is at the top — so a downward
+  // gesture starting at scrollTop=0 drags the sheet, while a normal scroll
+  // mid-list stays a scroll.
+  const onPullStart = (e, fromBody = false) => {
+    if (fromBody && bodyRef.current && bodyRef.current.scrollTop > 0) return;
     startYRef.current = e.touches[0].clientY;
     dragYRef.current  = 0;
+    dragActiveRef.current = !fromBody; // body waits to confirm downward intent
+    if (sheetRef.current) sheetRef.current.style.transition = 'transform 0s';
   };
-  const onHandleTouchMove  = e => {
+  const onPullMove = (e, fromBody = false) => {
     if (startYRef.current == null) return;
-    const dy = Math.max(0, e.touches[0].clientY - startYRef.current);
-    dragYRef.current = dy;
-    if (sheetRef.current) sheetRef.current.style.transform = `translateY(${dy}px)`;
+    const dy = e.touches[0].clientY - startYRef.current;
+    if (fromBody && !dragActiveRef.current) {
+      // Only claim the gesture on a clear downward pull from scrollTop=0.
+      if (bodyRef.current && bodyRef.current.scrollTop > 0) { startYRef.current = null; return; }
+      if (dy < 8) return;
+      dragActiveRef.current = true;
+    }
+    const cappedDy = Math.max(0, dy);
+    dragYRef.current = cappedDy;
+    if (sheetRef.current) sheetRef.current.style.transform = `translateY(${cappedDy}px)`;
+    if (cappedDy > 0 && e.cancelable) e.preventDefault();
   };
-  const onHandleTouchEnd   = () => {
-    if (dragYRef.current > 100) { onClose(); }
-    else if (sheetRef.current)  { sheetRef.current.style.transform = ''; }
+  const onPullEnd = () => {
+    if (startYRef.current == null) return;
+    const dy = dragYRef.current;
+    if (sheetRef.current) sheetRef.current.style.transition = 'transform .28s var(--ease-out)';
+    if (dy > 100) { onClose(); }
+    else if (sheetRef.current) { sheetRef.current.style.transform = ''; }
     startYRef.current = null;
+    dragActiveRef.current = false;
   };
+
+  // Native non-passive touchmove on the body so preventDefault can stop the
+  // scroll while we're claiming the gesture. React's synthetic handlers are
+  // passive in modern browsers.
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el || !visible) return;
+    const start = (e) => onPullStart(e, true);
+    const move  = (e) => onPullMove(e, true);
+    const end   = () => onPullEnd();
+    el.addEventListener('touchstart',  start, { passive: true });
+    el.addEventListener('touchmove',   move,  { passive: false });
+    el.addEventListener('touchend',    end,   { passive: true });
+    el.addEventListener('touchcancel', end,   { passive: true });
+    return () => {
+      el.removeEventListener('touchstart',  start);
+      el.removeEventListener('touchmove',   move);
+      el.removeEventListener('touchend',    end);
+      el.removeEventListener('touchcancel', end);
+    };
+  }, [visible]);
 
   if (!visible) return null;
   return (
@@ -121,20 +163,41 @@ export function Sheet({ open, onClose, children, title, maxHeight='94dvh', noPad
         transform: anim ? 'translateY(0)' : 'translateY(100%)',
         transition:'transform .36s var(--ease-out)',
         boxShadow:'0 -1px 0 var(--border), 0 -12px 48px rgba(0,0,0,.22)',
+        touchAction:'pan-y', overflow:'hidden',
       }}>
-        <div onTouchStart={onHandleTouchStart} onTouchMove={onHandleTouchMove} onTouchEnd={onHandleTouchEnd}
+        {/* Handle + (optional) title bar both seize the drag immediately. */}
+        <div
+          onTouchStart={e => onPullStart(e, false)}
+          onTouchMove ={e => onPullMove (e, false)}
+          onTouchEnd  ={onPullEnd}
+          onTouchCancel={onPullEnd}
           style={{ flexShrink:0, paddingTop:9, paddingBottom:5, display:'flex', justifyContent:'center', cursor:'grab', touchAction:'none' }}>
           <div style={{ width:38, height:5, borderRadius:99, background:'var(--border-strong)' }}/>
         </div>
         {title && (
-          <div style={{ display:'flex', alignItems:'center', padding:'4px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+          <div
+            onTouchStart={e => onPullStart(e, false)}
+            onTouchMove ={e => onPullMove (e, false)}
+            onTouchEnd  ={onPullEnd}
+            onTouchCancel={onPullEnd}
+            style={{ display:'flex', alignItems:'center', padding:'4px 20px 14px', borderBottom:'1px solid var(--border)', flexShrink:0, touchAction:'none' }}>
             <span style={{ flex:1, fontSize:17, fontWeight:600, color:'var(--t1)', letterSpacing:'-.012em' }}>{title}</span>
             <button onClick={onClose} className="tap" style={{ width:30, height:30, border:'none', borderRadius:'50%', background:'var(--surface-2)', color:'var(--t3)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
             </button>
           </div>
         )}
-        <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding: noPad ? 0 : '0 0 max(20px,env(safe-area-inset-bottom))' }}>
+        <div
+          ref={bodyRef}
+          style={{
+            flex:1,
+            overflowY:'auto',
+            overflowX:'hidden',
+            WebkitOverflowScrolling:'touch',
+            overscrollBehavior:'contain',
+            touchAction:'pan-y',
+            padding: noPad ? 0 : '0 0 max(20px,env(safe-area-inset-bottom))',
+          }}>
           {children}
         </div>
       </div>
@@ -291,6 +354,7 @@ export function TaskCard({ task, onOpen, onToggle, onDelete, onLongPress, showDa
       <div
         ref={swipeRef}
         onClick={handleTap}
+        data-task-id={task.id}
         style={{
           background: task.done ? 'var(--surface-2)' : 'var(--surface)',
           border:`1px solid ${overdue ? 'rgba(239,68,68,.32)' : 'var(--border)'}`,

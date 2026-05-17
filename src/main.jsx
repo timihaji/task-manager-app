@@ -52,19 +52,22 @@ function pickShell() {
 function useShell() {
   const [shell, setShell] = useState(() => pickShell());
   useEffect(() => {
-    let frame = null;
+    // setTimeout-based debounce so we work in headless previews too —
+    // rAF doesn't always fire there. 30ms is short enough to feel instant
+    // and long enough to coalesce a rapid resize gesture.
+    let timer = null;
     const onResize = () => {
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        frame = null;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
         const next = pickShell();
         setShell(prev => prev === next ? prev : next);
-      });
+      }, 30);
     };
     window.addEventListener('resize', onResize);
     return () => {
       window.removeEventListener('resize', onResize);
-      if (frame) cancelAnimationFrame(frame);
+      if (timer) clearTimeout(timer);
     };
   }, []);
 
@@ -84,15 +87,17 @@ function WorkspaceGate() {
   const { workspace, loading, error, supabaseDisabled } = useWorkspace();
   const shell = useShell();
   const Shell = shell === 'mobile' ? MobileApp : App;
-  // Local-only mode: skip the workspace and render the app with localStorage.
-  if (supabaseDisabled) return <Shell />;
+  // key={shell} forces unmount + remount when the shell switches mid-session,
+  // so the desktop App's useEffect cleanups (dnd-kit sensors, body classes,
+  // window listeners) actually run before mobile mounts.
+  if (supabaseDisabled) return <Shell key={shell} />;
   if (loading || !workspace) {
     if (error) {
       return <BootError error={error} onRetry={() => window.location.reload()} />;
     }
     return <BootSplash message="Loading your workspace…" />;
   }
-  return <Shell />;
+  return <Shell key={shell} />;
 }
 
 function Gate() {

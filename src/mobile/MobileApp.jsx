@@ -178,7 +178,12 @@ function AppProvider({ children }) {
     document.documentElement.style.setProperty('--accent-border', hexToRgba(accent, 0.30));
   }, [theme, accent, look]);
 
-  // Navigation
+  // ── Navigation + history-based back gestures ────────────────────────────
+  // We push a history entry for every open overlay / nested screen, and call
+  // history.back() on UI close. The popstate handler is the single source of
+  // truth for closing: it runs whether the user hit the OS back button, the
+  // X button, or made an edge-swipe-back gesture (which calls history.back()
+  // internally). Skips its own programmatic back() to avoid double-firing.
   const [activeTab,  setActiveTab]  = useState('today');
   const [pushAnim,   setPushAnim]   = useState(false);
   const [tabStacks,  setTabStacks]  = useState({
@@ -191,31 +196,60 @@ function AppProvider({ children }) {
   const currentScreen = currentStack[currentStack.length - 1];
   const isNested = currentStack.length > 1;
 
-  const navigate = (tab) => { setActiveTab(tab); setPushAnim(false); };
+  // Overlay state
+  const [activeTaskId, setActiveTaskId] = useState(null);
+  const [quickAddOpts, setQuickAddOpts] = useState(null);
+  const [searchOpen,   setSearchOpen]   = useState(false);
+  const [toast,        setToast]        = useState(null);
+  const toastTimer = useRef(null);
+
+  // History layer tracking. Each entry we push corresponds to one closable
+  // layer. depth tracks how many we've pushed — popstate decrements.
+  const depthRef = useRef(0);
+
+  const pushHistoryLayer = useCallback((kind) => {
+    depthRef.current += 1;
+    try { window.history.pushState({ mobile: true, kind, depth: depthRef.current }, ''); } catch {}
+  }, []);
+
+  // Replace state with our "anchor" on first mount so the first popstate
+  // doesn't navigate the user out of the page accidentally.
+  useEffect(() => {
+    try {
+      if (!window.history.state || window.history.state.mobile !== 'anchor') {
+        window.history.replaceState({ mobile: 'anchor' }, '');
+      }
+    } catch {}
+  }, []);
+
+  // ── Open* helpers (always push a history entry first) ───────────────────
+  const openDetail = (id) => { pushHistoryLayer('detail'); setActiveTaskId(id); };
+  const openQuickAdd = (opts) => { pushHistoryLayer('quickadd'); setQuickAddOpts(opts ?? {}); };
+  const openSearch = () => { pushHistoryLayer('search'); setSearchOpen(true); };
   const push = (screen, props = {}) => {
+    pushHistoryLayer('screen');
     setTabStacks(prev => ({ ...prev, [activeTab]: [...prev[activeTab], { screen, props }] }));
     setPushAnim(true);
     setTimeout(() => setPushAnim(false), 320);
   };
-  const pop = () => {
-    setTabStacks(prev => {
-      const stack = prev[activeTab];
-      if (stack.length <= 1) return prev;
-      return { ...prev, [activeTab]: stack.slice(0, -1) };
-    });
-  };
 
-  // Overlays
-  const [activeTaskId,  setActiveTaskId]  = useState(null);
-  const [quickAddOpts,  setQuickAddOpts]  = useState(null);
-  const [searchOpen,    setSearchOpen]    = useState(false);
-  const [toast,         setToast]         = useState(null);
-  const toastTimer = useRef(null);
+  // ── Close* helpers route through history.back() so popstate is the
+  // single state-mutation path. Avoids divergence between OS-back and UI-X.
+  const goBack = useCallback(() => {
+    if (depthRef.current > 0) { try { window.history.back(); } catch {} }
+  }, []);
+  const closeDetail   = goBack;
+  const closeQuickAdd = goBack;
+  const closeSearch   = goBack;
+  const pop           = goBack;
 
-  const openDetail    = (id)   => setActiveTaskId(id);
-  const closeDetail   = ()     => setActiveTaskId(null);
-  const openQuickAdd  = (opts) => setQuickAddOpts(opts ?? {});
-  const closeQuickAdd = ()     => setQuickAddOpts(null);
+  // setSearchOpen kept on the value (some screens want to programmatically
+  // open). Use openSearch for proper history wiring.
+  const setSearchOpenWrapper = (v) => { if (v) openSearch(); else goBack(); };
+
+  // Tab switch resets pushAnim but doesn't touch history (tabs are siblings).
+  const navigate = (tab) => { setActiveTab(tab); setPushAnim(false); };
+
   const showToast = (msg) => {
     setToast(msg);
     clearTimeout(toastTimer.current);
@@ -227,8 +261,18 @@ function AppProvider({ children }) {
     activeTab, navigate, push, pop, isNested, currentScreen, pushAnim,
     openDetail, closeDetail, activeTaskId,
     openQuickAdd, closeQuickAdd, quickAddOpts,
-    searchOpen, setSearchOpen,
+    searchOpen, setSearchOpen: setSearchOpenWrapper, openSearch, closeSearch,
     toast, showToast,
+    // Internal — for MobileShell's popstate handler
+    _depthRef: depthRef,
+    _setActiveTaskId: setActiveTaskId,
+    _setQuickAddOpts: setQuickAddOpts,
+    _setSearchOpen: setSearchOpen,
+    _popStack: () => setTabStacks(prev => {
+      const stack = prev[activeTab];
+      if (stack.length <= 1) return prev;
+      return { ...prev, [activeTab]: stack.slice(0, -1) };
+    }),
   }), [theme, accent, look, activeTab, currentScreen, pushAnim, activeTaskId, quickAddOpts, searchOpen, toast]);
 
   return (
@@ -244,32 +288,81 @@ function AppProvider({ children }) {
 function MobileShell() {
   const ctx = React.useContext(AppContext);
   const {
-    activeTab, navigate, currentScreen, pushAnim, openQuickAdd,
-    searchOpen, setSearchOpen, activeTaskId, closeDetail,
-    quickAddOpts, closeQuickAdd, toast, pop,
+    activeTab, navigate, currentScreen, pushAnim, openQuickAdd, openSearch,
+    activeTaskId, quickAddOpts, searchOpen, toast,
+    _depthRef, _setActiveTaskId, _setQuickAddOpts, _setSearchOpen, _popStack,
   } = ctx;
 
-  // System back gesture (browser back button) pops the stack first.
+  // popstate is the single state-mutation path for closes (UI X buttons call
+  // history.back() which fires this; OS back / edge-swipe also fires this).
+  // We close the deepest open layer in LIFO order and decrement our depth.
+  // If anchor is reached and the user back-gestures again, re-push it so the
+  // browser doesn't navigate away from the app silently.
   useEffect(() => {
     const onPop = () => {
-      if (activeTaskId) { closeDetail(); return; }
-      if (quickAddOpts !== null) { closeQuickAdd(); return; }
-      if (searchOpen) { setSearchOpen(false); return; }
-      pop();
+      if (activeTaskId)              _setActiveTaskId(null);
+      else if (quickAddOpts !== null) _setQuickAddOpts(null);
+      else if (searchOpen)            _setSearchOpen(false);
+      else                            _popStack();
+      if (_depthRef.current > 0) _depthRef.current -= 1;
+      // Re-anchor if we're at root and there's no state — keeps the user
+      // inside the app instead of accidentally navigating to about:blank.
+      try {
+        if (!window.history.state || window.history.state.mobile !== 'anchor') {
+          if (_depthRef.current === 0) {
+            window.history.replaceState({ mobile: 'anchor' }, '');
+          }
+        }
+      } catch {}
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, [activeTaskId, quickAddOpts, searchOpen, pop, closeDetail, closeQuickAdd, setSearchOpen]);
+  }, [activeTaskId, quickAddOpts, searchOpen]);
+
+  // Edge-swipe-back: touch starts within 20px of left edge and moves right
+  // > 60px before any meaningful vertical motion → history.back(). Doesn't
+  // interfere with native iOS swipe-back since both go to the same outcome.
+  useEffect(() => {
+    let sx = 0, sy = 0, candidate = false, fired = false;
+    const onStart = (e) => {
+      const t = e.touches[0];
+      if (!t) return;
+      candidate = t.clientX <= 20;
+      sx = t.clientX; sy = t.clientY; fired = false;
+    };
+    const onMove = (e) => {
+      if (!candidate || fired) return;
+      const t = e.touches[0];
+      const dx = t.clientX - sx;
+      const dy = Math.abs(t.clientY - sy);
+      if (dy > 30) { candidate = false; return; }
+      if (dx > 60) {
+        fired = true;
+        try { window.history.back(); } catch {}
+      }
+    };
+    const onEnd = () => { candidate = false; fired = false; };
+    document.addEventListener('touchstart', onStart, { passive: true });
+    document.addEventListener('touchmove',  onMove,  { passive: true });
+    document.addEventListener('touchend',   onEnd,   { passive: true });
+    document.addEventListener('touchcancel', onEnd,  { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onStart);
+      document.removeEventListener('touchmove',  onMove);
+      document.removeEventListener('touchend',   onEnd);
+      document.removeEventListener('touchcancel', onEnd);
+    };
+  }, []);
 
   return (
     <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', background:'var(--bg)', overflow:'hidden', fontFamily:'var(--font)', color:'var(--t1)', position:'relative' }}>
       <div style={{ flex:1, position:'relative', overflow:'hidden', minHeight:0 }}>
-        <ScreenRouter screen={currentScreen} pushAnim={pushAnim} onSettingsBack={pop}/>
+        <ScreenRouter screen={currentScreen} pushAnim={pushAnim} onSettingsBack={ctx.pop}/>
       </div>
       <BottomNav activeTab={activeTab} onNavigate={navigate} onQuickAdd={() => openQuickAdd({})}/>
-      {searchOpen && <SearchScreen onClose={() => setSearchOpen(false)}/>}
-      {activeTaskId && <TaskDetailSheet taskId={activeTaskId} onClose={closeDetail}/>}
-      {quickAddOpts !== null && <QuickAddSheet opts={quickAddOpts} onClose={closeQuickAdd}/>}
+      {searchOpen && <SearchScreen onClose={ctx.closeSearch}/>}
+      {activeTaskId && <TaskDetailSheet taskId={activeTaskId} onClose={ctx.closeDetail}/>}
+      {quickAddOpts !== null && <QuickAddSheet opts={quickAddOpts} onClose={ctx.closeQuickAdd}/>}
       {toast && <Toast message={toast}/>}
     </div>
   );

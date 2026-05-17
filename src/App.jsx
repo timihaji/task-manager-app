@@ -79,6 +79,7 @@ import { parseNLDate } from './utils/parseNLDate.js';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useDndSensors, getInsertionIndex, compositeCollisionDetection } from './utils/dnd.js';
+import { computePosition } from './utils/position.js';
 import * as haptics from './utils/haptics.js';
 
 // ── extracted leaf components ────────────────────────────────────────────
@@ -2719,15 +2720,7 @@ function App() {
   // JSON.stringify differs, the diff effect fires. Without this the array
   // splice alone is invisible to the diff and the manual order is lost on
   // refresh (fetchTasks orders by `position` then `created_at`).
-  const computePosition = (above, below) => {
-    const A = above && Number.isFinite(above.position) ? above.position : null;
-    const B = below && Number.isFinite(below.position) ? below.position : null;
-    if (A == null && B == null) return 1;
-    if (A == null) return B - 1;
-    if (B == null) return A + 1;
-    if (Math.abs(B - A) < 1e-9) return A + 0.5; // gap collapsed; rare
-    return (A + B) / 2;
-  };
+  // `computePosition` now lives in src/utils/position.js — shared with mobile.
 
   // Reorder a task within a specific date column to position `index` among
   // the cards currently visible in that column. Mirrors `reorderToInbox` but
