@@ -986,13 +986,20 @@ function App() {
       const prev = lastSyncedTasksRef.current;
       if (prev === tasks) return;
       lastSyncedTasksRef.current = tasks;
-      syncTaskDiff(prev, tasks, userId, workspaceId).catch((e) => {
+      // Stamp diagnostic state so the user can inspect via console
+      // (`window.__tmLastSync`) even if a toast is missed or dismissed.
+      window.__tmLastSync = { at: new Date().toISOString(), status: 'pending', upserts: null, error: null };
+      syncTaskDiff(prev, tasks, userId, workspaceId).then((result) => {
+        window.__tmLastSync = { at: new Date().toISOString(), status: 'ok', upserts: result?.upserts || 0, deletes: result?.deletes || 0, error: null };
+      }).catch((e) => {
         console.error('[tasks] sync failed', e);
-        // Surface to UI so silent persistence failures don't hide from the
-        // user. The full Postgres error (column missing, RLS denial, etc.)
-        // goes straight to the toast for diagnosis. Long timeout, no auto-
-        // dismiss until they see it.
         const msg = e?.message || e?.details || e?.hint || String(e);
+        const full = { message: e?.message, details: e?.details, hint: e?.hint, code: e?.code };
+        window.__tmLastSync = { at: new Date().toISOString(), status: 'error', upserts: null, error: full };
+        // Persist to localStorage so it survives a refresh — user can run
+        // `JSON.parse(localStorage.tm_last_sync_error)` to see the last
+        // failure even if they refreshed past the toast.
+        try { localStorage.setItem('tm_last_sync_error', JSON.stringify({ at: new Date().toISOString(), ...full })); } catch {}
         showToast(`Save failed: ${msg}`, { timeout: 0 });
       });
     }, 80);
