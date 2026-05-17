@@ -17,11 +17,17 @@ const SMART_DATE_PATTERNS = [
   { re: /\bnext week\b/i, fn: () => D.str(D.add(D.today(), 7)) },
 ];
 
+// Returns { date, cleanTitle } — strips the matched date phrase from the title
+// so a captured task doesn't end up reading "Email John tomorrow at 2pm" after
+// it's already filed on Tomorrow. Returns date=null if no phrase matched.
 function parseSmartDate(title) {
   for (const { re, fn } of SMART_DATE_PATTERNS) {
-    if (re.test(title)) return fn();
+    if (re.test(title)) {
+      const cleanTitle = title.replace(re, '').replace(/\s{2,}/g, ' ').trim();
+      return { date: fn(), cleanTitle };
+    }
   }
-  return null;
+  return { date: null, cleanTitle: title };
 }
 
 export const QuickAddBar = forwardRef(function QuickAddBar(_props, ref) {
@@ -87,9 +93,9 @@ export const QuickAddBar = forwardRef(function QuickAddBar(_props, ref) {
   // browser back.
   const submit = useCallback(() => {
     if (!title.trim()) return;
-    const smartDate = parseSmartDate(title);
+    const { date: smartDate, cleanTitle } = parseSmartDate(title.trim());
     addTask({
-      title: title.trim(),
+      title: cleanTitle || title.trim(),
       project,
       priority,
       date: smartDate ?? date,
