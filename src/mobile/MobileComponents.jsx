@@ -304,6 +304,8 @@ export function TaskCard({ task, onOpen, onToggle, onDelete, onLongPress, showDa
         timer = null; fired = true;
         lockRef.current = true;
         const rect = el.getBoundingClientRect();
+        el.style.touchAction = 'none';
+        try { el.setPointerCapture(pid); } catch {}
         onLongPress(task, { x: sx, y: sy, rect });
       }, 380);
     };
@@ -311,7 +313,7 @@ export function TaskCard({ task, onOpen, onToggle, onDelete, onLongPress, showDa
       if (timer == null || e.pointerId !== pid) return;
       if (Math.hypot(e.clientX - sx, e.clientY - sy) > 8) cancel();
     };
-    const onUp = () => { if (!fired) cancel(); else { setPressing(false); lockRef.current = false; } };
+    const onUp = () => { el.style.touchAction = ''; if (!fired) cancel(); else { setPressing(false); lockRef.current = false; } };
 
     el.addEventListener('pointerdown',   onDown);
     el.addEventListener('pointermove',   onMove);
