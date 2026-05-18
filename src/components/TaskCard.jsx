@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, fmtTimeEst, daysSince, isStale, D, recurrenceLabel } from '../data.js';
 import { I } from '../utils/icons.jsx';
 import { PRI_INFO } from '../utils/constants.js';
+import { tagPath, formatTagChip, resolveTagColor } from '../utils/tagTree.js';
 // Life-area imports removed in the Buckets redesign polish pass. The
 // life-area chip is gone; bucket chip resolves task.groupId against
-// tweaks.customGroups (passed via the `tweaks` prop).
+// tweaks.customGroups (passed via the `tweaks` prop). Tag chips now
+// honour tweaks.tagChipFormat and tweaks.tagTree for nesting + colour.
 import { cardColorVars } from '../utils/cardColor.js';
 import { groupTasksBy, getGLabel, getGColor } from '../utils/grouping.js';
 import { CardPopover } from './CardPopover.jsx';
@@ -207,18 +209,41 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
         )}
         {/* Tag */}
         {(() => {
-          // Only render tags that exist in the current taxonomy. Orphan tags
-          // (e.g. legacy values left on tasks after a tag was deleted) are
-          // hidden so the card doesn't show a chip the user can't manage.
-          const visibleTags = (task.tags || []).filter(tg => tagPalette[tg]);
+          // Tag chips honour the user's tagChipFormat setting + tagTree.
+          // - Label: formatTagChip(parentLeaf|leaf|fullPath) over the tree path.
+          // - Colour: resolveTagColor walks ancestors to find the first
+          //   non-null colour (children inherit by default).
+          // - Fallbacks: tasks may carry tag IDs that aren't in the tree
+          //   yet (e.g. before tagTreeBuilt fires). Use the legacy
+          //   TAG_DARK/TAG_LIGHT palette + TAG_NAMES as a graceful fallback.
+          const tree = tweaks?.tagTree || [];
+          const format = tweaks?.tagChipFormat || 'parentLeaf';
+          const treeIds = new Set(tree.map(n => n?.id).filter(Boolean));
+          const allTagIds = (task.tags || []).filter(Boolean);
+          // Hide orphan IDs that aren't in either the tree or the legacy
+          // palette (so a deleted tag doesn't leave a dangling chip).
+          const visibleTags = allTagIds.filter(tg => treeIds.has(tg) || tagPalette[tg]);
+          const fullTitle = visibleTags.length
+            ? `Tags: ${visibleTags.map(tg => {
+                const path = tagPath(tree, tg);
+                return path.length ? path.map(n => n.name).join(' / ') : (TAG_NAMES[tg] || tg);
+              }).join(', ')}`
+            : 'Set tag';
           return (
             <span ref={tagRef} className={`card-meta-btn${openPop==='tag'?' act':''}`}
-              title={visibleTags.length ? `Tags: ${visibleTags.map(t=>TAG_NAMES[t]||t).join(', ')}` : 'Set tag'}
+              title={fullTitle}
               onClick={e=>{e.stopPropagation(); setOpenPop(o=>o==='tag'?null:'tag');}}>
               {visibleTags.length ? (
-                visibleTags.map((tg)=>{
-                  const p = tagPalette[tg];
-                  return <span key={tg} className="card-tag" style={{background:p.bg,color:p.fg}}>{TAG_NAMES[tg]||tg}</span>;
+                visibleTags.map((tg) => {
+                  const path = tagPath(tree, tg);
+                  const label = path.length
+                    ? formatTagChip(path, format)
+                    : (TAG_NAMES[tg] || tg);
+                  const treeColor = resolveTagColor(tree, tg);
+                  const legacy = tagPalette[tg];
+                  const fg = treeColor || legacy?.fg || '#94a3b8';
+                  const bg = treeColor ? `${treeColor}22` : (legacy?.bg || `${fg}22`);
+                  return <span key={tg} className="card-tag" style={{background: bg, color: fg}}>{label}</span>;
                 })
               ) : (
                 <span className="card-meta empty"><I.Tag/></span>

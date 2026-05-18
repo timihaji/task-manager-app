@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { I } from '../utils/icons.jsx';
 import { D, parseTimeEst, fmtTimeEst, PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, recurrenceLabel } from '../data.js';
+import { tagPath, formatTagChip, resolveTagColor } from '../utils/tagTree.js';
 // Life-area imports removed in the Buckets redesign polish pass — the
 // life-area chip is replaced by a bucket chip resolved from tweaks.customGroups.
+// Tag chips honour tweaks.tagChipFormat + tagTree.
 import { cardColorVars } from '../utils/cardColor.js';
 import { PriBars } from './PriBars.jsx';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -183,11 +185,25 @@ function ChipRow({ task, isProject, allTasks, theme, tweaks }) {
         </span>
       )}
 
-      {tags.filter(tg => tagPalette[tg]).slice(0,2).map(tg => {
-        const p = tagPalette[tg];
-        if (!p) return null;
-        return <span key={tg} className="schip schip-tag" style={{background:p.bg, color:p.fg, borderLeftColor:p.fg, borderColor:p.fg+'40'}}>{TAG_NAMES[tg] || tg}</span>;
-      })}
+      {/* Tag chips honour tweaks.tagChipFormat + tagTree, same logic as
+          TaskCard. First two visible chips render; rest are truncated for
+          row density. Orphan tags (not in tree or legacy palette) are
+          hidden so a deleted tag doesn't leave a dangling chip. */}
+      {(() => {
+        const tree = tweaks?.tagTree || [];
+        const format = tweaks?.tagChipFormat || 'parentLeaf';
+        const treeIds = new Set(tree.map(n => n?.id).filter(Boolean));
+        const visible = tags.filter(tg => treeIds.has(tg) || tagPalette[tg]).slice(0, 2);
+        return visible.map(tg => {
+          const path = tagPath(tree, tg);
+          const label = path.length ? formatTagChip(path, format) : (TAG_NAMES[tg] || tg);
+          const treeColor = resolveTagColor(tree, tg);
+          const legacy = tagPalette[tg];
+          const fg = treeColor || legacy?.fg || '#94a3b8';
+          const bg = treeColor ? `${treeColor}22` : (legacy?.bg || `${fg}22`);
+          return <span key={tg} className="schip schip-tag" style={{background: bg, color: fg, borderLeftColor: fg, borderColor: `${fg}40`}}>{label}</span>;
+        });
+      })()}
 
       {task.checkInOf && <span className="schip schip-delegated">→ Check-in</span>}
       {task.blocked && <span className="schip schip-blocked" title={task.blockedReason}>⏸ Blocked</span>}

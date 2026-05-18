@@ -73,7 +73,7 @@ function AddTaxonomyChip({ kind, onAdd }) {
   );
 }
 
-function TaskDrawer({ task, theme, tasks, buckets, onCreateBucket, onUpdate, onAddTaxonomy, onClose, onDelete, onDuplicate, onMoveToInbox, fromLeft, onSetBlocked, onClearBlocked, recentBlockReasons, blockingCountFor, onJumpTo, onCheckIn, onGoToCard, secs: secsProp, onSecsChange, initialFocus, onInitialFocusConsumed, showToast, showConfirm }) {
+function TaskDrawer({ task, theme, tasks, buckets, tagTree, onCreateBucket, onCreateTag, onUpdate, onAddTaxonomy, onClose, onDelete, onDuplicate, onMoveToInbox, fromLeft, onSetBlocked, onClearBlocked, recentBlockReasons, blockingCountFor, onJumpTo, onCheckIn, onGoToCard, secs: secsProp, onSecsChange, initialFocus, onInitialFocusConsumed, showToast, showConfirm }) {
   const [localTitle, setLocalTitle] = useState('');
   const [localDesc,  setLocalDesc]  = useState('');
   const [localReason,setLocalReason]= useState('');
@@ -650,18 +650,84 @@ function TaskDrawer({ task, theme, tasks, buckets, onCreateBucket, onUpdate, onA
             </div>
           </DRow>
           <DRow label="Tags">
-            <div className="dr-pickrow">
-              {ALL_TAGS.map(t=>{
-                const c = tp[t] || tp['admin'];
-                const act = (task.tags||[]).includes(t);
-                return <button key={t} className={`dr-pick${act?' act':''}`}
-                  style={{background:c.bg, color:c.fg, borderColor:act?c.fg+'aa':c.fg+'55', boxShadow: act?`inset 0 0 0 1px ${c.fg}66`:undefined, opacity: act ? 1 : .5}}
-                  onClick={()=>act?removeTag(t):addTag(t)}>
-                  {TAG_NAMES[t]||t}
-                </button>;
-              })}
-              {onAddTaxonomy && <AddTaxonomyChip kind="tag" onAdd={onAddTaxonomy}/>}
-            </div>
+            {/* Tag picker — Buckets redesign uses tweaks.tagTree (flat list
+                with parentId refs). Renders a depth-indented chip list so
+                hierarchy is visible without a full tree widget. Click
+                toggles assignment. '+ Add child tag' creates a child at
+                the chip's level (handled via prompt). Tag tree management
+                (rename / colour / delete) lives in the Tags view. */}
+            {(() => {
+              const tree = Array.isArray(tagTree) && tagTree.length ? tagTree
+                : ALL_TAGS.map(id => ({ id, name: TAG_NAMES[id] || id, color: null, parentId: null }));
+              // Build parent→children index for stable depth ordering.
+              const childrenMap = new Map();
+              for (const node of tree) {
+                const key = node?.parentId || '__root__';
+                if (!childrenMap.has(key)) childrenMap.set(key, []);
+                childrenMap.get(key).push(node);
+              }
+              for (const [, list] of childrenMap) {
+                list.sort((a,b) => String(a?.name||'').localeCompare(String(b?.name||'')));
+              }
+              const flat = [];
+              const walk = (parentId, depth) => {
+                for (const node of (childrenMap.get(parentId) || [])) {
+                  flat.push({ ...node, _depth: depth });
+                  walk(node.id, depth + 1);
+                }
+              };
+              walk('__root__', 0);
+              const resolveColor = (id) => {
+                // walk up parentId chain until first non-null color
+                const idx = new Map(tree.map(n => [n.id, n]));
+                let cur = idx.get(id);
+                const seen = new Set();
+                while (cur && !seen.has(cur.id)) {
+                  seen.add(cur.id);
+                  if (cur.color) return cur.color;
+                  cur = cur.parentId ? idx.get(cur.parentId) : null;
+                }
+                return null;
+              };
+              return (
+                <div className="dr-pickrow" style={{flexDirection:'column', alignItems:'stretch', gap:4}}>
+                  <div className="dr-pickrow" style={{flexWrap:'wrap'}}>
+                    {flat.map(node => {
+                      const act = (task.tags || []).includes(node.id);
+                      const c = resolveColor(node.id);
+                      const legacy = tp[node.id] || tp['admin'];
+                      const fg = c || legacy.fg;
+                      const bg = c ? `${c}22` : legacy.bg;
+                      return (
+                        <button key={node.id} className={`dr-pick${act?' act':''}`}
+                          style={{
+                            background: act ? bg : 'transparent',
+                            color: fg,
+                            borderColor: act ? `${fg}aa` : `${fg}55`,
+                            boxShadow: act ? `inset 0 0 0 1px ${fg}66` : undefined,
+                            opacity: act ? 1 : .65,
+                            paddingLeft: 8 + node._depth * 10,
+                          }}
+                          title={node._depth > 0 ? `${'·'.repeat(node._depth)} ${node.name}` : node.name}
+                          onClick={() => act ? removeTag(node.id) : addTag(node.id)}>
+                          {node._depth > 0 ? <span style={{opacity:.55, marginRight:4}}>{'›'}</span> : null}
+                          {node.name}
+                        </button>
+                      );
+                    })}
+                    {onCreateTag && (
+                      <button className="dr-pick" style={{borderStyle:'dashed', opacity:.7}}
+                        onClick={() => {
+                          const name = (window.prompt('New tag name') || '').trim();
+                          if (!name) return;
+                          const id = onCreateTag(name, null);
+                          if (id) addTag(id);
+                        }}>+ Add tag</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </DRow>
           <DRow label="Start Date">
             <div ref={startRef} style={{position:'relative'}}>

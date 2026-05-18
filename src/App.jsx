@@ -4910,6 +4910,20 @@ function App() {
         setTweak('customGroups', (tweaks.customGroups || []).concat(bucket));
         return id;
       }}
+      tagTree={tweaks.tagTree || []}
+      onCreateTag={(name, parentId = null) => {
+        const trimmed = (name || '').trim();
+        if (!trimmed) return null;
+        // mkTagId-style: slugify; collide-suffix on dupes. Inline here to
+        // avoid importing the util into the App callsite for one use.
+        const existing = new Set((tweaks.tagTree || []).map(n => n?.id).filter(Boolean));
+        const base = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'tag';
+        const id = existing.has(base) ? `${base}-${Math.random().toString(36).slice(2, 6)}` : base;
+        const swatch = taxonomyAutoSwatch((tweaks.tagTree || []).length, `tag-${trimmed}`, 'Pastel');
+        const node = { id, name: trimmed, color: swatch?.color || null, parentId };
+        setTweak('tagTree', (tweaks.tagTree || []).concat(node));
+        return id;
+      }}
       onUpdate={updateTask}
       onAddTaxonomy={(kind,label)=>taxonomyActions.add(kind,label)}
       onClose={()=>setDrawerId(null)}
