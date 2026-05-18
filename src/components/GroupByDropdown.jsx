@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 function GroupByDropdown({ colKey, value, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  const opts = [{v:'project',l:'Location'},{v:'lifeArea',l:'Life Area'},{v:'tag',l:'Tag'},{v:'priority',l:'Priority'},{v:'none',l:'None'}];
+  const opts = [{v:'project',l:'Location'},{v:'bucket',l:'Bucket'},{v:'lifeArea',l:'Life Area'},{v:'tag',l:'Tag'},{v:'priority',l:'Priority'},{v:'none',l:'None'}];
   useEffect(()=>{
     if (!open) return;
     const fn = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };

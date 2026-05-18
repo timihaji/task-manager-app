@@ -427,7 +427,7 @@ function InboxCol({ tasks, theme, tweaks, focusedCardId, selectedIds, renamingId
               {groupOpen && (
                 <div className="filter-dd" onClick={e=>e.stopPropagation()} style={{left:'auto',right:0,top:'calc(100% + 4px)',minWidth:140}}>
                   <div style={{padding:'5px 12px 6px',fontSize:9.5,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',borderBottom:'1px solid var(--border)'}}>Group by</div>
-                  {[{v:'none',l:'None'},{v:'project',l:'Location'},{v:'lifeArea',l:'Life Area'},{v:'tag',l:'Tag'},{v:'priority',l:'Priority'}].map(o=>(
+                  {[{v:'none',l:'None'},{v:'project',l:'Location'},{v:'bucket',l:'Bucket'},{v:'lifeArea',l:'Life Area'},{v:'tag',l:'Tag'},{v:'priority',l:'Priority'}].map(o=>(
                     <div key={o.v} className={`fdd-item${inboxGroupBy===o.v?' active':''}`}
                       onClick={()=>{onInboxGroupBy(o.v);setGroupOpen(false);}}
                       style={inboxGroupBy===o.v?{color:'var(--accent)'}:undefined}>{o.l}</div>

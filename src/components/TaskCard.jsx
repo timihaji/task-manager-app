@@ -223,7 +223,11 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
             </span>
           );
         })()}
-        {/* Project */}
+        {/* Project / Location — hidden on cards by default per the buckets
+            redesign. Users who want it visible flip `showLocationOnCards`
+            in Settings. We still render the chip if the popover is open
+            (so opening it from elsewhere doesn't make it disappear). */}
+        {(tweaks?.showLocationOnCards || openPop==='proj') && (
         <span ref={projRef} className={`card-meta-btn${openPop==='proj'?' act':''}`}
           title={proj?`Location: ${proj.label}`:'Set location'}
           onClick={e=>{e.stopPropagation(); setOpenPop(o=>o==='proj'?null:'proj');}}>
@@ -237,6 +241,7 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
               onChange={(p,rv)=>applyChange(p,rv)} onAddTaxonomy={onAddTaxonomy} onClose={()=>setOpenPop(null)}/>
           </CardPopover>
         </span>
+        )}
         {/* Time estimate (read-only on project cards) */}
         {renderAsProject ? (
           <span className={`card-meta${projTimeStr?'':' empty'}`} title={projTimeStr?`Sum of children: ${projTimeStr}`:'No time'}>

@@ -4373,11 +4373,11 @@ function App() {
       {view==='week' && (
         <div className="filter-dd-wrap" onClick={e=>e.stopPropagation()}>
           <button className="tb-btn" onClick={()=>setGroupOpen(o=>!o)}>
-            Group: {{none:'None',project:'Location',lifeArea:'Life Area',tag:'Tag',priority:'Priority'}[globalGroupBy]||'Location'}
+            Group: {{none:'None',project:'Location',bucket:'Bucket',lifeArea:'Life Area',tag:'Tag',priority:'Priority'}[globalGroupBy]||'Location'}
           </button>
           {groupOpen && (
             <div className="filter-dd" style={{minWidth:140}}>
-              {[{v:'project',l:'Location'},{v:'lifeArea',l:'Life Area'},{v:'tag',l:'Tag'},{v:'priority',l:'Priority'},{v:'none',l:'None'}].map(o=>(
+              {[{v:'project',l:'Location'},{v:'bucket',l:'Bucket'},{v:'lifeArea',l:'Life Area'},{v:'tag',l:'Tag'},{v:'priority',l:'Priority'},{v:'none',l:'None'}].map(o=>(
                 <div key={o.v} className={`fdd-item${globalGroupBy===o.v?' active':''}`}
                   onClick={()=>{setGlobalGroupBy(o.v);setGroupOpen(false);}}
                   style={globalGroupBy===o.v?{color:'var(--accent)'}:undefined}>{o.l}</div>

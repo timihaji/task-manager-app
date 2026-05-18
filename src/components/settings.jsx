@@ -519,6 +519,27 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
               <SRow label="Show weekends" desc="Display Saturday and Sunday columns."><Tog id="showWeekend"/></SRow>
               <SRow label="Day window" desc="How many day columns fit on screen, including the pinned Today column. Auto picks by width; 4 is focused, 5 is workweek, 7 is full week."><Seg id="dayWindow" opts={['auto',4,5,7]}/></SRow>
               <SRow label="Location side panel" desc="Show a resizable location filter panel beside the inbox."><Tog id="showProjectPanel"/></SRow>
+              {/* Buckets redesign — location chip is hidden on cards by
+                  default; flip this on to surface it again. Tag chip format
+                  applies to every TaskCard surface. */}
+              <SRow label="Show location on cards" desc="Display the location/project chip on every card. Off by default — the redesign hides it to keep cards lean."><Tog id="showLocationOnCards"/></SRow>
+              <SRow label="Tag chip format" desc="How nested tag chips render on cards. Parent + leaf is the recommended balance of context and brevity.">
+                {/* Three-way radio backed by tweaks.tagChipFormat. */}
+                <div style={{display:'flex',background:'var(--surface-3)',borderRadius:3,padding:2,gap:2}}>
+                  {[
+                    {v:'parentLeaf', l:'Parent + leaf'},
+                    {v:'leaf', l:'Leaf only'},
+                    {v:'fullPath', l:'Full path'},
+                  ].map(o => (
+                    <button key={o.v} onClick={()=>setTweak('tagChipFormat', o.v)}
+                      style={{padding:'3px 10px',border:'none',borderRadius:2,cursor:'pointer',font:'12px var(--font)',
+                        background: tweaks.tagChipFormat===o.v ? 'var(--surface)' : 'transparent',
+                        color: tweaks.tagChipFormat===o.v ? 'var(--t1)' : 'var(--t3)',
+                        fontWeight: tweaks.tagChipFormat===o.v ? 500 : 400,
+                        boxShadow: tweaks.tagChipFormat===o.v ? '0 1px 3px rgba(0,0,0,.1)' : 'none'}}>{o.l}</button>
+                  ))}
+                </div>
+              </SRow>
               <SRow label="Density" desc="Card padding and column spacing."><Seg id="density" opts={['compact','normal','airy']}/></SRow>
               <SRow label="Card radius" desc="Border radius on task cards.">
                 <input type="range" min={0} max={16} step={1} value={tweaks.cardRadius}
