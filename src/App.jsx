@@ -284,10 +284,16 @@ function App() {
     // Persisted UI state (cross-device via user_settings.settings):
     lastView: null,                 // last-active main view (string or {type,id|name})
     sidePanelView: 'inbox',         // panel view inside the timeline's sticky inbox column
-    filters: { projects:[], tags:[], lifeAreas:[], priorities:[] }, // topbar pill filters
+    // Buckets redesign: filters.lifeAreas retained for legacy reads but no
+    // longer surfaced in the UI (the polish migration clears it). New
+    // filters.buckets drives the bucket filter chip; '__nobucket__' is the
+    // pseudo-id for "tasks with no bucket assigned".
+    filters: { projects:[], tags:[], buckets:[], lifeAreas:[], priorities:[] }, // topbar pill filters
     showWaitingOn: false,           // topbar toggle: only show delegated/waiting cards
     showStaleOnly: false,           // topbar toggle: only show stale cards
-    inboxFilters: { projects:{}, tags:{}, lifeAreas:{}, priorities:{} }, // inbox panel include/exclude
+    // Buckets redesign: lifeAreas axis retired in favour of buckets axis.
+    // Old key retained for legacy reads (cleared by the polish migration).
+    inboxFilters: { projects:{}, tags:{}, buckets:{}, lifeAreas:{}, priorities:{} }, // inbox panel include/exclude
     collapsedGroups: [],            // array form of collapsedGrps Set
     completedOpenCols: [],          // colKeys with completed section expanded
     blockedOpenCols: [],            // colKeys with blocked section expanded
@@ -605,9 +611,9 @@ function App() {
   const setShowWaitingOn = (v) => setTweak('showWaitingOn', typeof v === 'function' ? v(!!tweaks.showWaitingOn) : !!v);
   const showStaleOnly = !!tweaks.showStaleOnly;
   const setShowStaleOnly = (v) => setTweak('showStaleOnly', typeof v === 'function' ? v(!!tweaks.showStaleOnly) : !!v);
-  const inboxFilters = tweaks.inboxFilters || { projects:{}, tags:{}, lifeAreas:{}, priorities:{} };
+  const inboxFilters = tweaks.inboxFilters || { projects:{}, tags:{}, buckets:{}, lifeAreas:{}, priorities:{} };
   const setInboxFilters = (updater) => setTweakState(prev => {
-    const cur = prev.inboxFilters || { projects:{}, tags:{}, lifeAreas:{}, priorities:{} };
+    const cur = prev.inboxFilters || { projects:{}, tags:{}, buckets:{}, lifeAreas:{}, priorities:{} };
     const next = typeof updater === 'function' ? updater(cur) : updater;
     return { ...prev, inboxFilters: next };
   });
@@ -1533,9 +1539,10 @@ function App() {
     const activeAxes = [];
     if(filters.projects.length) activeAxes.push(filters.projects.includes(t.project));
     if(filters.tags.length) activeAxes.push((t.tags||[]).some(tg=>filters.tags.includes(tg)));
-    if(filters.lifeAreas.length) {
-      const lifeArea = getEffectiveLifeArea(t);
-      activeAxes.push(filters.lifeAreas.some(id => id===UNASSIGNED_LIFE_AREA ? !lifeArea : lifeArea===id));
+    // Buckets filter — replaces lifeAreas. '__nobucket__' pseudo-id matches
+    // tasks with no groupId set (the "No bucket" entry in the filter list).
+    if((filters.buckets || []).length) {
+      activeAxes.push((filters.buckets || []).some(id => id==='__nobucket__' ? !t.groupId : t.groupId===id));
     }
     if(filters.priorities.length) activeAxes.push(filters.priorities.includes(t.pri||t.priority));
     if(!activeAxes.length) return true;
@@ -1551,7 +1558,7 @@ function App() {
     }
     return false;
   });
-  const filtersActive = !!searchNeedle || filters.projects.length>0 || filters.tags.length>0 || filters.lifeAreas.length>0 || filters.priorities.length>0;
+  const filtersActive = !!searchNeedle || filters.projects.length>0 || filters.tags.length>0 || (filters.buckets || []).length>0 || filters.priorities.length>0;
 
   useEffect(()=>{
     setSelectedIds(prev => {
@@ -3807,12 +3814,17 @@ function App() {
 
   // filter helpers
   const toggleFilter = (key, val) => {
-    setFilters(f=>({ ...f, [key]: f[key].includes(val)?f[key].filter(x=>x!==val):[...f[key],val] }));
+    setFilters(f=>({ ...f, [key]: (f[key] || []).includes(val)?(f[key] || []).filter(x=>x!==val):[...(f[key] || []),val] }));
   };
   const activeFilterPills = [
     ...filters.projects.map(p=>({key:'projects',val:p,label:PROJ.find(x=>x.id===p)?.label||p})),
     ...filters.tags.map(t=>({key:'tags',val:t,label:TAG_NAMES[t]||t})),
-    ...filters.lifeAreas.map(a=>({key:'lifeAreas',val:a,label:lifeAreaOptionLabel(a)})),
+    // Buckets pills replace the old lifeAreas pills.
+    ...((filters.buckets || []).map(bid => {
+      if (bid === '__nobucket__') return { key: 'buckets', val: bid, label: 'No bucket' };
+      const b = (tweaks.customGroups || []).find(g => g.id === bid);
+      return { key: 'buckets', val: bid, label: b?.name || bid };
+    })),
     ...filters.priorities.map(p=>({key:'priorities',val:p,label:{p1:'P1',p2:'P2',p3:'P3'}[p]||p})),
   ];
 
@@ -3859,22 +3871,24 @@ function App() {
     const excP = Object.entries(inboxFilters.projects).filter(([,v])=>v==='exc').map(([k])=>k);
     const incT = Object.entries(inboxFilters.tags).filter(([,v])=>v==='inc').map(([k])=>k);
     const excT = Object.entries(inboxFilters.tags).filter(([,v])=>v==='exc').map(([k])=>k);
-    const incA = Object.entries(inboxFilters.lifeAreas).filter(([,v])=>v==='inc').map(([k])=>k);
-    const excA = Object.entries(inboxFilters.lifeAreas).filter(([,v])=>v==='exc').map(([k])=>k);
+    // Bucket inbox-filter axis (replaces lifeAreas). '__nobucket__' pseudo-id
+    // matches tasks with no groupId.
+    const incB = Object.entries(inboxFilters.buckets || {}).filter(([,v])=>v==='inc').map(([k])=>k);
+    const excB = Object.entries(inboxFilters.buckets || {}).filter(([,v])=>v==='exc').map(([k])=>k);
     const incPri = Object.entries(inboxFilters.priorities).filter(([,v])=>v==='inc').map(([k])=>k);
     const excPri = Object.entries(inboxFilters.priorities).filter(([,v])=>v==='exc').map(([k])=>k);
-    if(!incP.length && !excP.length && !incT.length && !excT.length && !incA.length && !excA.length && !incPri.length && !excPri.length) return list;
+    if(!incP.length && !excP.length && !incT.length && !excT.length && !incB.length && !excB.length && !incPri.length && !excPri.length) return list;
     return list.filter(t => {
       const proj = t.project || '_none';
       const tags = t.tags || [];
-      const lifeArea = getEffectiveLifeArea(t);
+      const gid = t.groupId || null;
       const pri = t.pri || t.priority || 'p3';
       if(incP.length && !incP.includes(proj)) return false;
       if(excP.length && excP.includes(proj)) return false;
       if(incT.length && !tags.some(tg=>incT.includes(tg))) return false;
       if(excT.length && tags.some(tg=>excT.includes(tg))) return false;
-      if(incA.length && !incA.some(id => id===UNASSIGNED_LIFE_AREA ? !lifeArea : lifeArea===id)) return false;
-      if(excA.length && excA.some(id => id===UNASSIGNED_LIFE_AREA ? !lifeArea : lifeArea===id)) return false;
+      if(incB.length && !incB.some(id => id==='__nobucket__' ? !gid : gid===id)) return false;
+      if(excB.length && excB.some(id => id==='__nobucket__' ? !gid : gid===id)) return false;
       if(incPri.length && !incPri.includes(pri)) return false;
       if(excPri.length && excPri.includes(pri)) return false;
       return true;
@@ -3901,7 +3915,7 @@ function App() {
     if(next) newKind[val] = next; else delete newKind[val];
     return {...prev, [kind]: newKind};
   });
-  const clearInboxFilters = () => setInboxFilters({projects:{},tags:{},lifeAreas:{},priorities:{}});
+  const clearInboxFilters = () => setInboxFilters({projects:{},tags:{},buckets:{},priorities:{}});
   const inboxFilterCount = Object.values(inboxFilters).reduce((s,o)=>s+Object.keys(o).length, 0);
   const sidePanelCurrentTasks = view==='week' ? sidePanelTasks() : [];
   const sidePanelCurrentIds = sidePanelCurrentTasks.map(t=>t.id);
@@ -4416,11 +4430,11 @@ function App() {
       {view==='week' && (
         <div className="filter-dd-wrap" onClick={e=>e.stopPropagation()}>
           <button className="tb-btn" onClick={()=>setGroupOpen(o=>!o)}>
-            Group: {{none:'None',project:'Location',bucket:'Bucket',lifeArea:'Life Area',tag:'Tag',priority:'Priority'}[globalGroupBy]||'Location'}
+            Group: {{none:'None',project:'Location',bucket:'Bucket',tag:'Tag',priority:'Priority'}[globalGroupBy]||'Location'}
           </button>
           {groupOpen && (
             <div className="filter-dd" style={{minWidth:140}}>
-              {[{v:'project',l:'Location'},{v:'bucket',l:'Bucket'},{v:'lifeArea',l:'Life Area'},{v:'tag',l:'Tag'},{v:'priority',l:'Priority'},{v:'none',l:'None'}].map(o=>(
+              {[{v:'project',l:'Location'},{v:'bucket',l:'Bucket'},{v:'tag',l:'Tag'},{v:'priority',l:'Priority'},{v:'none',l:'None'}].map(o=>(
                 <div key={o.v} className={`fdd-item${globalGroupBy===o.v?' active':''}`}
                   onClick={()=>{setGlobalGroupBy(o.v);setGroupOpen(false);}}
                   style={globalGroupBy===o.v?{color:'var(--accent)'}:undefined}>{o.l}</div>
@@ -4452,10 +4466,21 @@ function App() {
               {['p1','p2','p3'].map(p=><div key={p} className="fdd-item" onClick={()=>toggleFilter('priorities',p)}><input type="checkbox" readOnly checked={filters.priorities.includes(p)}/>{p.toUpperCase()}</div>)}
             </div>
             <div className="fdd-sep"/>
+            {/* Buckets filter — replaces the old Life Area filter section.
+                Sources from tweaks.customGroups; "No bucket" matches tasks
+                with no groupId set. */}
             <div className="fdd-section">
-              <div className="fdd-label">Life Area</div>
-              {taxonomy.lifeAreas.map(area=><div key={area.id} className="fdd-item" onClick={()=>toggleFilter('lifeAreas',area.id)}><input type="checkbox" readOnly checked={filters.lifeAreas.includes(area.id)}/>{area.label}</div>)}
-              <div className="fdd-item" onClick={()=>toggleFilter('lifeAreas',UNASSIGNED_LIFE_AREA)}><input type="checkbox" readOnly checked={filters.lifeAreas.includes(UNASSIGNED_LIFE_AREA)}/>Unassigned</div>
+              <div className="fdd-label">Bucket</div>
+              {(tweaks.customGroups || []).map(b => (
+                <div key={b.id} className="fdd-item" onClick={()=>toggleFilter('buckets', b.id)}>
+                  <input type="checkbox" readOnly checked={(filters.buckets || []).includes(b.id)}/>
+                  <span style={{display:'inline-block',width:8,height:8,borderRadius:2,background:b.color||'#94a3b8',marginRight:6,verticalAlign:'middle'}}/>
+                  {b.name}
+                </div>
+              ))}
+              <div className="fdd-item" onClick={()=>toggleFilter('buckets','__nobucket__')}>
+                <input type="checkbox" readOnly checked={(filters.buckets || []).includes('__nobucket__')}/>No bucket
+              </div>
             </div>
             <div className="fdd-sep"/>
             <div className="fdd-section">
@@ -4795,15 +4820,17 @@ function App() {
           <option value="">Location</option>
           {PROJ.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
         </select>
+        {/* Bucket bulk selector (replaces Life Area).
+            Sets task.groupId. '__clear__' sets to null. */}
         <select className="bulk-select" defaultValue="" onChange={e=>{
           if(e.target.value){
-            bulkSet({lifeArea:e.target.value===UNASSIGNED_LIFE_AREA?null:e.target.value}, e.target.value===UNASSIGNED_LIFE_AREA?'Life Area cleared':'Life Area updated');
+            bulkSet({groupId:e.target.value==='__clear__'?null:e.target.value}, e.target.value==='__clear__'?'Bucket cleared':'Bucket updated');
             e.target.value='';
           }
         }}>
-          <option value="">Life Area</option>
-          {taxonomy.lifeAreas.map(area=><option key={area.id} value={area.id}>{area.label}</option>)}
-          <option value={UNASSIGNED_LIFE_AREA}>Clear</option>
+          <option value="">Bucket</option>
+          {(tweaks.customGroups || []).map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+          <option value="__clear__">Clear</option>
         </select>
         <select className="bulk-select" defaultValue="" onChange={e=>{if(e.target.value){bulkSet({priority:e.target.value,pri:e.target.value},'Priority updated');e.target.value='';}}}>
           <option value="">Priority</option>

@@ -136,7 +136,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
   const onStartGroupRename = cardExtras?.onStartGroupRename;
   const onGroupRenameDone = cardExtras?.onGroupRenameDone;
   const onRenameGroup = cardExtras?.onRenameGroup;
-  const gbLabel = {none:'None',project:'Location',lifeArea:'Life Area',tag:'Tag',priority:'Priority'}[groupBy]||'Location';
+  const gbLabel = {none:'None',project:'Location',bucket:'Bucket',tag:'Tag',priority:'Priority'}[groupBy]||'Location';
   // grpKey carried in sortable data so dndOnDragEnd's same-context check
   // can distinguish cards in different groups of the same column. Without
   // it, cross-group drops within one column wouldn't get the manual drop-
@@ -427,7 +427,7 @@ function InboxCol({ tasks, theme, tweaks, focusedCardId, selectedIds, renamingId
               {groupOpen && (
                 <div className="filter-dd" onClick={e=>e.stopPropagation()} style={{left:'auto',right:0,top:'calc(100% + 4px)',minWidth:140}}>
                   <div style={{padding:'5px 12px 6px',fontSize:9.5,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',borderBottom:'1px solid var(--border)'}}>Group by</div>
-                  {[{v:'none',l:'None'},{v:'project',l:'Location'},{v:'bucket',l:'Bucket'},{v:'lifeArea',l:'Life Area'},{v:'tag',l:'Tag'},{v:'priority',l:'Priority'}].map(o=>(
+                  {[{v:'none',l:'None'},{v:'project',l:'Location'},{v:'bucket',l:'Bucket'},{v:'tag',l:'Tag'},{v:'priority',l:'Priority'}].map(o=>(
                     <div key={o.v} className={`fdd-item${inboxGroupBy===o.v?' active':''}`}
                       onClick={()=>{onInboxGroupBy(o.v);setGroupOpen(false);}}
                       style={inboxGroupBy===o.v?{color:'var(--accent)'}:undefined}>{o.l}</div>
@@ -461,10 +461,15 @@ function InboxCol({ tasks, theme, tweaks, focusedCardId, selectedIds, renamingId
                     {['p1','p2','p3'].map(p=><FilterRow key={p} kind="priorities" val={p} label={p.toUpperCase()}/>)}
                   </div>
                   <div className="fdd-sep"/>
+                  {/* Buckets filter — replaces Life Area in the inbox column
+                      filter panel. Sources from tweaks.customGroups via the
+                      cardExtras prop bag. */}
                   <div className="fdd-section">
-                    <div className="fdd-label">Life Area</div>
-                    {LIFE_AREAS.map(id=><FilterRow key={id} kind="lifeAreas" val={id} label={LIFE_AREA_NAMES[id]||id} color={lifeAreaPalette(id, theme).fg}/>)}
-                    <FilterRow kind="lifeAreas" val={UNASSIGNED_LIFE_AREA} label="Unassigned"/>
+                    <div className="fdd-label">Bucket</div>
+                    {(cardExtras?.customGroups || []).map(b => (
+                      <FilterRow key={b.id} kind="buckets" val={b.id} label={b.name} color={b.color || '#94a3b8'}/>
+                    ))}
+                    <FilterRow kind="buckets" val="__nobucket__" label="No bucket"/>
                   </div>
                   <div className="fdd-sep"/>
                   <div className="fdd-section">
