@@ -326,7 +326,7 @@ body.marquee-active *{user-select:none !important}
    Radii via --rk / --rk-ctrl — soft/sharp/glass looks inherit.
    Density inherits via .card / .list-item (those classes pick up data-density). */
 .dvv{color:var(--t1);max-width:1240px;margin:0 auto}
-@media (min-width:1700px){.dvv{width:100%;max-width:clamp(1300px, 70vw, 1800px)}}
+@media (min-width:1700px){.dvv{width:100%;max-width:clamp(1280px, 55vw, 1500px)}}
 .dvv-empty{padding:48px 24px;text-align:center;color:var(--t3);max-width:560px;margin:32px auto}
 .dvv-empty-title{font-size:14px;color:var(--t1);font-weight:600;margin-bottom:6px}
 .dvv-empty-body{font-size:12.5px;color:var(--t3);line-height:1.55}
