@@ -171,9 +171,26 @@ export function BucketsView({
     setShowCompleted(prev => ({ ...prev, [bucketId]: !prev[bucketId] }));
   }, []);
 
-  // Filter out archived (the Buckets view never shows them).
+  // Buckets is a triage surface. Filter out everything that doesn't belong
+  // in a categorisation pass: archived, subtasks, snoozed, someday, blocked,
+  // delegated parents, generated check-in tasks, routine instances. Matches
+  // the canonical "real Inbox" filter in src/components/sidebar.jsx
+  // (LeftNav counts.inbox) plus check-in + routine exclusions. Without this,
+  // the Unbucketed sidebar gets polluted with auto-generated cards
+  // (delegation check-ins, routine instances) that the user never expected
+  // to triage manually.
+  //
+  // Applied to BOTH the sidebar AND bucket columns: routines belong in the
+  // Routines view, check-ins in the Delegations view — never in a
+  // categorisation Kanban.
+  const isTriageCandidate = (t) =>
+    t && !t.archived && !t.parentId
+    && !t.snoozedUntil && !t.someday && !t.blocked
+    && !t.delegatedTo && !t.checkInOf
+    && !(t.recurrence && t.recurrence.isRoutine);
+
   const openTasks = useMemo(
-    () => (tasks || []).filter(t => !t?.archived),
+    () => (tasks || []).filter(isTriageCandidate),
     [tasks]
   );
   const { byBucket, unbucketed } = useMemo(
@@ -181,7 +198,8 @@ export function BucketsView({
     [openTasks, buckets]
   );
 
-  // Sidebar (unbucketed) excludes completed cards entirely.
+  // Sidebar (unbucketed) additionally excludes completed cards entirely;
+  // per-column "Show completed (n)" toggle handles them inside buckets.
   const sidebarTasks = useMemo(
     () => sortByBucketPosition(unbucketed.filter(t => !t.done)),
     [unbucketed]
