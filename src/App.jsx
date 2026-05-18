@@ -273,6 +273,9 @@ function App() {
     // task.lifeArea value (preserved colour via lifeAreaPalette) and stash
     // the IDs against the matching tasks. Flag prevents re-running.
     bucketsMigrated: false,
+    // Polish-pass flag — runs once to migrate stale group-by / filter state
+    // tied to the now-removed life-area UI. See polishMigrationRef useEffect.
+    bucketsPolishMigrated: false,
     // Settings — `showLocationOnCards` hides the (otherwise always-visible)
     // location chip by default; users who want it back flip it on.
     // `tagChipFormat` controls how nested tag chips render on cards.
@@ -1089,6 +1092,46 @@ function App() {
     }
     setTweak('tagTreeBuilt', true);
   }, [tasksReady, settingsReady, tasks, tweaks.tagTreeBuilt, tweaks.tagTree]);
+
+  // ---------------------------------------------------------------------------
+  // Buckets redesign polish — one-time auto-migration of stale tweak state
+  // tied to the now-removed life-area UI. Runs after settingsReady, gated by
+  // tweaks.bucketsPolishMigrated. Idempotent.
+  //
+  // What it does:
+  //  - groupPrefs.global / groupPrefs.inbox === 'lifeArea' → 'bucket'
+  //    (preserves the user's intent: they wanted to group by their
+  //    primary category; that category is now buckets).
+  //  - filters.lifeAreas → cleared (the slugs aren't bucket IDs; re-applying
+  //    them would silently filter to nothing).
+  //  - inboxFilters.lifeAreas → cleared (same reason).
+  const polishMigrationRef = useRef(false);
+  useEffect(() => {
+    if (!settingsReady) return;
+    if (polishMigrationRef.current) return;
+    if (tweaks.bucketsPolishMigrated) return;
+    polishMigrationRef.current = true;
+
+    const patch = {};
+    const gp = tweaks.groupPrefs || {};
+    if (gp.global === 'lifeArea' || gp.inbox === 'lifeArea') {
+      patch.groupPrefs = {
+        ...gp,
+        global: gp.global === 'lifeArea' ? 'bucket' : gp.global,
+        inbox: gp.inbox === 'lifeArea' ? 'bucket' : gp.inbox,
+      };
+    }
+    const f = tweaks.filters || {};
+    if (Array.isArray(f.lifeAreas) && f.lifeAreas.length) {
+      patch.filters = { ...f, lifeAreas: [] };
+    }
+    const ifs = tweaks.inboxFilters || {};
+    if (ifs.lifeAreas && Object.keys(ifs.lifeAreas).length) {
+      patch.inboxFilters = { ...ifs, lifeAreas: {} };
+    }
+    patch.bucketsPolishMigrated = true;
+    setTweak(patch);
+  }, [settingsReady, tweaks.bucketsPolishMigrated]);
   // ---------------------------------------------------------------------------
 
   // localStorage shadow + debounced diff-sync of local mutations to Supabase.
@@ -4519,9 +4562,7 @@ function App() {
         if (a && (Math.abs(e.clientX - a.x) > 4 || Math.abs(e.clientY - a.y) > 4)) return;
         if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar,.dvv,.rt-view')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); setTweak('calendarOpen',false); }
       }}>
-      <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false); if (isNarrowScreen) setNavCollapsed(true);}} collapsed={navCollapsed} theme={theme}
-        activeLifeAreas={filters.lifeAreas}
-        onLifeAreaToggle={id=>toggleFilter('lifeAreas',id)}/>
+      <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false); if (isNarrowScreen) setNavCollapsed(true);}} collapsed={navCollapsed} theme={theme}/>
       {isNarrowScreen && !navCollapsed && (
         <div className="lnav-scrim" onClick={()=>setNavCollapsed(true)}/>
       )}

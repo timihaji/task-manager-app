@@ -1,7 +1,10 @@
 import React from 'react';
-import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, D, LIFE_AREAS, LIFE_AREA_NAMES } from '../data.js';
+import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, D } from '../data.js';
 import { I } from '../utils/icons.jsx';
-import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from '../utils/colors.js';
+// Note: life-area imports removed in the Buckets redesign polish pass.
+// The "Life Areas" sidebar section is replaced by the dedicated Buckets
+// view and the topbar bucket filter. Constants in data.js remain for the
+// one-time migration in App.jsx (see bucketsMigrationRef useEffect).
 
 function ProjectSidePanel({ tasks, activeProjects, width, collapsed, stickyLeft, onCollapse, onResizeStart, onProjectToggle }) {
   const openTasks = tasks.filter(t=>!t.done&&!t.archived&&!t.blocked);
@@ -32,16 +35,11 @@ function ProjectSidePanel({ tasks, activeProjects, width, collapsed, stickyLeft,
   );
 }
 
-function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, onLifeAreaToggle, theme }) {
+function LeftNav({ tasks, view, onView, collapsed, onSettings, theme }) {
+  // activeLifeAreas / onLifeAreaToggle props removed in the polish pass;
+  // theme stays since callers still pass it (and a future Buckets sidebar
+  // section may want it back).
   const all=tasks.filter(t=>!t.archived);
-  const byId = new Map(all.map(t=>[t.id,t]));
-  const getLifeAreaForTask = (task, seen=new Set()) => {
-    if(!task) return null;
-    if(task.lifeArea !== null && task.lifeArea !== undefined) return task.lifeArea;
-    if(!task.parentId || seen.has(task.id)) return null;
-    seen.add(task.id);
-    return getLifeAreaForTask(byId.get(task.parentId), seen);
-  };
   const counts = {
     inbox: all.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.snoozedUntil&&!t.someday&&!t.blocked&&!t.delegatedTo).length,
     today: all.filter(t=>D.isTdy(t.date)&&!t.done&&!t.parentId&&!t.blocked&&!t.delegatedTo).length,
@@ -116,25 +114,10 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, 
           </div>;
         })}
       </div>
-      <div className="lnav-sec">
-        <div className="lnav-lbl">Life Areas</div>
-        {LIFE_AREAS.filter(id=>all.some(task=>getLifeAreaForTask(task)===id&&!task.done&&!task.parentId)).map(id=>{
-          const c = lifeAreaPalette(id, theme);
-          const cnt = all.filter(task=>getLifeAreaForTask(task)===id&&!task.done&&!task.parentId).length;
-          return <div key={id} className={`lnav-item${activeLifeAreas?.includes(id)?' active':''}`}
-            onClick={()=>onLifeAreaToggle?.(id)}>
-            <span style={{width:6,height:6,borderRadius:1,background:c.fg,flexShrink:0,display:'inline-block'}}/>
-            <span>{LIFE_AREA_NAMES[id]||id}</span>
-            <span className="lnav-cnt">{cnt}</span>
-          </div>;
-        })}
-        <div className={`lnav-item${activeLifeAreas?.includes(UNASSIGNED_LIFE_AREA)?' active':''}`}
-          onClick={()=>onLifeAreaToggle?.(UNASSIGNED_LIFE_AREA)}>
-          <span style={{width:6,height:6,borderRadius:1,background:'var(--t4)',flexShrink:0,display:'inline-block'}}/>
-          <span>Unassigned</span>
-          <span className="lnav-cnt">{all.filter(task=>!getLifeAreaForTask(task)&&!task.done&&!task.parentId).length}</span>
-        </div>
-      </div>
+      {/* Life Areas section removed in the Buckets redesign polish pass.
+          Categorisation lives in the Buckets view (top of this nav) and the
+          topbar bucket filter. Per-task lifeArea data is retained in the DB
+          for safety but no longer drives any UI. */}
       <div className="lnav-sync"><div className="sync-dot"/><span>Synced · just now</span></div>
       <div style={{padding:'4px 8px 8px'}}>
         <div className="lnav-item" onClick={onSettings}>
