@@ -4733,6 +4733,7 @@ function App() {
           <TagsView
             tasks={activeTasks}
             tagTree={tweaks.tagTree || []}
+            buckets={tweaks.customGroups || []}
             onUpdateTagTree={(updater) => {
               const prev = tweaks.tagTree || [];
               const next = typeof updater === 'function' ? updater(prev) : updater;
@@ -4769,12 +4770,12 @@ function App() {
           onGroupRenameDone={()=>setRenamingGroupId(null)}
           onRenameGroup={renameGroup}/>
       ) : view==='list' ? (
-        <ListView title="List" tasks={allOpenTopLevel} onOpen={openTask} onFocus={setFocusedId}
+        <ListView title="List" tasks={allOpenTopLevel} tweaks={tweaks} onOpen={openTask} onFocus={setFocusedId}
           onSelect={toggleSelected} selectedIds={selectedIds}
           focusedCardId={focusedId} renamingId={renamingId} onRename={updateTask} onRenameDone={()=>setRenamingId(null)}
           onContextMenu={onCardContextMenu}/>
       ) : (
-        <ListView title={viewTitle} tasks={listTasks()} onOpen={openTask} onFocus={setFocusedId}
+        <ListView title={viewTitle} tasks={listTasks()} tweaks={tweaks} onOpen={openTask} onFocus={setFocusedId}
           onSelect={toggleSelected} selectedIds={selectedIds}
           focusedCardId={focusedId} renamingId={renamingId} onRename={updateTask} onRenameDone={()=>setRenamingId(null)}
           onContextMenu={onCardContextMenu}/>

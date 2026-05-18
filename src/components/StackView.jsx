@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { I } from '../utils/icons.jsx';
-import { D, parseTimeEst, fmtTimeEst, PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREA_NAMES, recurrenceLabel } from '../data.js';
-import { lifeAreaPalette } from '../utils/colors.js';
+import { D, parseTimeEst, fmtTimeEst, PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, recurrenceLabel } from '../data.js';
+// Life-area imports removed in the Buckets redesign polish pass — the
+// life-area chip is replaced by a bucket chip resolved from tweaks.customGroups.
 import { cardColorVars } from '../utils/cardColor.js';
 import { PriBars } from './PriBars.jsx';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -121,13 +122,16 @@ function sortStack(arr, mode, allTasks, manualOrder=[]) {
   return list;
 }
 
-function ChipRow({ task, isProject, allTasks, theme }) {
+function ChipRow({ task, isProject, allTasks, theme, tweaks }) {
   const eff = effectiveDueDate(task, allTasks);
   const due = dueLabel(eff.date, undefined, eff.isDue);
   const proj = PROJ.find(p=>p.id === task.project);
   const tags = task.tags || [];
-  const life = task.lifeArea;
-  const lifeMeta = life ? lifeAreaPalette(life, theme) : null;
+  // Bucket chip — task.groupId resolved against tweaks.customGroups.
+  // Replaces the old life-area chip; null-safe.
+  const bucket = task.groupId
+    ? (tweaks?.customGroups || []).find(g => g.id === task.groupId) || null
+    : null;
   const tagPalette = theme === 'light' ? TAG_LIGHT : TAG_DARK;
 
   let totalTime = task.timeEstimate;
@@ -171,9 +175,11 @@ function ChipRow({ task, isProject, allTasks, theme }) {
 
       {proj && <span className="schip schip-proj" style={{color:proj.color, borderColor:proj.color+'55'}}>{proj.id}</span>}
 
-      {lifeMeta && (
-        <span className="schip schip-life" style={{background:lifeMeta.bg, color:lifeMeta.fg, borderColor:lifeMeta.fg+'40'}}>
-          {LIFE_AREA_NAMES[life] || life}
+      {bucket && (
+        <span className="schip schip-bucket"
+          style={{ background: `${bucket.color || '#94a3b8'}22`, color: bucket.color || '#94a3b8', borderColor: `${bucket.color || '#94a3b8'}55` }}
+          title={`Bucket: ${bucket.name}`}>
+          {bucket.name}
         </span>
       )}
 
@@ -397,7 +403,7 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
         </div>
       </div>
 
-      <ChipRow task={task} isProject={isProject} allTasks={allTasks} theme={theme}/>
+      <ChipRow task={task} isProject={isProject} allTasks={allTasks} theme={theme} tweaks={tweaks}/>
 
       {isProject && kids.length > 0 && (
         <div className="scard-proj-prog">

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_NAMES, fmtTimeEst, daysSince, isStale, D, recurrenceLabel } from '../data.js';
+import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, fmtTimeEst, daysSince, isStale, D, recurrenceLabel } from '../data.js';
 import { I } from '../utils/icons.jsx';
 import { PRI_INFO } from '../utils/constants.js';
-import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from '../utils/colors.js';
+// Life-area imports removed in the Buckets redesign polish pass. The
+// life-area chip is gone; bucket chip resolves task.groupId against
+// tweaks.customGroups (passed via the `tweaks` prop).
 import { cardColorVars } from '../utils/cardColor.js';
 import { groupTasksBy, getGLabel, getGColor } from '../utils/grouping.js';
 import { CardPopover } from './CardPopover.jsx';
@@ -44,8 +46,12 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
   const tagPalette = theme==='dark'?TAG_DARK:TAG_LIGHT;
   const tp = tagPalette[task.tags?.[0]] || tagPalette.admin;
   const proj = PROJ.find(p=>p.id===task.project);
-  const effectiveLifeArea = getEffectiveLifeArea ? getEffectiveLifeArea(task) : task.lifeArea;
-  const effectiveLifeAreaMeta = effectiveLifeArea ? lifeAreaPalette(effectiveLifeArea, theme) : null;
+  // Bucket chip — resolve task.groupId against tweaks.customGroups. The
+  // bucket's color drives both bg (soft) and fg (legible). Hidden when
+  // no bucket assigned.
+  const bucket = task.groupId
+    ? (tweaks?.customGroups || []).find(g => g.id === task.groupId) || null
+    : null;
   const [draft,setDraft] = useState(task.title || '');
   const [openPop, setOpenPop] = useState(null);
   const tagRef = useRef(null);
@@ -192,10 +198,11 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
             ↺ d{task.checkInDayOffset ?? '?'}
           </span>
         )}
-        {effectiveLifeArea && effectiveLifeAreaMeta && (
-          <span className="card-tag card-tag-life" style={{background:effectiveLifeAreaMeta.bg,color:effectiveLifeAreaMeta.fg}}
-            title={`Life Area: ${LIFE_AREA_NAMES[effectiveLifeArea] || effectiveLifeArea}`}>
-            {LIFE_AREA_NAMES[effectiveLifeArea] || effectiveLifeArea}
+        {bucket && (
+          <span className="card-tag card-tag-bucket"
+            style={{ background: `${bucket.color || '#94a3b8'}22`, color: bucket.color || '#94a3b8' }}
+            title={`Bucket: ${bucket.name}`}>
+            {bucket.name}
           </span>
         )}
         {/* Tag */}

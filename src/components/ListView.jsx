@@ -1,12 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREA_NAMES, daysSince, recurrenceLabel } from '../data.js';
+import { PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, daysSince, recurrenceLabel } from '../data.js';
 import { I } from '../utils/icons.jsx';
-import { lifeAreaPalette, UNASSIGNED_LIFE_AREA } from '../utils/colors.js';
+// Life-area imports dropped in the Buckets redesign polish pass. ListView
+// now shows a bucket chip resolved from tweaks.customGroups.
 import { PRI_INFO } from '../utils/constants.js';
 import { CheckGlyph } from './CheckGlyph.jsx';
 import { EmptyState } from './EmptyState.jsx';
 
-function ListTaskItem({ task, focused, selected, renaming, onOpen, onFocus, onSelect, onRename, onRenameDone, onContextMenu }) {
+function ListTaskItem({ task, tweaks, focused, selected, renaming, onOpen, onFocus, onSelect, onRename, onRenameDone, onContextMenu }) {
+  // Bucket chip — render alongside the other meta if the task is bucketed.
+  // Cross-view parity with TaskCard / StackView per
+  // memory/feedback_visual_consistency_across_views.md.
+  const bucket = task?.groupId
+    ? (tweaks?.customGroups || []).find(g => g.id === task.groupId) || null
+    : null;
   const [draft,setDraft] = useState(task.title || '');
   const ref = useRef(null);
   // See TaskCard.jsx for rationale — clears hover-induced focus on leave while
@@ -49,6 +56,13 @@ function ListTaskItem({ task, focused, selected, renaming, onOpen, onFocus, onSe
       {task.snoozedUntil && <span className="list-item-date" title={`Returns ${task.snoozedUntil}`}>Until {task.snoozedUntil}</span>}
       {task.date && <span className="list-item-date" title={`Start Date: ${task.date}`}>Start {task.date}</span>}
       {task.dueDate && <span className="list-item-date" title={`Due Date: ${task.dueDate}`}>Due {task.dueDate}</span>}
+      {bucket && (
+        <span className="card-tag card-tag-bucket"
+          style={{ background: `${bucket.color || '#94a3b8'}22`, color: bucket.color || '#94a3b8' }}
+          title={`Bucket: ${bucket.name}`}>
+          {bucket.name}
+        </span>
+      )}
       {task.recurrence && (
         <span className={`schip ${task.recurrence.isRoutine ? 'schip-routine' : 'schip-recurring'}`}
               title={`Repeats: ${recurrenceLabel(task.recurrence)}${task.recurrence.isRoutine ? ' (routine)' : ''}`}>
@@ -59,14 +73,14 @@ function ListTaskItem({ task, focused, selected, renaming, onOpen, onFocus, onSe
   );
 }
 
-function ListView({ title, tasks, onOpen, onFocus, onSelect, selectedIds, focusedCardId, renamingId, onRename, onRenameDone, onContextMenu }) {
+function ListView({ title, tasks, tweaks, onOpen, onFocus, onSelect, selectedIds, focusedCardId, renamingId, onRename, onRenameDone, onContextMenu }) {
   const renderLimit = 500;
   const shownTasks = tasks.slice(0, renderLimit);
   return <div className="list-view">
     <div className="list-view-title">{title}</div>
     {tasks.length===0 && <EmptyState kind="list" title="Nothing here yet" hint="Switch to Calendar or Inbox to capture something."/>}
     {shownTasks.map(t=>(
-      <ListTaskItem key={t.id} task={t} focused={focusedCardId===t.id} selected={selectedIds?.has(t.id)} renaming={renamingId===t.id}
+      <ListTaskItem key={t.id} task={t} tweaks={tweaks} focused={focusedCardId===t.id} selected={selectedIds?.has(t.id)} renaming={renamingId===t.id}
         onOpen={onOpen} onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
         onContextMenu={onContextMenu}/>
     ))}

@@ -140,7 +140,7 @@ function BucketColumn({
             onDrop={e => { e.stopPropagation(); onCardDrop(e, bucket.id, task.id); }}
             onClick={() => onOpenCard?.(task.id)}
           >
-            <TaskCard task={task} />
+            <TaskCard task={task} tweaks={{ customGroups: buckets || [] }} />
           </div>
         ))}
         {completedCount > 0 && (
@@ -305,7 +305,7 @@ export function BucketsView({
                 onDragStart={e => handleCardDragStart(e, task.id, null)}
                 onClick={() => onOpenCard?.(task.id)}
               >
-                <TaskCard task={task} />
+                <TaskCard task={task} tweaks={{ customGroups: buckets || [] }} />
               </div>
             ))
           )}

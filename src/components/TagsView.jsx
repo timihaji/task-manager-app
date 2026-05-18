@@ -158,6 +158,7 @@ function TagNode({
 export function TagsView({
   tasks,
   tagTree,
+  buckets,
   onUpdateTagTree,
   onOpenCard,
 }) {
@@ -264,7 +265,7 @@ export function TagsView({
               ) : (
                 filteredTasks.map(t => (
                   <div key={t.id} className="tg-card-slot" onClick={() => onOpenCard?.(t.id)}>
-                    <TaskCard task={t} />
+                    <TaskCard task={t} tweaks={{ customGroups: buckets || [] }} />
                   </div>
                 ))
               )}
