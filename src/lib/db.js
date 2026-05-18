@@ -18,7 +18,14 @@ const TASK_TO_ROW_KEYS = {
   cardType: 'card_type',
   parentId: 'parent_id',
   childOrder: 'child_order',
-  groupId: 'group_id',
+  // The buckets redesign (migration 0011) renamed the DB column from
+  // `group_id` to `bucket_id` and added `bucket_position`. The JS side keeps
+  // the legacy `groupId` field name to avoid churning every grouping/DnD
+  // call-site — the field map handles the snake_case translation, and the
+  // user-facing concept is "bucket" everywhere in the UI. `bucketPosition`
+  // is new on both sides (the per-bucket-column manual sort key).
+  groupId: 'bucket_id',
+  bucketPosition: 'bucket_position',
   lifeArea: 'life_area',
   timeEstimate: 'time_estimate',
   dueDate: 'due_date',
@@ -59,8 +66,8 @@ const ROW_TO_TASK_KEYS = Object.fromEntries(
 // otherwise fail the upsert with a "column not found" error.
 const TASK_DB_COLUMNS = new Set([
   'id', 'workspace_id', 'user_id',
-  'title', 'description', 'card_type', 'parent_id', 'child_order', 'group_id',
-  'project', 'tags', 'priority', 'life_area', 'time_estimate',
+  'title', 'description', 'card_type', 'parent_id', 'child_order', 'bucket_id',
+  'project', 'tags', 'priority', 'life_area', 'time_estimate', 'bucket_position',
   'date', 'due_date', 'done', 'completed_at', 'snoozed_until', 'snooze_mode', 'snooze_offset_days', 'someday', 'recurrence',
   'blocked', 'blocked_reason', 'blocked_by', 'blocked_since', 'follow_up_at',
   'delegated_to', 'delegated_at', 'delegation_status',
@@ -143,6 +150,11 @@ export function taskToRow(task, userId, workspaceId) {
     // Drop `position` from upserts until migration 0007 is applied —
     // otherwise every write fails with "column does not exist".
     if (dbKey === 'position' && _positionColumnMissing) continue;
+    // Same guard for migration 0011 (rename group_id -> bucket_id +
+    // add bucket_position): until applied, drop these columns from
+    // upserts so writes don't fail. The client still keeps the bucketId
+    // / bucketPosition in memory.
+    if ((dbKey === 'bucket_id' || dbKey === 'bucket_position') && _bucketColumnsMissing) continue;
     row[dbKey] = v;
   }
   return row;
@@ -154,6 +166,13 @@ export function rowToTask(row) {
   const task = {};
   for (const [k, v] of Object.entries(row)) {
     if (k === 'workspace_id' || k === 'user_id') continue; // app doesn't need these
+    // Pre-migration-0011 servers still return `group_id`. The new field map
+    // only knows about `bucket_id`, so handle the old name explicitly and
+    // route it to the same JS field (`groupId`).
+    if (k === 'group_id') {
+      if (task.groupId == null) task.groupId = v;
+      continue;
+    }
     const jsKey = ROW_TO_TASK_KEYS[k] || k;
     task[jsKey] = v;
   }
@@ -226,6 +245,13 @@ export async function getOrCreateWorkspace(userId) {
 // the position-sorted read until the user applies migration 0007.
 let _positionColumnMissing = false;
 
+// Same idea for migration 0011 (rename group_id -> bucket_id + add
+// bucket_position). If a fetch/upsert errors on these columns we flip the
+// flag and silently drop them from subsequent writes; the user still gets
+// the new in-memory bucket logic, just without cloud persistence of the
+// bucket fields until they run the migration.
+let _bucketColumnsMissing = false;
+
 export async function fetchTasks(workspaceId) {
   if (!supabase) throw new Error('Supabase client not configured');
   if (!_positionColumnMissing) {
@@ -249,18 +275,36 @@ export async function fetchTasks(workspaceId) {
   return (data || []).map(rowToTask).map(normalizeTask);
 }
 
+// Once-per-error console warn so the user knows to run migration 0011.
+function flagBucketColumnsMissing(error) {
+  if (_bucketColumnsMissing) return false;
+  const msg = String(error?.message || '');
+  if (!/bucket_id|bucket_position|group_id/i.test(msg)) return false;
+  _bucketColumnsMissing = true;
+  console.warn('[tasks] `bucket_id` / `bucket_position` column missing — apply migration 0011 to enable bucket persistence. The Buckets view will still work in-memory in the meantime.');
+  return true;
+}
+
 export async function upsertTask(task, userId, workspaceId) {
   if (!supabase) throw new Error('Supabase client not configured');
-  const row = taskToRow(task, userId, workspaceId);
-  const { error } = await supabase.from('tasks').upsert(row);
+  let row = taskToRow(task, userId, workspaceId);
+  let { error } = await supabase.from('tasks').upsert(row);
+  if (error && flagBucketColumnsMissing(error)) {
+    row = taskToRow(task, userId, workspaceId); // re-build now that the flag is set
+    ({ error } = await supabase.from('tasks').upsert(row));
+  }
   if (error) throw error;
 }
 
 export async function upsertTasks(tasks, userId, workspaceId) {
   if (!supabase) throw new Error('Supabase client not configured');
   if (!tasks?.length) return;
-  const rows = tasks.map((t) => taskToRow(t, userId, workspaceId));
-  const { error } = await supabase.from('tasks').upsert(rows);
+  let rows = tasks.map((t) => taskToRow(t, userId, workspaceId));
+  let { error } = await supabase.from('tasks').upsert(rows);
+  if (error && flagBucketColumnsMissing(error)) {
+    rows = tasks.map((t) => taskToRow(t, userId, workspaceId));
+    ({ error } = await supabase.from('tasks').upsert(rows));
+  }
   if (error) throw error;
 }
 

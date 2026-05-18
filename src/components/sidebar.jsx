@@ -75,6 +75,12 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, activeLifeAreas, 
       <div className="lnav-sec">
         <NavItem ico={I.Cal} label="Timeline" v="week" cnt={counts.today}/>
         <NavItem ico={I.Stack} label="Stack" v="stack" cnt={counts.stack}/>
+        {/* Buckets / Tags — new top-level views from the buckets redesign.
+            Buckets list count = open tasks across all buckets; Tags count =
+            distinct tags in use (rough indicator that the user has set some
+            up). Both peer with the existing main views per Tim's pick. */}
+        <NavItem ico={I.Stack} label="Buckets" v="buckets" cnt={all.filter(t=>!t.done&&!t.parentId&&t.groupId).length}/>
+        <NavItem ico={I.Star} label="Tags" v="tags" cnt={ALL_TAGS.filter(t=>all.some(task=>(task.tags||[]).includes(t)&&!task.done&&!task.parentId)).length}/>
         <NavItem ico={I.Inbox} label="Inbox" v="inbox" cnt={counts.inbox}/>
         <NavItem ico={I.Star} label="Upcoming" v="upcoming" cnt={counts.upcoming}/>
         <NavItem ico={I.Archive} label="Backlog" v="backlog" cnt={all.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.someday&&!t.blocked&&!t.delegatedTo).length}/>

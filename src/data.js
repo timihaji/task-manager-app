@@ -656,6 +656,7 @@ const repairMissingCheckIns = (tasks = []) => {
 // === Delegation: presets, spawn helpers, staleness, people store ===
 
 const CHECKIN_PRESETS = {
+  none:     [],
   gentle:   [3, 7, 14],
   standard: [2, 5, 10],
   tight:    [1, 3, 5, 7],
@@ -663,6 +664,7 @@ const CHECKIN_PRESETS = {
 };
 
 const CHECKIN_PRESET_LABELS = {
+  none:     'No cadence',
   gentle:   'Gentle 3/7/14',
   standard: 'Standard 2/5/10',
   tight:    'Tight 1/3/5/7',
@@ -670,9 +672,10 @@ const CHECKIN_PRESET_LABELS = {
 };
 
 const matchPreset = (schedule) => {
-  if (!Array.isArray(schedule) || !schedule.length) return null;
+  if (!Array.isArray(schedule) || !schedule.length) return 'none';
   const key = schedule.join(',');
   for (const k of Object.keys(CHECKIN_PRESETS)) {
+    if (k === 'none') continue;
     if (CHECKIN_PRESETS[k].join(',') === key) return k;
   }
   return null;
@@ -855,7 +858,11 @@ const makeTask = (overrides={}) => syncTaskSnooze({
   recurrence:null, activity:[{type:'created',at:new Date().toISOString()}],
   createdAt:new Date().toISOString(),
   cardType:'task', parentId:null, childOrder:null,
-  groupId:null, position:null,
+  // groupId (DB column: bucket_id post-migration-0011) is the task's bucket
+  // reference. bucketPosition is the per-bucket-column manual sort key —
+  // separate from `position` (global per-day sort) so a card can keep both
+  // its Stack/Timeline order and its column order in the Buckets view.
+  groupId:null, bucketPosition:null, position:null,
   blocked:false, blockedReason:'', blockedBy:[], blockedSince:null, followUpAt:null,
   delegatedTo:null, delegatedAt:null, delegationStatus:null,
   checkInSchedule:null, checkInTaskIds:[], checkInOf:null, checkInDayOffset:null,
@@ -876,6 +883,7 @@ const migrateTasks = (tasks=[]) => tasks.map(t => ({
   parentId: t.parentId === undefined ? null : t.parentId,
   childOrder: t.childOrder === undefined ? null : t.childOrder,
   groupId: t.groupId === undefined ? null : t.groupId,
+  bucketPosition: t.bucketPosition === undefined ? null : t.bucketPosition,
   lifeArea: t.lifeArea === undefined ? null : t.lifeArea,
   dueDate: t.dueDate === undefined ? null : t.dueDate,
   snoozeMode: t.snoozeMode === undefined ? null : t.snoozeMode,

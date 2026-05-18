@@ -100,6 +100,8 @@ import { CMDS, CommandPalette, SC_ROWS, ShortcutsOverlay } from './components/mo
 import { SwatchPicker, CardColorPopover, SettingsScrollPane, TaxonomyManager, PRESETS_DATA, SettingsView, SettingsDrawer } from './components/settings.jsx';
 import { ListTaskItem, ListView } from './components/ListView.jsx';
 import { StackView } from './components/StackView.jsx';
+import { BucketsView } from './components/BucketsView.jsx';
+import { TagsView } from './components/TagsView.jsx';
 import { AddModal } from './components/AddModal.jsx';
 import { QuickEntry } from './components/QuickEntry.jsx';
 import { MigrateFromLocal } from './components/MigrateFromLocal.jsx';
@@ -121,6 +123,11 @@ const LAST_VIEW_STORAGE_KEY = 'tm_last_view_v1';
 const SIMPLE_VIEWS = new Set([
   'week', 'list', 'stack', 'inbox', 'upcoming', 'backlog',
   'snoozed', 'someday', 'blocked', 'completed', 'archived', 'delegations', 'routines',
+  // Buckets redesign — new top-level views accessible from the sidebar.
+  // 'buckets' is the Trello-style Kanban over tweaks.customGroups (rebranded
+  // as "buckets" in the UI). 'tags' is the tree-on-left / task-list-on-right
+  // view backed by tweaks.tagTree.
+  'buckets', 'tags',
 ]);
 
 function normalizeSavedView(value) {
@@ -254,6 +261,23 @@ function App() {
     groupPrefs: { global: 'project', inbox: 'none' },
     recentBlockReasons: [],
     customGroups: [],
+    // Buckets redesign — tagTree is a flat list of {id, name, color, parentId}
+    // nodes that powers the new managed/nestable tag taxonomy. Built once on
+    // first load from the user's distinct task.tags values; thereafter the
+    // user curates it via the Tags view. Tag chips on cards format per
+    // `tagChipFormat`. Migration flag `tagTreeBuilt` guards re-import.
+    tagTree: [],
+    tagTreeBuilt: false,
+    // Buckets redesign — life_area used to be a hardcoded enum; first time the
+    // user opens the app post-redesign we mint a bucket per distinct
+    // task.lifeArea value (preserved colour via lifeAreaPalette) and stash
+    // the IDs against the matching tasks. Flag prevents re-running.
+    bucketsMigrated: false,
+    // Settings — `showLocationOnCards` hides the (otherwise always-visible)
+    // location chip by default; users who want it back flip it on.
+    // `tagChipFormat` controls how nested tag chips render on cards.
+    showLocationOnCards: false,
+    tagChipFormat: 'parentLeaf', // 'parentLeaf' | 'leaf' | 'fullPath'
     // Persisted UI state (cross-device via user_settings.settings):
     lastView: null,                 // last-active main view (string or {type,id|name})
     sidePanelView: 'inbox',         // panel view inside the timeline's sticky inbox column
@@ -964,6 +988,108 @@ function App() {
       return changed ? next : prev;
     });
   }, [tasksReady, settingsReady, tweaks.customGroups]);
+
+  // ---------------------------------------------------------------------------
+  // Buckets redesign — one-time migrations (gated by tweak flags).
+  //
+  // 1) Buckets: distinct lifeArea values become buckets in tweaks.customGroups
+  //    (the existing user-curated list, now surfaced as "Buckets" in the UI).
+  //    Each task with a lifeArea but no groupId is reassigned to its derived
+  //    bucket. Colours preserved via lifeAreaPalette so the visual continuity
+  //    survives the rename.
+  //
+  // 2) TagTree: distinct task.tags values become flat top-level entries in
+  //    tweaks.tagTree, with palette-assigned colours. Tag IDs on tasks stay
+  //    untouched (the new tree uses the same string IDs).
+  //
+  // Both gates are tweak flags (bucketsMigrated, tagTreeBuilt) + a session-
+  // scoped useRef to defend against the gap between setTweak (local) and
+  // the cloud round-trip — without it the effect can fire twice on rapid
+  // re-render before the flag persists.
+  const bucketsMigrationRef = useRef(false);
+  useEffect(() => {
+    if (!tasksReady || !settingsReady) return;
+    if (bucketsMigrationRef.current) return;
+    if (tweaks.bucketsMigrated) return;
+    bucketsMigrationRef.current = true;
+
+    const existingGroups = Array.isArray(tweaks.customGroups) ? tweaks.customGroups : [];
+    const existingNames = new Map(existingGroups.map(g => [String(g?.name || '').toLowerCase(), g]));
+    const newGroups = existingGroups.slice();
+
+    // Walk tasks, collect distinct lifeArea values not already represented.
+    const seenLifeAreas = new Set();
+    for (const t of tasks) {
+      if (!t?.lifeArea) continue;
+      const key = String(t.lifeArea).toLowerCase();
+      if (seenLifeAreas.has(key)) continue;
+      seenLifeAreas.add(key);
+      if (existingNames.has(key)) continue;
+      const label = LIFE_AREA_NAMES[t.lifeArea] || t.lifeArea;
+      const pal = lifeAreaPalette(t.lifeArea, 'light');
+      const bucket = {
+        id: `bk_${t.lifeArea}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
+        name: label,
+        color: pal?.fg || '#64748b',
+      };
+      newGroups.push(bucket);
+      existingNames.set(key, bucket);
+    }
+
+    // Re-point tasks: every task with a lifeArea and no groupId picks up the
+    // matching bucket id. Tasks that already have a groupId are left alone
+    // (they're already bucketed).
+    const reassign = new Map();
+    for (const t of tasks) {
+      if (!t || t.groupId || !t.lifeArea) continue;
+      const bucket = existingNames.get(String(t.lifeArea).toLowerCase());
+      if (bucket?.id) reassign.set(t.id, bucket.id);
+    }
+
+    if (newGroups.length !== existingGroups.length) {
+      setTweak('customGroups', newGroups);
+    }
+    if (reassign.size) {
+      setTasks(prev => prev.map(t => reassign.has(t.id) ? { ...t, groupId: reassign.get(t.id) } : t));
+    }
+    setTweak('bucketsMigrated', true);
+  }, [tasksReady, settingsReady, tasks, tweaks.bucketsMigrated, tweaks.customGroups]);
+
+  const tagTreeMigrationRef = useRef(false);
+  useEffect(() => {
+    if (!tasksReady || !settingsReady) return;
+    if (tagTreeMigrationRef.current) return;
+    if (tweaks.tagTreeBuilt) return;
+    tagTreeMigrationRef.current = true;
+
+    const existingTree = Array.isArray(tweaks.tagTree) ? tweaks.tagTree : [];
+    const existingIds = new Set(existingTree.map(n => n?.id).filter(Boolean));
+    const distinct = new Set();
+    for (const t of tasks) {
+      for (const tag of (t?.tags || [])) {
+        if (tag) distinct.add(tag);
+      }
+    }
+    const added = [];
+    let i = existingTree.length;
+    for (const tagId of distinct) {
+      if (existingIds.has(tagId)) continue;
+      const label = TAG_NAMES[tagId] || tagId;
+      const swatch = taxonomyAutoSwatch(i, `tag-${tagId}`, 'Pastel');
+      added.push({
+        id: tagId,
+        name: label,
+        color: swatch?.color || null,
+        parentId: null,
+      });
+      i += 1;
+    }
+    if (added.length) {
+      setTweak('tagTree', existingTree.concat(added));
+    }
+    setTweak('tagTreeBuilt', true);
+  }, [tasksReady, settingsReady, tasks, tweaks.tagTreeBuilt, tweaks.tagTree]);
+  // ---------------------------------------------------------------------------
 
   // localStorage shadow + debounced diff-sync of local mutations to Supabase.
   // Shadow runs in both dev-bypass and cloud modes so a refresh restores the
@@ -4525,6 +4651,54 @@ function App() {
             onDayFilterChange={(v)=>setTweak('delegationsDayFilter', v)}
             selectedId={tweaks.delegationsSelectedId}
             onSelectId={(v)=>setTweak('delegationsSelectedId', v)}/>
+        </div>
+      ) : view==='buckets' ? (
+        <div className="board-area" style={{padding:0}}>
+          <BucketsView
+            tasks={activeTasks}
+            buckets={tweaks.customGroups || []}
+            onUpdateTask={updateTask}
+            onReorderBuckets={(orderIds) => {
+              const byId = new Map((tweaks.customGroups || []).map(g => [g.id, g]));
+              const next = orderIds.map(id => byId.get(id)).filter(Boolean);
+              // Append any buckets not in the new order (defensive).
+              for (const g of (tweaks.customGroups || [])) {
+                if (!orderIds.includes(g.id)) next.push(g);
+              }
+              setTweak('customGroups', next);
+            }}
+            onRenameBucket={(id, name) => {
+              setTweak('customGroups', (tweaks.customGroups || []).map(g => g.id === id ? { ...g, name } : g));
+            }}
+            onChangeBucketColor={(id, color) => {
+              setTweak('customGroups', (tweaks.customGroups || []).map(g => g.id === id ? { ...g, color } : g));
+            }}
+            onDeleteBucket={(id) => {
+              const bucket = (tweaks.customGroups || []).find(g => g.id === id);
+              const affected = tasks.filter(t => t.groupId === id).map(t => ({ id: t.id, groupId: t.groupId, bucketPosition: t.bucketPosition }));
+              setTweak('customGroups', (tweaks.customGroups || []).filter(g => g.id !== id));
+              setTasks(prev => prev.map(t => t.groupId === id ? { ...t, groupId: null, bucketPosition: null } : t));
+              setUndoStack(s => [...s.slice(-9), { bulk: true, kind: 'bucket-delete', bucket, affected }]);
+              showToast(`Bucket "${bucket?.name || ''}" deleted`, { undoable: true, timeout: 5000 });
+            }}
+            onCreateBucket={(bucket) => {
+              setTweak('customGroups', (tweaks.customGroups || []).concat(bucket));
+            }}
+            onOpenCard={openTask}
+          />
+        </div>
+      ) : view==='tags' ? (
+        <div className="board-area" style={{padding:0}}>
+          <TagsView
+            tasks={activeTasks}
+            tagTree={tweaks.tagTree || []}
+            onUpdateTagTree={(updater) => {
+              const prev = tweaks.tagTree || [];
+              const next = typeof updater === 'function' ? updater(prev) : updater;
+              setTweak('tagTree', Array.isArray(next) ? next : []);
+            }}
+            onOpenCard={openTask}
+          />
         </div>
       ) : view==='stack' ? (
         <StackView
