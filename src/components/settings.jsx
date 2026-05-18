@@ -248,17 +248,9 @@ function TaxonomyManager({ taxonomy, actions }) {
         <input className="tax-input" placeholder="New tag" value={newTag} onChange={e=>setNewTag(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&newTag.trim()){actions.add('tag',newTag);setNewTag('');}}}/>
         <button className="tb-btn primary" onClick={()=>{if(newTag.trim()){actions.add('tag',newTag);setNewTag('');}}}>Add</button>
       </div>
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12,marginTop:26,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>
-        <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',flex:1}}>Life Areas</div>
-        <SectionTools kind="lifeArea" label="Life Areas"/>
-      </div>
-      <div className="tax-list">
-        {taxonomy.lifeAreas.map((area,i)=><Row key={area.id} kind="lifeArea" item={area} index={i} total={taxonomy.lifeAreas.length}/>)}
-      </div>
-      <div className="tax-add">
-        <input className="tax-input" placeholder="New life area" value={newLifeArea} onChange={e=>setNewLifeArea(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&newLifeArea.trim()){actions.add('lifeArea',newLifeArea);setNewLifeArea('');}}}/>
-        <button className="tb-btn primary" onClick={()=>{if(newLifeArea.trim()){actions.add('lifeArea',newLifeArea);setNewLifeArea('');}}}>Add</button>
-      </div>
+      {/* Life Areas section removed in the Buckets redesign polish pass.
+          Buckets are managed inline in the Buckets view (column kebab →
+          rename / colour / delete). Settings no longer mirrors that UI. */}
       <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:18}}>
         <button className="tb-btn" onClick={actions.exportTaxonomy}>Export taxonomy</button>
         <input ref={importRef} type="file" accept=".json,application/json" style={{display:'none'}}

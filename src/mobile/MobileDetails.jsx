@@ -73,11 +73,11 @@ export function TaskDetailSheet({ taskId, onClose }) {
   }));
   snoozeItems.push('sep', { label:'Clear snooze', onPress:() => { save({ snoozedUntil:null }); setPicker(null); } });
 
-  const lifeAreaItems = LIFE_AREAS.map(a => ({
-    label:a.label, dot:a.color, active:task.lifeArea===a.id,
-    onPress:() => { save({ lifeArea:a.id }); setPicker(null); },
-  }));
-  lifeAreaItems.push('sep', { label:'Clear', onPress:() => { save({ lifeArea:null }); setPicker(null); } });
+  // Life-area picker removed in the Buckets redesign polish pass.
+  // Kept the empty array so the (still-rendered) ActionSheet stays empty
+  // and safe — avoids tearing every callsite in this file in one polish
+  // commit. Bucket picker for mobile is follow-up work.
+  const lifeAreaItems = [];
 
   const actionItems = [
     { label:'Duplicate', icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>, onPress:() => { duplicateTask(taskId); onClose(); showToast('Task duplicated'); } },
@@ -156,15 +156,9 @@ export function TaskDetailSheet({ taskId, onClose }) {
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--t4)" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
               </button>
             </DetailRow>
-            <DetailRow label="Life area">
-              <button onClick={() => setPicker('lifeArea')} style={{ display:'flex', alignItems:'center', gap:6, border:'none', background:'transparent', cursor:'pointer', padding:0 }}>
-                {task.lifeArea ? (
-                  <> <span style={{ width:8, height:8, borderRadius:2, background: LIFE_AREAS.find(a=>a.id===task.lifeArea)?.color, display:'inline-block' }}/>
-                  <span style={{ fontSize:14, color:'var(--t1)' }}>{LIFE_AREAS.find(a=>a.id===task.lifeArea)?.label}</span> </>
-                ) : <span style={{ fontSize:14, color:'var(--t4)' }}>Unassigned</span>}
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--t4)" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-              </button>
-            </DetailRow>
+            {/* Mobile Life Area picker removed in the Buckets redesign polish
+                pass. Bucket assignment is desktop-only for now; mobile
+                returns to triage in a follow-up. */}
             <DetailRow label="Priority">
               <div style={{ display:'flex', gap:6 }}>
                 {Object.entries(PRI).map(([id,info]) => (
