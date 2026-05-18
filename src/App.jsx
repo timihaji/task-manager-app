@@ -1444,6 +1444,26 @@ function App() {
       return ct && !ct.done;
     });
   };
+  // Per-parent earliest active nudge. Used to dedupe nudge cards on the
+  // Timeline so the same delegation doesn't litter the week with one card per
+  // scheduled check-in — you only ever act on the next one.
+  const nextNudgeIds = useMemo(()=>{
+    const byParent = new Map();
+    activeTasks.forEach(t=>{
+      if(!t.checkInOf) return;
+      if(t.done) return;
+      if(t.snoozedUntil) return;
+      const prev = byParent.get(t.checkInOf);
+      const cmp = (a,b) => {
+        const ad = a.date || '9999-99-99';
+        const bd = b.date || '9999-99-99';
+        if(ad !== bd) return ad < bd ? -1 : 1;
+        return (a.checkInDayOffset ?? 0) - (b.checkInDayOffset ?? 0);
+      };
+      if(!prev || cmp(t, prev) < 0) byParent.set(t.checkInOf, t);
+    });
+    return new Set(Array.from(byParent.values()).map(t => t.id));
+  }, [activeTasks]);
   const tasksByDate = useMemo(()=>{
     const map = new Map([['inbox', []]]);
     activeTasks.forEach(t=>{
@@ -1469,6 +1489,9 @@ function App() {
         // showCheckInsOnTimeline tweak is kept for back-compat but no
         // longer gates visibility.
       }
+      // Timeline-only: only the earliest active nudge per parent surfaces;
+      // the rest stay accessible via Stack / drawer / parent's activity log.
+      if(view === 'week' && t.checkInOf && !nextNudgeIds.has(t.id)) return;
       if(showStaleOnly && !isStale(t)) return;
       const key = t.date || 'inbox';
       if(!map.has(key)) map.set(key, []);
@@ -1476,7 +1499,7 @@ function App() {
     });
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTasks, showWaitingOn, showStaleOnly, showDelegationsOnTimeline, showCheckInsOnTimeline]);
+  }, [activeTasks, showWaitingOn, showStaleOnly, showDelegationsOnTimeline, showCheckInsOnTimeline, view, nextNudgeIds]);
   const taxonomyActions = {
     add(kind,label) {
       const trimmed = String(label||'').trim();

@@ -369,6 +369,11 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
           </div>
         </div>
       )}
+      {task.checkInOf && (
+        <button className="card-jump-parent"
+          title="Open parent delegation"
+          onClick={e=>{e.stopPropagation(); onOpen(task.checkInOf);}}>→</button>
+      )}
       <button className="card-del" onClick={e=>{e.stopPropagation();onDelete(task.id,colKey);}}>×</button>
     </div>
   );
