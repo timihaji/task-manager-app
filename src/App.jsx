@@ -2083,6 +2083,21 @@ function App() {
         return;
       }
     }
+    // Title propagation for routine series. Renaming any instance renames all siblings.
+    const titleTouched =
+      Object.prototype.hasOwnProperty.call(changes, 'title') &&
+      changes.title !== before.title &&
+      before.recurrence?.recurrenceId;
+    if (titleTouched) {
+      const rid = before.recurrence.recurrenceId;
+      pushSnapshotUndo();
+      setTasks(prev => prev.map(t => {
+        if (t.id === id) return applyTaskPatch(t, changes);
+        if (t.recurrence?.recurrenceId !== rid) return t;
+        return { ...t, title: changes.title };
+      }));
+      return;
+    }
     setUndoStack(s=>[...s.slice(-9),{id,before}]);
     setTasks(prev=>prev.map(t=>t.id===id ? applyTaskPatch(t, changes) : t));
   };
