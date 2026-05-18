@@ -3640,7 +3640,10 @@ function App() {
 
   // Stack/List task pool — all open top-level tasks, ignoring topbar pill filters by design.
   // Search still applies so users can find tasks in these views.
-  const allOpenTopLevel = activeTasks.filter(t=>!t.done&&!t.parentId&&!t.snoozedUntil&&!t.delegatedTo&&!t.checkInOf&&taskMatchesSearch(t));
+  // Check-in nudges are normally excluded (they're surfaced on Timeline), but
+  // today's / overdue nudges surface here too so an "act today" Stack pass
+  // includes chase-ups. Future-dated nudges stay hidden — Timeline owns those.
+  const allOpenTopLevel = activeTasks.filter(t=>!t.done&&!t.parentId&&!t.snoozedUntil&&!t.delegatedTo&&(!t.checkInOf || (t.date && t.date <= todayStr))&&taskMatchesSearch(t));
   // Stack body excludes routines entirely — they live in the pinned strip
   // above. The strip handles today's routines; the rest of the routine series
   // (tomorrow's walk, next week's triage, etc.) is chrome that shouldn't
