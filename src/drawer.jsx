@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, LIFE_AREAS, LIFE_AREA_NAMES, LIFE_AREA_DARK, LIFE_AREA_LIGHT,
-  D, fmtWeek, MONTH_S, DAY_S, DAY_L, makeTask, parseTimeEst, fmtTimeEst, suggestLifeAreaFromTitle,
+  // Life-area imports (LIFE_AREAS, LIFE_AREA_NAMES, LIFE_AREA_DARK,
+  // LIFE_AREA_LIGHT, suggestLifeAreaFromTitle) removed in the Buckets
+  // redesign polish pass — the drawer no longer renders a life-area picker.
+  PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT,
+  D, fmtWeek, MONTH_S, DAY_S, DAY_L, makeTask, parseTimeEst, fmtTimeEst,
   CHECKIN_PRESETS, CHECKIN_PRESET_LABELS, matchPreset, isStale, daysSince,
   loadPeople, savePeople, getPreferredCadence, recordContact, peopleRollup, personKey,
   buildCheckInTasks, buildExpiryTask, stretchSchedule,
@@ -9,6 +12,7 @@ import {
 } from './data.js';
 import { CheckGlyph } from './components/CheckGlyph.jsx';
 import { ActivityLog } from './components/ActivityLog.jsx';
+import { Avatar } from './components/Avatar.jsx';
 import { I } from './utils/icons.jsx';
 
 // Task Manager — right drawer task editor (560px)
@@ -55,7 +59,7 @@ function AddTaxonomyChip({ kind, onAdd }) {
   };
   if (!open) {
     return <button className="dr-pick" style={{borderStyle:'dashed',color:'var(--t3)'}}
-      onClick={()=>setOpen(true)} title={`Add new ${kind === 'context' ? 'location' : kind === 'lifeArea' ? 'life area' : 'tag'}`}>+ Add</button>;
+      onClick={()=>setOpen(true)} title={`Add new ${kind === 'context' ? 'location' : 'tag'}`}>+ Add</button>;
   }
   return (
     <input ref={ref} className="dr-inp" style={{padding:'3px 8px', fontSize:11, width:120}}
@@ -69,7 +73,7 @@ function AddTaxonomyChip({ kind, onAdd }) {
   );
 }
 
-function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDelete, onDuplicate, onMoveToInbox, fromLeft, onSetBlocked, onClearBlocked, recentBlockReasons, blockingCountFor, onJumpTo, onCheckIn, onGoToCard, secs: secsProp, onSecsChange, initialFocus, onInitialFocusConsumed, showToast, showConfirm }) {
+function TaskDrawer({ task, theme, tasks, buckets, onCreateBucket, onUpdate, onAddTaxonomy, onClose, onDelete, onDuplicate, onMoveToInbox, fromLeft, onSetBlocked, onClearBlocked, recentBlockReasons, blockingCountFor, onJumpTo, onCheckIn, onGoToCard, secs: secsProp, onSecsChange, initialFocus, onInitialFocusConsumed, showToast, showConfirm }) {
   const [localTitle, setLocalTitle] = useState('');
   const [localDesc,  setLocalDesc]  = useState('');
   const [localReason,setLocalReason]= useState('');
@@ -107,7 +111,9 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
     if (onSecsChange) onSecsChange(updater);
   };
   const [cadenceCustom, setCadenceCustom] = useState('');
-  const [delegateName, setDelegateName] = useState('');
+  const [pickerFilter, setPickerFilter] = useState('');
+  const [pickerHi, setPickerHi] = useState(0);
+  const pickerInputRef = useRef(null);
   // When the drawer is opened via card→routine drop, this is set to the
   // task's id. The Repeats + Treat-as rows get a purple emphasis (background
   // tint + left border + initial pulse) until the user opens a different
@@ -131,7 +137,8 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
       setLocalTitle(task.title||'');
       setLocalDesc(task.description||'');
       setLocalReason(task.blockedReason||'');
-      setDelegateName(task.delegatedTo || '');
+      setPickerFilter('');
+      setPickerHi(0);
       setCadenceCustom('');
       // Auto-open Delegation + Activity sections if delegated — keep parity with the
       // Delegations view, where both are visible by default.
@@ -143,6 +150,8 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
       if (initialFocus === 'delegation') {
         setSecs(s => ({...s, dele:true, log:true}));
         onInitialFocusConsumed?.();
+        // Focus the new picker search input so the user can immediately type a name.
+        setTimeout(() => pickerInputRef.current?.focus(), 50);
       }
       // 'date' focus: expand Schedule section and open snooze dropdown so the
       // user can immediately pick a new date (used by Delegations "Snooze for…").
@@ -179,19 +188,11 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
   if (!task) return null;
 
   const tp  = theme==='dark' ? TAG_DARK : TAG_LIGHT;
-  const lap = theme==='dark' ? LIFE_AREA_DARK : LIFE_AREA_LIGHT;
+  // life-area helpers (lap palette, resolveLifeArea/inheritedLifeArea/
+  // suggestedLifeArea) removed in the Buckets redesign polish pass. The
+  // drawer no longer renders a life-area picker — buckets replace it.
   const tog = k => setSecs(s => ({...s,[k]:!s[k]}));
   const upd = ch => onUpdate(task.id, ch);
-  const resolveLifeArea = (item, seen=new Set()) => {
-    if (!item) return null;
-    if (item.lifeArea !== null && item.lifeArea !== undefined) return item.lifeArea;
-    if (!item.parentId || seen.has(item.id)) return null;
-    seen.add(item.id);
-    return resolveLifeArea((tasks||[]).find(t=>t.id===item.parentId), seen);
-  };
-  const effectiveLifeArea = resolveLifeArea(task);
-  const inheritedLifeArea = task.lifeArea == null && effectiveLifeArea ? effectiveLifeArea : null;
-  const suggestedLifeArea = task.lifeArea == null && !inheritedLifeArea ? suggestLifeAreaFromTitle(task.title || localTitle) : null;
 
   const nextMondayStr = () => {
     const d = new Date(D.today());
@@ -339,7 +340,10 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
   const TIME_PRESETS = ['5m','15m','30m','45m','1h','1.5h','2h'];
   const TIME_MORE = ['10m','20m','25m','40m','50m','1h 15m','1h 30m','1h 45m','2h 30m','3h','4h','5h','6h','8h'];
 
-  const addSub    = () => { if(!newSub.trim())return; upd({subtasks:[...(task.subtasks||[]),{id:`s${Date.now()}`,title:newSub.trim(),done:false,lifeArea:task.lifeArea}]}); setNewSub(''); };
+  // Subtasks inherit bucket assignment from the parent (the old code wrote
+  // lifeArea; that's now dead post-Buckets-redesign). Keeping the field
+  // simple — buckets travel via groupId.
+  const addSub    = () => { if(!newSub.trim())return; upd({subtasks:[...(task.subtasks||[]),{id:`s${Date.now()}`,title:newSub.trim(),done:false}]}); setNewSub(''); };
   const togSub    = id => upd({subtasks:(task.subtasks||[]).map(s=>s.id===id?{...s,done:!s.done}:s)});
   const delSub    = id => upd({subtasks:(task.subtasks||[]).filter(s=>s.id!==id)});
   const removeTag = t  => upd({tags:(task.tags||[]).filter(x=>x!==t)});
@@ -600,36 +604,38 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
               {task.project && <button className="dr-time-clear" onClick={()=>upd({project:null})}>Clear</button>}
             </div>
           </DRow>
-          <DRow label="Life Area">
-            <div>
-              {suggestedLifeArea && (
-                <div className="dr-pickrow" style={{marginBottom:6}}>
-                  <span style={{fontSize:10,color:'var(--t4)',textTransform:'uppercase',letterSpacing:'.06em'}}>Suggested</span>
-                  <button className="dr-pick"
-                    style={{borderStyle:'dashed',borderColor:(lap[suggestedLifeArea]||lap.admin).fg+'66',color:(lap[suggestedLifeArea]||lap.admin).fg,background:(lap[suggestedLifeArea]||lap.admin).bg,opacity:.8}}
-                    onClick={()=>upd({lifeArea:suggestedLifeArea})}>
-                    {LIFE_AREA_NAMES[suggestedLifeArea] || suggestedLifeArea}
-                  </button>
-                </div>
+          {/* Bucket picker (Buckets redesign — replaces Life Area).
+              Buckets live in tweaks.customGroups; selection writes
+              task.groupId. No suggestion logic — buckets are user-named
+              and a keyword map can't sensibly suggest them. */}
+          <DRow label="Bucket">
+            <div className="dr-pickrow">
+              {(buckets || []).map(b => {
+                const act = task.groupId === b.id;
+                const c = b.color || '#94a3b8';
+                return <button key={b.id} className={`dr-pick${act?' act':''}`}
+                  style={{
+                    background: act ? `${c}33` : 'transparent',
+                    color: c,
+                    borderColor: act ? `${c}aa` : `${c}55`,
+                    boxShadow: act ? `inset 0 0 0 1px ${c}66` : undefined,
+                    opacity: act ? 1 : .7,
+                  }}
+                  onClick={() => upd({ groupId: act ? null : b.id })}>
+                  {b.name}
+                </button>;
+              })}
+              {onCreateBucket && (
+                <button className="dr-pick" style={{borderStyle:'dashed',opacity:.7}}
+                  onClick={() => {
+                    const name = (window.prompt('New bucket name') || '').trim();
+                    if (!name) return;
+                    const id = onCreateBucket(name);
+                    if (id) upd({ groupId: id });
+                  }}>+ Add bucket</button>
               )}
-              <div className="dr-pickrow">
-                {LIFE_AREAS.map(id=>{
-                  const c = lap[id] || lap.admin;
-                  const explicit = task.lifeArea===id;
-                  const inherited = inheritedLifeArea===id;
-                  return <button key={id} className={`dr-pick${explicit?' act':''}`}
-                    style={{background:c.bg, color:c.fg, borderColor:explicit?c.fg+'aa':c.fg+'55', boxShadow: explicit ? `inset 0 0 0 1px ${c.fg}66` : inherited ? `inset 0 0 0 1px ${c.fg}33` : undefined, opacity: explicit ? 1 : (inherited ? .8 : .5)}}
-                    onClick={()=>upd({lifeArea: explicit ? null : id})}>
-                    {LIFE_AREA_NAMES[id] || id}
-                  </button>;
-                })}
-                {onAddTaxonomy && <AddTaxonomyChip kind="lifeArea" onAdd={onAddTaxonomy}/>}
-                {task.lifeArea && <button className="dr-time-clear" onClick={()=>upd({lifeArea:null})}>Clear</button>}
-              </div>
-              {inheritedLifeArea && (
-                <div style={{marginTop:6,fontSize:11,color:'var(--t4)'}}>
-                  Inheriting {LIFE_AREA_NAMES[inheritedLifeArea] || inheritedLifeArea} from parent
-                </div>
+              {task.groupId && (
+                <button className="dr-time-clear" onClick={() => upd({ groupId: null })}>Clear</button>
               )}
             </div>
           </DRow>
@@ -1080,7 +1086,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
             })() : (() => {
               const sched = task.checkInSchedule;
               const matched = matchPreset(sched);
-              const presets = ['standard','gentle','tight','weekly4'];
+              const presets = ['none','standard','gentle','tight','weekly4'];
               const todayStr = D.str(D.today());
               const upcoming = (task.checkInTaskIds||[])
                 .map(cid => (tasks||[]).find(t => t.id === cid))
@@ -1091,37 +1097,113 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
               const lastContact = task.lastContactAt
                 ? `${Math.max(0, Math.floor((Date.now() - new Date(task.lastContactAt).getTime())/(86400000)))}d ago`
                 : 'no contact yet';
-              const peopleNames = Object.values(loadPeople()).map(p => p.displayName).filter(Boolean);
+              // People picker — merge loadPeople() store (history, totals) with
+              // peopleRollup(tasks) (live open counts). Sort by openCount desc,
+              // then totalDelegations desc, then displayName asc.
+              const peopleStore = loadPeople();
+              const rollup = peopleRollup(tasks||[]);
+              const rollupByKey = new Map(rollup.map(r => [r.name, r]));
+              const peopleMap = new Map();
+              for (const k of Object.keys(peopleStore)) {
+                const p = peopleStore[k];
+                if (!p?.displayName) continue;
+                peopleMap.set(k, {
+                  key: k,
+                  displayName: p.displayName,
+                  openCount: rollupByKey.get(k)?.openCount || 0,
+                  totalDelegations: p.totalDelegations || 0,
+                });
+              }
+              for (const r of rollup) {
+                if (peopleMap.has(r.name)) continue;
+                peopleMap.set(r.name, {
+                  key: r.name,
+                  displayName: r.displayName,
+                  openCount: r.openCount,
+                  totalDelegations: 0,
+                });
+              }
+              const allPeople = Array.from(peopleMap.values())
+                .sort((a,b) => (b.openCount - a.openCount)
+                  || (b.totalDelegations - a.totalDelegations)
+                  || a.displayName.localeCompare(b.displayName));
+              const q = pickerFilter.trim().toLowerCase();
+              const filtered = q ? allPeople.filter(p => p.displayName.toLowerCase().includes(q)) : allPeople;
+              const exactMatch = q && allPeople.some(p => p.displayName.toLowerCase() === q);
+              const showAddNew = q && !exactMatch;
+              const currentKey = personKey(task.delegatedTo);
+              const safeHi = Math.min(pickerHi, Math.max(0, filtered.length - 1 + (showAddNew?1:0)));
+              const commitPerson = (name) => {
+                const v = String(name||'').trim();
+                if (!v) return;
+                if (personKey(v) === currentKey) return; // no-op
+                upd({delegatedTo: v});
+                setPickerFilter('');
+                setPickerHi(0);
+              };
               return (
                 <>
                   <DRow label="Delegated to">
-                    {(() => {
-                      const commitDelegate = () => {
-                        const v = delegateName.trim();
-                        if (v !== (task.delegatedTo || '')) upd({delegatedTo: v || null});
-                      };
-                      const dirty = delegateName.trim() !== (task.delegatedTo || '');
-                      return (
-                        <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                          <input className="dr-inp" list="dr-people-list" placeholder="Type a name…"
-                            value={delegateName}
-                            onChange={e=>setDelegateName(e.target.value)}
-                            onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); commitDelegate(); } }}
-                            onBlur={commitDelegate}/>
-                          {dirty && (
-                            <button className="dr-pick"
-                              style={{borderColor:'var(--accent)',color:'var(--accent)',background:'var(--accent-dim)'}}
-                              onMouseDown={e=>e.preventDefault()}
-                              onClick={commitDelegate}>
-                              {task.delegatedTo ? 'Update' : 'Add'}
+                    <div style={{display:'flex',flexDirection:'column',gap:6,width:'100%'}}>
+                      <input ref={pickerInputRef} className="dr-inp" placeholder="Search or add a name…"
+                        value={pickerFilter}
+                        onChange={e => { setPickerFilter(e.target.value); setPickerHi(0); }}
+                        onKeyDown={e => {
+                          const total = filtered.length + (showAddNew ? 1 : 0);
+                          if (e.key === 'ArrowDown') { e.preventDefault(); setPickerHi(h => Math.min(h+1, Math.max(0,total-1))); }
+                          else if (e.key === 'ArrowUp') { e.preventDefault(); setPickerHi(h => Math.max(0, h-1)); }
+                          else if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (safeHi < filtered.length) commitPerson(filtered[safeHi].displayName);
+                            else if (showAddNew) commitPerson(pickerFilter.trim());
+                          }
+                        }}/>
+                      <div className="dvv-cad-pop-sep"/>
+                      <div style={{maxHeight:200,overflowY:'auto',display:'flex',flexDirection:'column',gap:2}}>
+                        {filtered.length === 0 && !showAddNew && (
+                          <div className="dr-empty" style={{padding:'6px 8px'}}>
+                            {allPeople.length === 0 ? 'No one yet — type a name to delegate.' : 'No match.'}
+                          </div>
+                        )}
+                        {filtered.map((p, i) => {
+                          const isActive = p.key === currentKey;
+                          const isHi = i === safeHi;
+                          return (
+                            <button key={p.key} type="button"
+                              className={`dvv-cad-pop-row${isActive?' on':''}`}
+                              style={isHi && !isActive ? {background:'var(--surface-3, var(--surface-2))'} : undefined}
+                              onMouseEnter={() => setPickerHi(i)}
+                              onClick={() => commitPerson(p.displayName)}>
+                              <span style={{display:'flex',alignItems:'center',gap:8,minWidth:0}}>
+                                <Avatar name={p.displayName} size={20}/>
+                                <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.displayName}</span>
+                                {isActive && <span style={{color:'var(--accent)',display:'inline-flex',width:12,height:12}}><I.Check/></span>}
+                              </span>
+                              <span className="dvv-cad-pop-vals">
+                                {p.openCount > 0 ? `${p.openCount} open` : '—'} · {p.totalDelegations} tot
+                              </span>
                             </button>
-                          )}
-                          <datalist id="dr-people-list">
-                            {peopleNames.map(n => <option key={n} value={n}/>)}
-                          </datalist>
-                        </div>
-                      );
-                    })()}
+                          );
+                        })}
+                        {showAddNew && (() => {
+                          const i = filtered.length;
+                          const isHi = i === safeHi;
+                          return (
+                            <button type="button"
+                              className="dvv-cad-pop-row"
+                              style={isHi ? {background:'var(--surface-3, var(--surface-2))'} : undefined}
+                              onMouseEnter={() => setPickerHi(i)}
+                              onClick={() => commitPerson(pickerFilter.trim())}>
+                              <span style={{display:'flex',alignItems:'center',gap:8}}>
+                                <span style={{width:20,height:20,borderRadius:'50%',border:'1px dashed var(--border-s)',color:'var(--t3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0}}>+</span>
+                                <span>Add "<b>{pickerFilter.trim()}</b>"</span>
+                              </span>
+                            </button>
+                          );
+                        })()}
+                      </div>
+                      <div className="dvv-cad-pop-hint">Click a person to delegate · <kbd>↵</kbd> to confirm</div>
+                    </div>
                   </DRow>
                   {task.delegatedTo && (
                     <>
@@ -1157,7 +1239,7 @@ function TaskDrawer({ task, theme, tasks, onUpdate, onAddTaxonomy, onClose, onDe
                             return <button key={p} className={`dr-pick${act?' act':''}`}
                               style={act?{borderColor:'var(--accent)',color:'var(--accent)',background:'var(--accent-dim)'}:{}}
                               onClick={()=>upd({checkInSchedule: CHECKIN_PRESETS[p].slice()})}>
-                              {name} <span style={{opacity:.6,fontFamily:'var(--mono)',fontSize:'10.5px',marginLeft:4}}>{vals}d</span>
+                              {name}{vals && <span style={{opacity:.6,fontFamily:'var(--mono)',fontSize:'10.5px',marginLeft:4}}>{vals}d</span>}
                             </button>;
                           })}
                           <input className="dr-inp" style={{maxWidth:130}} placeholder="custom: 2, 5, 10"

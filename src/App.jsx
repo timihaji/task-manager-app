@@ -4872,6 +4872,16 @@ function App() {
         const next = typeof updater === 'function' ? updater(cur) : updater;
         return { ...prev, drawerSecs: next };
       })}
+      buckets={tweaks.customGroups || []}
+      onCreateBucket={(name)=>{
+        const trimmed = (name || '').trim();
+        if (!trimmed) return null;
+        const id = `bk_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+        const swatch = taxonomyAutoSwatch((tweaks.customGroups || []).length, `bucket-${trimmed}`, 'Pastel');
+        const bucket = { id, name: trimmed, color: swatch?.color || '#94a3b8' };
+        setTweak('customGroups', (tweaks.customGroups || []).concat(bucket));
+        return id;
+      }}
       onUpdate={updateTask}
       onAddTaxonomy={(kind,label)=>taxonomyActions.add(kind,label)}
       onClose={()=>setDrawerId(null)}
