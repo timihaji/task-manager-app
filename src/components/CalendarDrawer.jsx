@@ -10,6 +10,7 @@
 // Physics, hand-rolled DnD, snap pulse, settle, rubberband — unchanged.
 
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   SNAP, DAY_MIN, MIN_PXH, MAX_PXH, WORK_START, WORK_END,
   clamp, snap as snapMinutes, massFor, rubber,
@@ -1031,21 +1032,26 @@ export default function CalendarDrawer({
         <span><kbd>drag</kbd> to pan &middot; <kbd>dbl-click</kbd> new block &middot; <kbd>drag event left</kbd> to remove &middot; <kbd>&#8679;&#8679;</kbd> nudge &middot; <kbd>del</kbd></span>
       </footer>
 
-      {calCtxMenu && (
+      {/* Portal these to document.body — the .cal-drawer has a transform
+          (from its slide-in animation) which creates a containing block
+          for position:fixed children, knocking them off-screen. */}
+      {calCtxMenu && createPortal(
         <ContextMenu
           x={calCtxMenu.x}
           y={calCtxMenu.y}
           items={calCtxItems}
           onClose={() => setCalCtxMenu(null)}
-        />
+        />,
+        document.body
       )}
-      {calColorPickerFor && (
+      {calColorPickerFor && createPortal(
         <CalEventColorPicker
           x={calColorPickerFor.x}
           y={calColorPickerFor.y}
           onPick={(color) => setEvents(evs => evs.map(e => e.id === calColorPickerFor.evId ? { ...e, color } : e))}
           onClose={() => setCalColorPickerFor(null)}
-        />
+        />,
+        document.body
       )}
     </section>
   );
