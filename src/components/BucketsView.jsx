@@ -36,7 +36,7 @@ const PRESET_BUCKET_COLORS = [
 const tintFor = (color) => color ? `${color}1c` : 'transparent';
 
 function BucketColumn({
-  bucket, tasks, columnTaskIds, columnTint,
+  bucket, tasks, columnTint,
   showCompleted, onToggleCompleted,
   tweaks, theme, selectedIds, focusedId, renamingId, spawningSet, recents,
   onOpenCard, onSelect, onFocus, onRename, onRenameDone,
@@ -77,6 +77,11 @@ function BucketColumn({
   });
 
   const visible = showCompleted ? tasks : tasks.filter(t => !t?.done);
+  // SortableContext items MUST match the rendered DOM. Earlier this passed
+  // a prop computed over the full task list, leaving phantom IDs for done
+  // cards that aren't rendered — verticalListSortingStrategy then distributed
+  // transforms across non-existent rects, producing jitter and wrong slots.
+  const visibleIds = useMemo(() => visible.map(t => t.id), [visible]);
   const completedCount = tasks.length - visible.length;
 
   const commitRename = () => {
@@ -176,7 +181,7 @@ function BucketColumn({
           }
         }}
       >
-        <SortableContext items={columnTaskIds} strategy={verticalListSortingStrategy}>
+        <SortableContext items={visibleIds} strategy={verticalListSortingStrategy}>
           {visible.map(task => (
             <TaskCard
               key={task.id}
@@ -496,13 +501,11 @@ export function BucketsView({
         ) : (
           (buckets || []).map(bucket => {
             const colTasks = sortBucketTasks(byBucket.get(bucket.id) || [], sortMode);
-            const colTaskIds = colTasks.map(t => t.id);
             return (
               <BucketColumn
                 key={bucket.id}
                 bucket={bucket}
                 tasks={colTasks}
-                columnTaskIds={colTaskIds}
                 columnTint={bucket.color}
                 showCompleted={!!showCompleted[bucket.id]}
                 onToggleCompleted={toggleCompleted}

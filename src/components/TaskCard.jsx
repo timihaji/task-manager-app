@@ -103,10 +103,16 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
   const isProject = task.cardType === 'project';
   // Recursion guard: a project nested inside a project should never render its body.
   const renderAsProject = isProject && depth === 0;
+  // A project can only render its body / act as a nest drop target when the
+  // host view provides a children source. Buckets renders projects flat
+  // (no body, no nest drops) and so omits childrenOf — without this gate,
+  // every Buckets project registers a project-body droppable that
+  // compositeCollisionDetection step 0 routes drops to, breaking reorder.
+  const projectHasBody = renderAsProject && typeof childrenOf === 'function';
   const stats = renderAsProject && projectStats ? projectStats(task) : null;
   const isCollapsed = collapsedProjects?.has(task.id) && !forceOpenProjects?.has(task.id);
-  const open = renderAsProject && !isCollapsed;
-  const kids = renderAsProject ? (childrenOf?.(task.id) || []) : [];
+  const open = projectHasBody && !isCollapsed;
+  const kids = projectHasBody ? (childrenOf(task.id) || []) : [];
   const projTimeStr = renderAsProject && stats?.mins ? fmtTimeEst(stats.mins) : '';
   const pct = stats && stats.total>0 ? (stats.done/stats.total)*100 : 0;
 
@@ -121,7 +127,7 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
   const projectDrop = useDroppable({
     id: 'proj:' + task.id,
     data: { kind: 'project-body', targetId: task.id },
-    disabled: !renderAsProject,
+    disabled: !projectHasBody,
   });
   const isSortable = !!sortableData && !renaming;
   // When the calendar drawer is open, inbox/standalone task cards initiate
@@ -130,7 +136,7 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
   // body keep @dnd-kit reordering).
   const useExtDrag = !!onExternalDrag && !renaming && depth === 0;
   const isDragging = sortable.isDragging;
-  const isProjectDropTarget = renderAsProject && projectDrop.isOver;
+  const isProjectDropTarget = projectHasBody && projectDrop.isOver;
   const dragStyle = isSortable ? {
     transform: CSS.Transform.toString(sortable.transform),
     transition: sortable.transition,
@@ -171,7 +177,7 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
               title="Double-click to rename">{task.title}</span>
           </div>
         )}
-        {renderAsProject && (
+        {projectHasBody && (
           <button className="card-proj-chv" title={open?'Collapse project':'Expand project'}
             onClick={e=>{e.stopPropagation();onToggleProject?.(task.id);}}>
             <svg className={`grp-chv${open?' open':''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
