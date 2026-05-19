@@ -850,7 +850,13 @@ function App() {
         const pruned = pruneOrphanCheckIns(extendRoutineHorizon(archiveStaleRoutines(rollIncompleteTasksToToday(migrateRecurrence(migrateTasks(fetched))))));
         syncUidFromTasks(pruned);
         const merged = repairMissingCheckIns(pruned);
-        lastSyncedTasksRef.current = merged;
+        // Baseline the sync ref to what's actually in Supabase — NOT to `merged`,
+        // which already contains tasks added/mutated locally by extendRoutineHorizon,
+        // migrateTasks, archiveStaleRoutines, repairMissingCheckIns, etc. Setting it
+        // to `merged` makes the next sync tick see prev===tasks and short-circuit,
+        // so locally-added routine instances never reach Supabase. Calendar events
+        // that reference those instances then hit FK violations on insert.
+        lastSyncedTasksRef.current = fetched;
         setTasks(merged);
         setTasksReady(true);
       } catch (e) {
