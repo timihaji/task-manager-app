@@ -451,6 +451,11 @@ function TaskDrawer({ task, theme, tasks, buckets, tagTree, onCreateBucket, onCr
         {/* BLOCKED DETAILS */}
         {task.blocked && (
           <DrSection title="Blocked details" open={secs.block} onToggle={()=>tog('block')}>
+            <div className="dr-unblock-row">
+              <button className="dr-unblock-btn" onClick={()=>onClearBlocked?.(task.id)}>
+                ▶ Unblock
+              </button>
+            </div>
             {/* Reason */}
             <DRow label="Reason">
               <div style={{display:'flex',flexDirection:'column',gap:6,width:'100%'}}>
@@ -560,10 +565,6 @@ function TaskDrawer({ task, theme, tasks, buckets, tagTree, onCreateBucket, onCr
                       {blockers.map(b => <Chip key={b.id} t={b}/>)}
                     </div>
                   )}
-                  <div className="dr-graph-row">
-                    <span className="dr-graph-tier-lbl">This</span>
-                    <Chip t={task} self/>
-                  </div>
                   {blocking.length > 0 && (
                     <div className="dr-graph-row">
                       <span className="dr-graph-tier-lbl">Blocks</span>
