@@ -1107,6 +1107,16 @@ function TaskDrawer({ task, theme, tasks, buckets, tagTree, onCreateBucket, onCr
               {task.someday ? '☾ In Someday' : 'Move to Someday'}
             </button>
           </DRow>
+          <DRow label="Splittable">
+            <button className={`dr-pick${task.splittable?' act':''}`}
+              style={task.splittable?{background:'var(--accent-dim)',color:'var(--accent)',borderColor:'var(--accent-border)'}:{}}
+              onClick={()=>upd({splittable:!task.splittable})}
+              title={task.splittable
+                ? 'Auto-scheduling may break this task into ≥30-min chunks across free slots'
+                : 'Auto-scheduling keeps this task as one contiguous block (may push past 18:00)'}>
+              {task.splittable ? '✂︎ Splittable' : 'Keep as one block'}
+            </button>
+          </DRow>
         </DrSection>
 
         {/* DELEGATION (delegation parent — task OR project — or a check-in task) */}

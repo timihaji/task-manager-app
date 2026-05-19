@@ -112,7 +112,7 @@ import { QuickEntry } from './components/QuickEntry.jsx';
 import { MigrateFromLocal } from './components/MigrateFromLocal.jsx';
 import CalendarDrawer from './components/CalendarDrawer.jsx';
 import { fetchAllEvents, upsertEvent, deleteEvent as deleteEventRow } from './lib/eventsDb.js';
-import { currentMinOfDay } from './utils/timeOfDay.js';
+import { currentMinOfDay, DAY_MIN } from './utils/timeOfDay.js';
 import { HoldButton } from './components/HoldButton.jsx';
 
 // ── color/taxonomy helpers (used inside App body) ────────────────────────
@@ -312,6 +312,11 @@ function App() {
     recentMRU: { tags: [], projects: [] },  // recent-use MRU for pickers
     calendarPxh: 80,                // calendar drawer pixels-per-hour
     calendarSnapOn: true,           // calendar drawer snap-to-grid
+    calendarPinned: false,          // keep calendar open when clicking away
+    autoPopulateToday: false,       // reactively schedule today's tasks
+    scheduleDefaultDuration: 30,    // fallback minutes for no-estimate tasks
+    differentiateAutoBlocks: true,  // dim algo-placed blocks
+    hideCompletedOnCalendar: false, // filter done-task blocks from drawer
     navUserCollapsed: null,         // null = follow window-width default; true/false = explicit override
     settingsTab: 'appearance',      // last tab visited in Settings drawer
     // Delegations view state — selected task in right pane, status/person chip filters.
@@ -912,42 +917,223 @@ function App() {
     };
   }, [!!extDrag]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-plan: greedy pack of unscheduled tasks into open slots between now
-  // and 6pm. Mirrors the prototype's algorithm; only enabled when the
-  // visible day is today.
+  // Smart slot finder. Returns array of chunks {startMin, durationMin} for
+  // one task. Strategy:
+  //   1. Single contiguous slot before 18:00 → one block.
+  //   2. Else if splittable → fill ≥30min gaps in order; remainder (≥30min)
+  //      past 18:00.
+  //   3. Else → one block at the cursor (extends past 18:00 if needed).
+  // Shared by `autoPlan`, `scheduleTasksToday`, and the auto-populate effect.
+  const planSlotsForTask = (taskDur, busy, splittable) => {
+    const NOW = currentMinOfDay();
+    const dayStart = Math.max(Math.ceil(NOW / 15) * 15, 9 * 60);
+    const dayEnd = 18 * 60;
+    const MIN_CHUNK = 30;
+    const fits = (s, len) => busy.every(([a, b]) => s + len <= a || s >= b);
+
+    // Step 1: contiguous fit before 18:00.
+    for (let s = dayStart; s + taskDur <= dayEnd; s += 15) {
+      if (fits(s, taskDur)) return [{ startMin: s, durationMin: taskDur }];
+    }
+
+    // Step 2: splittable — fill ≥30min gaps in order.
+    if (splittable) {
+      const sortedBusy = [...busy].sort((a, b) => a[0] - b[0]);
+      const gaps = [];
+      let cursor = dayStart;
+      for (const [a, b] of sortedBusy) {
+        if (a > cursor) gaps.push([cursor, Math.min(a, dayEnd)]);
+        cursor = Math.max(cursor, b);
+        if (cursor >= dayEnd) break;
+      }
+      if (cursor < dayEnd) gaps.push([cursor, dayEnd]);
+
+      const chunks = [];
+      let remaining = taskDur;
+      for (const [gStart, gEnd] of gaps) {
+        if (remaining <= 0) break;
+        const aligned = Math.floor(Math.min(remaining, gEnd - gStart) / 15) * 15;
+        if (aligned < MIN_CHUNK) continue;
+        chunks.push({ startMin: gStart, durationMin: aligned });
+        remaining -= aligned;
+      }
+      if (remaining >= MIN_CHUNK) {
+        const lastBusyEnd = sortedBusy.length ? sortedBusy[sortedBusy.length - 1][1] : dayEnd;
+        chunks.push({ startMin: Math.max(dayEnd, lastBusyEnd), durationMin: remaining });
+        remaining = 0;
+      }
+      if (chunks.length && remaining === 0) return chunks;
+    }
+
+    // Step 3: one block at the cursor.
+    const sortedBusy = [...busy].sort((a, b) => a[0] - b[0]);
+    const lastBusyEnd = sortedBusy.length ? sortedBusy[sortedBusy.length - 1][1] : dayStart;
+    return [{ startMin: Math.max(dayStart, lastBusyEnd), durationMin: taskDur }];
+  };
+
+  // Auto-plan: greedy pack of unscheduled tasks into open slots. Mirrors the
+  // prototype's intent but now uses `planSlotsForTask` so it supports
+  // splitting and tags blocks with source='auto'.
   const autoPlan = useCallback(() => {
     const today = D.str(D.today());
     if (calendarDateStr !== today) return;
-    const NOW = currentMinOfDay();
-    const startFloor = Math.ceil(NOW / 15) * 15;
     const visible = events.filter(e => e.date === today);
     const scheduledIds = new Set(visible.map(e => e.taskId).filter(Boolean));
     const queue = tasks
       .filter(t => !t.done && !t.archived && t.cardType !== 'project'
         && !scheduledIds.has(t.id) && parseTimeEst(t.timeEstimate) > 0)
       .sort((a, b) => (a.priority || 'p3').localeCompare(b.priority || 'p3'));
-    const busy = visible
-      .map(e => [e.startMin, e.startMin + e.durationMin])
-      .sort((a, b) => a[0] - b[0]);
-    const fits = (s, len) => {
-      if (s + len > 18 * 60) return false;
-      return busy.every(([a, b]) => s + len <= a || s >= b);
-    };
-    let cursor = Math.max(startFloor, busy.length ? busy[busy.length - 1][1] : startFloor);
+    const busy = visible.map(e => [e.startMin, e.startMin + e.durationMin]);
     const additions = [];
     for (const t of queue) {
-      const len = parseTimeEst(t.timeEstimate);
-      let s = cursor;
-      while (!fits(s, len) && s < 18 * 60) s += 15;
-      if (s + len > 18 * 60) break;
-      const id = 'e' + Math.random().toString(36).slice(2, 8);
-      additions.push({ id, taskId: t.id, date: today, startMin: s, durationMin: len });
-      busy.push([s, s + len]);
-      busy.sort((a, b) => a[0] - b[0]);
-      cursor = s + len;
+      const slots = planSlotsForTask(parseTimeEst(t.timeEstimate), busy, !!t.splittable);
+      for (const s of slots) {
+        const id = 'e' + Math.random().toString(36).slice(2, 8);
+        additions.push({ id, taskId: t.id, date: today, startMin: s.startMin, durationMin: s.durationMin, source: 'auto' });
+        busy.push([s.startMin, s.startMin + s.durationMin]);
+      }
     }
     if (additions.length) setEvents(prev => [...prev, ...additions]);
   }, [calendarDateStr, events, tasks]);
+
+  // Schedule one or more tasks into today's calendar at the next free slot(s).
+  // Bulk-aware: pass an array of IDs and each task's chunks are placed
+  // sequentially against a running busy list. Opens the drawer at the end.
+  const scheduleTasksToday = useCallback((taskIds) => {
+    const ids = (Array.isArray(taskIds) ? taskIds : [taskIds]).filter(Boolean);
+    if (!ids.length) return;
+    const today = D.str(D.today());
+    const defaultDur = tweaks.scheduleDefaultDuration || 30;
+    const todayEvts = events.filter(e => e.date === today);
+    const busy = todayEvts.map(e => [e.startMin, e.startMin + e.durationMin]);
+    const alreadyScheduled = new Set(todayEvts.map(e => e.taskId).filter(Boolean));
+    // Inline lookup — taskById helper is declared later in the App body, so
+    // we'd hit a temporal-dead-zone error if we referenced it in deps here.
+    const lookup = (id) => tasks.find(t => t.id === id);
+
+    const additions = [];
+    for (const id of ids) {
+      if (alreadyScheduled.has(id)) continue;
+      const task = lookup(id);
+      if (!task) continue;
+      const dur = parseTimeEst(task.timeEstimate) || defaultDur;
+      const slots = planSlotsForTask(dur, busy, !!task.splittable);
+      for (const s of slots) {
+        additions.push({
+          id: 'e' + Math.random().toString(36).slice(2, 8),
+          taskId: id, date: today,
+          startMin: s.startMin, durationMin: s.durationMin,
+          source: 'auto',
+        });
+        busy.push([s.startMin, s.startMin + s.durationMin]);
+      }
+      alreadyScheduled.add(id);
+    }
+    if (additions.length) setEvents(prev => [...prev, ...additions]);
+    setCalendarDateStr(today);
+    setTweak('calendarOpen', true);
+  }, [tasks, events, tweaks.scheduleDefaultDuration]);
+
+  // Continuous auto-populate: when enabled, reactively schedule today's
+  // tasks (date===today) that aren't yet on the calendar. Uses an events ref
+  // so the effect only fires on TASK changes — deleting a block won't cause
+  // it to re-add itself.
+  const eventsRef = useRef(events);
+  useEffect(() => { eventsRef.current = events; }, [events]);
+
+  useEffect(() => {
+    if (!tweaks.autoPopulateToday || !tasksReady) return;
+    const today = D.str(D.today());
+    const todayEvts = eventsRef.current.filter(e => e.date === today);
+    const scheduled = new Set(todayEvts.map(e => e.taskId).filter(Boolean));
+    const defaultDur = tweaks.scheduleDefaultDuration || 30;
+
+    const queue = tasks
+      .filter(t => !t.done && !t.archived && t.cardType !== 'project'
+        && !t.blocked && !t.delegatedTo && !t.someday && !t.snoozedUntil
+        && !scheduled.has(t.id) && t.date === today)
+      .sort((a, b) => (a.priority || 'p3').localeCompare(b.priority || 'p3'));
+    if (!queue.length) return;
+
+    const busy = todayEvts.map(e => [e.startMin, e.startMin + e.durationMin]);
+    const additions = [];
+    for (const t of queue) {
+      const dur = parseTimeEst(t.timeEstimate) || defaultDur;
+      const slots = planSlotsForTask(dur, busy, !!t.splittable);
+      for (const s of slots) {
+        additions.push({
+          id: 'e' + Math.random().toString(36).slice(2, 8),
+          taskId: t.id, date: today,
+          startMin: s.startMin, durationMin: s.durationMin,
+          source: 'auto',
+        });
+        busy.push([s.startMin, s.startMin + s.durationMin]);
+      }
+    }
+    if (additions.length) setEvents(prev => [...prev, ...additions]);
+  }, [tasks, tweaks.autoPopulateToday, tweaks.scheduleDefaultDuration, tasksReady]);
+
+  // Resize-on-estimate-change: when a task's parseTimeEst changes, apply the
+  // delta to the last chunk of its calendar events. If shrinking the last
+  // chunk would drop it below 30min, drop chunks from the end. Overlaps are
+  // allowed — `layoutOverlaps` in CalendarDrawer arranges them side-by-side.
+  const prevEstRef = useRef(null);
+  useEffect(() => {
+    if (!tasksReady) return;
+    // Seed prev map on first run so initial mount doesn't fire spurious resizes.
+    if (prevEstRef.current === null) {
+      const init = new Map();
+      for (const t of tasks) init.set(t.id, parseTimeEst(t.timeEstimate));
+      prevEstRef.current = init;
+      return;
+    }
+    const prev = prevEstRef.current;
+    const next = new Map();
+    const evtsByTask = new Map();
+    for (const e of events) {
+      if (!e.taskId) continue;
+      const arr = evtsByTask.get(e.taskId) || [];
+      arr.push(e);
+      evtsByTask.set(e.taskId, arr);
+    }
+    const updates = [];
+    for (const t of tasks) {
+      const newDur = parseTimeEst(t.timeEstimate);
+      const oldDur = prev.get(t.id);
+      next.set(t.id, newDur);
+      if (oldDur === undefined || oldDur === newDur) continue;
+      if (newDur <= 0) continue; // estimate removed → leave blocks alone
+      const chunks = (evtsByTask.get(t.id) || []).slice().sort((a, b) => a.startMin - b.startMin);
+      if (!chunks.length) continue;
+      const totalCur = chunks.reduce((s, c) => s + c.durationMin, 0);
+      if (totalCur === newDur) continue;
+      let delta = newDur - totalCur;
+      const remaining = [...chunks];
+      while (remaining.length && (remaining[remaining.length - 1].durationMin + delta) < 30) {
+        const last = remaining.pop();
+        updates.push({ kind: 'delete', id: last.id });
+        delta += last.durationMin;
+      }
+      if (remaining.length) {
+        const last = remaining[remaining.length - 1];
+        updates.push({ kind: 'update', id: last.id, durationMin: last.durationMin + delta });
+      }
+    }
+    prevEstRef.current = next;
+    if (updates.length) {
+      setEvents(prevEvts => {
+        const byId = new Map(prevEvts.map(e => [e.id, e]));
+        for (const u of updates) {
+          if (u.kind === 'delete') byId.delete(u.id);
+          else if (u.kind === 'update') {
+            const cur = byId.get(u.id);
+            if (cur) byId.set(u.id, { ...cur, durationMin: u.durationMin });
+          }
+        }
+        return [...byId.values()];
+      });
+    }
+  }, [tasks, tasksReady]); // intentionally omits events — we read via closure
 
   useEffect(() => {
     const now = new Date();
@@ -2308,6 +2494,9 @@ function App() {
       setTasks(prev => prev
         .filter(t => t.id!==id && !(followers && followers.followerIds.has(t.id)))
         .map(t => t.parentId===id ? applyTaskPatch(t, { parentId:null, date: task.date || null }) : t));
+      // Cascade-delete calendar events for the deleted project + any deleted followers.
+      const removedIds = new Set([id, ...(followers ? [...followers.followerIds] : [])]);
+      setEvents(prev => prev.filter(e => !e.taskId || !removedIds.has(e.taskId)));
       if (followers) adjustOpenCount(followers.openCountName, -1);
       setSelectedIds(prev=>{const next=new Set(prev);next.delete(id);return next;});
       if(drawerId===id) setDrawerId(null);
@@ -2329,6 +2518,9 @@ function App() {
       setUndoStack(s=>[...s.slice(-9),{id,before:task,deleted:true}]);
       setTasks(prev => prev.filter(t => t.id!==id && !(followers && followers.followerIds.has(t.id))));
     }
+    // Cascade-delete calendar events across all dates for the deleted task + followers.
+    const removedIds = new Set([id, ...(followers ? [...followers.followerIds] : [])]);
+    setEvents(prev => prev.filter(e => !e.taskId || !removedIds.has(e.taskId)));
     if (followers) adjustOpenCount(followers.openCountName, -1);
     setSelectedIds(prev=>{const next=new Set(prev);next.delete(id);return next;});
     if(drawerId===id) setDrawerId(null);
@@ -3905,7 +4097,7 @@ function App() {
       if((e.metaKey||e.ctrlKey)&&e.key===' '){ e.preventDefault(); setQuickEntry(q=>!q); return; }
       if((e.metaKey||e.ctrlKey)&&e.key==='\\'){ e.preventDefault(); setNavCollapsed(n=>!n); return; }
       if((e.metaKey||e.ctrlKey)&&(e.key==='z'||e.key==='Z')){ e.preventDefault(); undo(); return; }
-      if(e.key==='Escape'){ setRenamingId(null); setDrawerId(null); setSettingsOpen(false); setFocusedId(null); setPalette(false); setShortcuts(false); setQuickEntry(false); setAddModal(null); setFilterOpen(false); clearSelection(); return; }
+      if(e.key==='Escape'){ setRenamingId(null); setDrawerId(null); setSettingsOpen(false); setFocusedId(null); setPalette(false); setShortcuts(false); setQuickEntry(false); setAddModal(null); setFilterOpen(false); clearSelection(); if (tweaks.calendarOpen) setTweak('calendarOpen', false); return; }
       if(inInput) return;
       if(e.key==='?'){ setShortcuts(s=>!s); return; }
       const flatNav = view==='stack' || view==='list' || view==='inbox' || view==='upcoming' || view==='backlog' || view==='snoozed' || view==='someday' || view==='blocked' || view==='completed' || view==='archived' || view?.type==='project' || view?.type==='tag' || view?.type==='lifeArea';
@@ -3913,7 +4105,19 @@ function App() {
       if(e.key==='k'||e.key==='K'){ flatNav ? moveFocusInFlat(-1) : moveFocusInCol(-1); }
       if(e.key==='ArrowRight'){ if(!flatNav) moveFocusToCol(1); else moveFocusInFlat(1); }
       if(e.key==='ArrowLeft'){ if(!flatNav) moveFocusToCol(-1); else moveFocusInFlat(-1); }
-      if((e.key==='x'||e.key==='X')&&focusedId){ const t=taskById(focusedId); if(t) completeTask(t.id,t.date||'inbox'); }
+      // x = schedule into today's calendar (bulk-aware via selectedIds).
+      if((e.key==='x'||e.key==='X') && (focusedId || selectedIds.size)) {
+        const ids = selectedIds.size > 1 ? [...selectedIds] : (focusedId ? [focusedId] : []);
+        if (ids.length) scheduleTasksToday(ids);
+      }
+      // d = complete (bulk-aware). Plain d/D only; Shift+D opens the date picker below.
+      if((e.key==='d'||e.key==='D') && !e.shiftKey && (focusedId || selectedIds.size)) {
+        const ids = selectedIds.size > 1 ? [...selectedIds] : (focusedId ? [focusedId] : []);
+        for (const id of ids) {
+          const t = taskById(id);
+          if (t) completeTask(t.id, t.date || 'inbox');
+        }
+      }
       if((e.key==='e'||e.key==='E')&&focusedId){ e.preventDefault(); setDrawerId(null); setSettingsOpen(false); setRenamingId(focusedId); }
       if(e.key==='Enter'&&focusedId&&!drawerId){ setSettingsOpen(false); setRenamingId(null); setDrawerId(focusedId); }
       if(e.key==='n'||e.key==='N'){ if(view==='stack'||view==='list'){ addTask('inbox',null,'Untitled'); } else { const ci=getFocusedColIdx(); const ck=visColKeys[ci<0?1:ci]||visColKeys[1]; const date=ck&&ck!=='inbox'?D.parse(ck):null; addTask(ck||'inbox',date,'Untitled'); } }
@@ -4306,7 +4510,7 @@ function App() {
     };
     setTimeout(findAndHighlight, 40);
   };
-  const openSettings = () => { setDrawerId(null); setRenamingId(null); if (!settingsOpen) setTweak('calendarOpen', false); setSettingsOpen(s=>!s); };
+  const openSettings = () => { setDrawerId(null); setRenamingId(null); if (!settingsOpen && !tweaks.calendarPinned) setTweak('calendarOpen', false); setSettingsOpen(s=>!s); };
   const drawerTask = drawerId ? taskById(drawerId) : null;
 
   // Shift+drag marquee selection — works on board AND stack-body backgrounds.
@@ -4785,7 +4989,7 @@ function App() {
         const a = bodyClickGuard.current;
         bodyClickGuard.current = null;
         if (a && (Math.abs(e.clientX - a.x) > 4 || Math.abs(e.clientY - a.y) > 4)) return;
-        if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar,.dvv,.rt-view')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); setTweak('calendarOpen',false); }
+        if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar,.dvv,.rt-view')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); if (!tweaks.calendarPinned) setTweak('calendarOpen',false); }
       }}>
       <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false); if (isNarrowScreen) setNavCollapsed(true);}} collapsed={navCollapsed} theme={theme} width={Number(tweaks.navWidth)||196} onResizeStart={resizeNav}/>
       {isNarrowScreen && !navCollapsed && (
@@ -5228,6 +5432,10 @@ function App() {
         onClose={()=>setTweak('calendarOpen', false)}
         calendarWidth={Number(tweaks.calendarWidth)||460}
         onWidthChange={w=>setTweak('calendarWidth',w)}
+        pinned={!!tweaks.calendarPinned}
+        onTogglePin={()=>setTweak('calendarPinned', !tweaks.calendarPinned)}
+        differentiateAutoBlocks={tweaks.differentiateAutoBlocks !== false}
+        hideCompletedOnCalendar={!!tweaks.hideCompletedOnCalendar}
       />
     )}
     {extDrag && extDragRef.current && (

@@ -873,6 +873,9 @@ const makeTask = (overrides={}) => syncTaskSnooze({
   // expiryDate (which is the delegate's deadline).
   personalReminderDate:null,
   cardColor:null,
+  // Splittable — when true, the smart scheduler may break this task into
+  // ≥30-min chunks across free slots if no contiguous slot fits.
+  splittable:false,
   ...overrides,
 });
 

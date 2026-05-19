@@ -2457,6 +2457,18 @@ button:active:not(:disabled):not(.no-press),
 }
 .cal-drawer .icon-btn:hover{background:var(--surface-2);color:var(--t1);}
 .cal-drawer .cal-close{font-size:18px;font-weight:400;}
+.cal-drawer .cal-pin{color:var(--t3);}
+.cal-drawer .cal-pin.on{color:var(--accent);background:var(--accent-dim);}
+.cal-drawer .cal-pin.on svg{stroke:var(--accent);}
+/* Narrow drawer: hide widest controls when width < 420px */
+.cal-drawer.cal-narrow .zoom-range{display:none;}
+.cal-drawer.cal-narrow .plan-lbl{display:none;}
+.cal-drawer.cal-narrow .cal-date{display:none;}
+.cal-drawer.cal-narrow .cal-hdr-right{gap:4px;}
+/* Dim algorithm-placed event blocks (toggleable via differentiateAutoBlocks). */
+.cal-drawer .cal-event.is-auto{opacity:.6;}
+.cal-drawer .cal-event.is-auto.is-selected,
+.cal-drawer .cal-grid.is-dragging .cal-event.is-auto{opacity:1;}
 .cal-drawer .cal-today{
   height:28px;padding:0 11px;border-radius:3px;
   border:1px solid var(--accent-border);background:var(--accent-dim);

@@ -24,7 +24,7 @@ const ROW_TO_EVENT_KEYS = Object.fromEntries(
 const EVENT_DB_COLUMNS = new Set([
   'id', 'workspace_id', 'user_id',
   'task_id', 'date', 'start_min', 'duration_min',
-  'title', 'color',
+  'title', 'color', 'source',
   'created_at', 'updated_at',
 ]);
 

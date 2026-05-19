@@ -505,7 +505,14 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
             ))}
           </>}
           {tab==='layout' && <>
-            <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Board</div>
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Calendar</div>
+            <SCard>
+              <SRow label="Auto-populate today" desc="Automatically schedule tasks dated today into the next free calendar slot as they're added or modified. Splittable tasks may be broken across gaps."><Tog id="autoPopulateToday"/></SRow>
+              <SRow label="Default block duration" desc="Fallback minutes when a task has no time estimate. Applies to 'x' shortcut and auto-populate."><Seg id="scheduleDefaultDuration" opts={[15, 30, 45, 60]}/></SRow>
+              <SRow label="Differentiate auto-placed blocks" desc="Render blocks created by 'x', Plan, or auto-populate at 60% opacity until you drag or resize them."><Tog id="differentiateAutoBlocks"/></SRow>
+              <SRow label="Hide completed task blocks" desc="When a task is marked done, hide its calendar block(s) from view. Blocks are kept in storage and return if untiched."><Tog id="hideCompletedOnCalendar"/></SRow>
+            </SCard>
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,marginTop:24,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Board</div>
             <SCard>
               <SRow label="New tasks appear at" desc="Where new tasks land when you press A or click + New task. Top puts them at the start; Bottom appends to the end."><Seg id="newTaskPosition" opts={['top','bottom']}/></SRow>
               <SRow label="Show weekends" desc="Display Saturday and Sunday columns."><Tog id="showWeekend"/></SRow>

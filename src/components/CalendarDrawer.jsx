@@ -57,6 +57,8 @@ function EventBlock({
   dragView, settle,
   isUnscheduling,
   isRenaming,
+  chunkInfo,
+  isAuto,
   onStartDrag, onSelect, onRename,
 }) {
   const declTop    = (ev.startMin / 60) * pxh;
@@ -97,7 +99,8 @@ function EventBlock({
     setEditTitle(null);
   };
 
-  const displayTitle = task?.title || ev.title || 'Time block';
+  const baseTitle = task?.title || ev.title || 'Time block';
+  const displayTitle = chunkInfo ? `${baseTitle} (${chunkInfo.idx}/${chunkInfo.total})` : baseTitle;
 
   return (
     <div
@@ -109,6 +112,7 @@ function EventBlock({
         (isUnscheduling ? ' is-unscheduling' : '') +
         (selected ? ' is-selected' : '') +
         (dimmed ? ' is-dimmed' : '') +
+        (isAuto ? ' is-auto' : '') +
         (tinyHeight ? ' is-small' : '') +
         (editTitle !== null ? ' is-renaming' : '')
       }
@@ -193,6 +197,9 @@ export default function CalendarDrawer({
   onAutoPlan,
   onPrev, onNext, onToday, onClose,
   calendarWidth, onWidthChange,
+  pinned, onTogglePin,
+  differentiateAutoBlocks,
+  hideCompletedOnCalendar,
 }) {
   const scrollRef = useRef(null);
   const gridRef = useRef(null);
@@ -407,14 +414,16 @@ export default function CalendarDrawer({
           setEvents(ev => ev.filter(x => x.id !== drag.evId));
           setSelectedId(null);
         } else {
-          setEvents(ev => ev.map(x => x.id === drag.evId ? { ...x, startMin: drag.startMin } : x));
+          // User-drag commits ownership: clear source='auto' so the block
+          // renders solid (no longer matches .is-auto).
+          setEvents(ev => ev.map(x => x.id === drag.evId ? { ...x, startMin: drag.startMin, source: null } : x));
           markSettle(drag.evId, massFor(drag.durationMin), 'move');
         }
       } else if (drag.kind === 'resize') {
-        setEvents(ev => ev.map(x => x.id === drag.evId ? { ...x, durationMin: drag.durationMin } : x));
+        setEvents(ev => ev.map(x => x.id === drag.evId ? { ...x, durationMin: drag.durationMin, source: null } : x));
         markSettle(drag.evId, massFor(drag.durationMin), 'resize');
       } else if (drag.kind === 'resize-top') {
-        setEvents(ev => ev.map(x => x.id === drag.evId ? { ...x, startMin: drag.startMin, durationMin: drag.durationMin } : x));
+        setEvents(ev => ev.map(x => x.id === drag.evId ? { ...x, startMin: drag.startMin, durationMin: drag.durationMin, source: null } : x));
         markSettle(drag.evId, massFor(drag.durationMin), 'resize');
       } else if (drag.kind === 'create' && !drag.taskId) {
         const id = newEventId();
@@ -491,13 +500,13 @@ export default function CalendarDrawer({
             if (x.id !== selectedId) return x;
             const nd = clamp(x.durationMin + dir * step, SNAP, DAY_MIN - x.startMin);
             mass = massFor(nd);
-            return { ...x, durationMin: nd };
+            return { ...x, durationMin: nd, source: null };
           }));
         } else {
           setEvents(ev => ev.map(x => {
             if (x.id !== selectedId) return x;
             mass = massFor(x.durationMin);
-            return { ...x, startMin: clamp(x.startMin + dir * step, 0, DAY_MIN - x.durationMin) };
+            return { ...x, startMin: clamp(x.startMin + dir * step, 0, DAY_MIN - x.durationMin), source: null };
           }));
         }
         markSettle(selectedId, mass, 'kbd');
@@ -515,8 +524,17 @@ export default function CalendarDrawer({
   const onGridMouseLeave = useCallback(() => setHoverMin(null), []);
 
   // Render events with drag overrides for the in-flight block.
+  // Also filters out events whose task is done when hideCompletedOnCalendar is on.
   const renderEvents = useMemo(() => {
-    return events.map(e => {
+    let src = events;
+    if (hideCompletedOnCalendar) {
+      src = src.filter(e => {
+        if (!e.taskId) return true;
+        const t = tasks.find(tk => tk.id === e.taskId);
+        return !t?.done;
+      });
+    }
+    return src.map(e => {
       if (drag && drag.kind !== 'create' && drag.evId === e.id) {
         return {
           ...e,
@@ -532,8 +550,27 @@ export default function CalendarDrawer({
       }
       return e;
     });
-  }, [events, drag, pxh]);
+  }, [events, drag, pxh, hideCompletedOnCalendar, tasks]);
   const layout = useMemo(() => layoutOverlaps(renderEvents), [renderEvents]);
+
+  // Chunk index map for split tasks — keyed by event id, gives {idx, total}
+  // when a task has >1 event on this day. Used by EventBlock for "(i/n)" label.
+  const chunkIndex = useMemo(() => {
+    const byTask = new Map();
+    for (const ev of renderEvents) {
+      if (!ev.taskId) continue;
+      const arr = byTask.get(ev.taskId);
+      if (arr) arr.push(ev);
+      else byTask.set(ev.taskId, [ev]);
+    }
+    const out = new Map();
+    for (const arr of byTask.values()) {
+      if (arr.length < 2) continue;
+      arr.sort((a, b) => a.startMin - b.startMin);
+      arr.forEach((ev, i) => out.set(ev.id, { idx: i + 1, total: arr.length }));
+    }
+    return out;
+  }, [renderEvents]);
 
   const previewEv = (drag && drag.kind === 'create')
     ? {
@@ -549,9 +586,14 @@ export default function CalendarDrawer({
       }
     : null;
 
-  // Initial scroll to ~7am when first mounted on each day.
+  // Initial scroll: anchor the "now" line ~25% from the top on today, or
+  // 9am on any other day. Re-runs when the visible day changes.
   useLayoutEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 7 * pxh - 30;
+    const el = scrollRef.current;
+    if (!el) return;
+    const anchorMin = isToday ? nowMin : 9 * 60;
+    const targetY = (anchorMin / 60) * pxh - el.clientHeight * 0.25;
+    el.scrollTop = Math.max(0, targetY);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateStr]);
 
@@ -610,7 +652,7 @@ export default function CalendarDrawer({
   const numLabel = `${moLabel} ${dateObj.getDate()}`;
 
   return (
-    <section className="cal-drawer is-open" ref={drawerRef} style={{width: calendarWidth || 460}}>
+    <section className={`cal-drawer is-open${(calendarWidth || 460) < 420 ? ' cal-narrow' : ''}`} ref={drawerRef} style={{width: calendarWidth || 460}}>
       <div className="cal-resize-handle" onMouseDown={onResizeMouseDown}/>
       <header className="cal-hdr">
         <div className="cal-hdr-left">
@@ -632,7 +674,7 @@ export default function CalendarDrawer({
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M3 12l4 4 14-14"/>
             </svg>
-            Plan
+            <span className="plan-lbl">Plan</span>
           </button>
           <input
             type="range" min={MIN_PXH} max={MAX_PXH} step="2" value={pxh}
@@ -653,6 +695,19 @@ export default function CalendarDrawer({
             </svg>
             <span className="snap-lbl">15m</span>
           </button>
+          {onTogglePin && (
+            <button
+              className={'icon-btn cal-pin' + (pinned ? ' on' : '')}
+              title={pinned ? 'Unpin calendar (will close on click-away)' : 'Pin calendar open'}
+              aria-pressed={!!pinned}
+              onClick={onTogglePin}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="17" x2="12" y2="22"/>
+                <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
+              </svg>
+            </button>
+          )}
           {onClose && (
             <button className="icon-btn cal-close" title="Close calendar" onClick={onClose}>×</button>
           )}
@@ -751,6 +806,8 @@ export default function CalendarDrawer({
                   dragView={ev._dragView}
                   settle={settle[ev.id]}
                   isRenaming={renamingId === ev.id}
+                  chunkInfo={chunkIndex.get(ev.id)}
+                  isAuto={ev.source === 'auto' && differentiateAutoBlocks}
                   onStartDrag={startEventDrag}
                   onSelect={setSelectedId}
                   onRename={(id, title) => {

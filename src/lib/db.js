@@ -75,7 +75,7 @@ const TASK_DB_COLUMNS = new Set([
   'expiry_date', 'expiry_task_id', 'expiry_of',
   'last_contact_at', 'delegation_history', 'personal_reminder_date',
   'activity', 'archived', 'source', 'source_id',
-  'subtasks', 'position', 'card_color',
+  'subtasks', 'position', 'card_color', 'splittable',
   'created_at',
   // Intentionally NOT including 'updated_at': the schema owns it via
   // `default now()` + `touch_updated_at` trigger. Sending it from JS broke
@@ -107,6 +107,7 @@ const TASK_NOT_NULL_DEFAULTS = {
   activity: [],
   archived: false,
   subtasks: [],
+  splittable: false,
 };
 
 // camelCase view of TASK_NOT_NULL_DEFAULTS, derived once. Used by
