@@ -17,6 +17,7 @@ import {
 } from '../utils/timeOfDay.js';
 import { parseTimeEst, D } from '../data.js';
 import { I } from '../utils/icons.jsx';
+import { ContextMenu } from './ContextMenu.jsx';
 
 const Chev = ({ dir = 'left' }) => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
@@ -24,6 +25,42 @@ const Chev = ({ dir = 'left' }) => (
     <path d="M15 6l-6 6 6 6" />
   </svg>
 );
+
+// Preset swatch palette for the per-event colour picker (matches bucket colour choices).
+const CAL_EVENT_COLORS = [
+  '#ef4444','#f97316','#eab308','#22c55e',
+  '#14b8a6','#3b82f6','#8b5cf6','#ec4899',
+  '#78716c','#6b7280',
+];
+
+function CalEventColorPicker({ x, y, onPick, onClose }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+  const left = Math.min(x, window.innerWidth - 200);
+  const top  = Math.min(y, window.innerHeight - 64);
+  return (
+    <div ref={ref} className="cal-color-picker" style={{ left, top }}>
+      {CAL_EVENT_COLORS.map(c => (
+        <button
+          key={c}
+          className="cal-color-swatch"
+          style={{ background: c }}
+          title={c}
+          onClick={() => { onPick(c); onClose(); }}
+        />
+      ))}
+    </div>
+  );
+}
 
 // Compute side-by-side columns for overlapping events. Map<eventId, {col, cols}>.
 function layoutOverlaps(events) {
@@ -59,10 +96,12 @@ function EventBlock({
   isRenaming,
   chunkInfo,
   isAuto,
-  onStartDrag, onSelect, onRename,
+  onStartDrag, onSelect, onRename, onContextMenu,
 }) {
-  const declTop    = (ev.startMin / 60) * pxh;
-  const declHeight = Math.max(14, (ev.durationMin / 60) * pxh);
+  // +1 top / -2 height gives a 1px visual gap above and below each block
+  // without touching the drag math (which uses ev.startMin / ev.durationMin directly).
+  const declTop    = (ev.startMin / 60) * pxh + 1;
+  const declHeight = Math.max(14, (ev.durationMin / 60) * pxh - 2);
 
   const top    = dragView ? dragView.topPx    : declTop;
   const height = dragView ? dragView.heightPx : declHeight;
@@ -127,6 +166,7 @@ function EventBlock({
       }}
       onMouseDown={(e) => { if (editTitle !== null) return; onStartDrag(e, 'move', ev); }}
       onClick={(e) => { e.stopPropagation(); onSelect && onSelect(ev.id); }}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(ev, task, e.clientX, e.clientY); }}
     >
       <div className="cal-event-stripe" />
       <div
@@ -200,11 +240,20 @@ export default function CalendarDrawer({
   pinned, onTogglePin,
   differentiateAutoBlocks,
   hideCompletedOnCalendar,
+  routines,           // task[] — routines due today, not yet scheduled
+  onRoutineMouseDown, // (e, task) => void — same as onTaskMouseDown in App.jsx
+  onOpenTask,         // (taskId) => void — open task in drawer
+  onMarkDone,         // (taskId, done) => void — toggle task done
 }) {
   const scrollRef = useRef(null);
   const gridRef = useRef(null);
   const drawerRef = useRef(null);
   const [drag, setDrag] = useState(null);
+  const [pan, setPan] = useState(null); // { anchorScrollTop, anchorClientY }
+
+  // Context menu for calendar events.
+  const [calCtxMenu, setCalCtxMenu] = useState(null);
+  const [calColorPickerFor, setCalColorPickerFor] = useState(null);
 
   const onResizeMouseDown = useCallback((e) => {
     e.preventDefault();
@@ -304,22 +353,51 @@ export default function CalendarDrawer({
     });
   }, []);
 
+  // Grid mousedown starts a pan. Double-click creates a new block (see onGridDoubleClick).
   const onGridMouseDown = useCallback((e) => {
     if (e.button !== 0) return;
     if (e.target !== e.currentTarget) return;
     setSelectedId(null);
-    const raw = yToMin(e.clientY);
-    const startMin = snapMin(clamp(raw, 0, DAY_MIN));
-    lastSnapRef.current = null;
-    setDrag({
-      kind: 'create', taskId: null,
-      startMin, durationMin: SNAP,
-      visStartMin: startMin, visDurationMin: SNAP,
-      anchor: { y: e.clientY, startMin, rawStart: raw },
-    });
-  }, [snapMin, yToMin]);
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) return;
+    setPan({ anchorScrollTop: scrollEl.scrollTop, anchorClientY: e.clientY });
+  }, []);
 
-  // External drag (from inbox) → live preview block on the grid.
+  // Double-click on the empty grid creates a 15-min block and opens rename.
+  const onGridDoubleClick = useCallback((e) => {
+    if (e.target !== e.currentTarget) return;
+    const raw = yToMin(e.clientY);
+    const startMin = snapMin(clamp(raw, 0, DAY_MIN - SNAP));
+    const id = newEventId();
+    setEvents(ev => [...ev, {
+      id, taskId: null, title: 'Time block', color: '#5eead4',
+      date: dateStr,
+      startMin, durationMin: SNAP,
+    }]);
+    setSelectedId(id);
+    setRenamingId(id);
+    markSettle(id, massFor(SNAP), 'create');
+  }, [snapMin, yToMin, dateStr, setEvents, markSettle]);
+
+  // Pan effect — scroll the cal-scroll container while panning.
+  useEffect(() => {
+    if (!pan) return;
+    const onMove = (e) => {
+      const dy = e.clientY - pan.anchorClientY;
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = pan.anchorScrollTop - dy;
+      }
+    };
+    const onUp = () => setPan(null);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [pan]);
+
+  // External drag (from inbox / routines strip) → live preview block on the grid.
   useEffect(() => {
     if (!externalDrag) return;
     const grid = gridRef.current;
@@ -388,24 +466,6 @@ export default function CalendarDrawer({
           visStartMin: visStart,
           visDurationMin: ne - visStart,
         });
-      } else if (drag.kind === 'create' && !drag.taskId) {
-        const cur = yToMin(e.clientY);
-        const a = drag.anchor.startMin;
-        const rawA = drag.anchor.rawStart ?? a;
-        let vS = Math.min(rawA, cur), vE = Math.max(rawA, cur);
-        vS = elasticClampMin(vS, 0, DAY_MIN);
-        vE = elasticClampMin(vE, 0, DAY_MIN);
-        let sS = Math.min(a, cur), sE = Math.max(a, cur);
-        sS = snapMin(sS); sE = snapMin(sE);
-        if (sE - sS < SNAP) sE = sS + SNAP;
-        sS = clamp(sS, 0, DAY_MIN - SNAP);
-        sE = clamp(sE, sS + SNAP, DAY_MIN);
-        if (snapOn) triggerSnapPulse(sE);
-        setDrag(d => d && {
-          ...d,
-          startMin: sS, durationMin: sE - sS,
-          visStartMin: vS, visDurationMin: Math.max(SNAP * 0.5, vE - vS),
-        });
       }
     };
     const onUp = () => {
@@ -425,16 +485,6 @@ export default function CalendarDrawer({
       } else if (drag.kind === 'resize-top') {
         setEvents(ev => ev.map(x => x.id === drag.evId ? { ...x, startMin: drag.startMin, durationMin: drag.durationMin, source: null } : x));
         markSettle(drag.evId, massFor(drag.durationMin), 'resize');
-      } else if (drag.kind === 'create' && !drag.taskId) {
-        const id = newEventId();
-        setEvents(ev => [...ev, {
-          id, taskId: null, title: 'Time block', color: '#5eead4',
-          date: dateStr,
-          startMin: drag.startMin, durationMin: drag.durationMin,
-        }]);
-        setSelectedId(id);
-        setRenamingId(id);
-        markSettle(id, massFor(drag.durationMin), 'create');
       }
       setDrag(null);
     };
@@ -517,10 +567,10 @@ export default function CalendarDrawer({
   }, [selectedId, setEvents, markSettle]);
 
   const onGridMouseMove = useCallback((e) => {
-    if (drag) return;
+    if (drag || pan) return;
     if (e.target !== e.currentTarget) { setHoverMin(null); return; }
     setHoverMin(snapMin(clamp(yToMin(e.clientY), 0, DAY_MIN)));
-  }, [drag, snapMin, yToMin]);
+  }, [drag, pan, snapMin, yToMin]);
   const onGridMouseLeave = useCallback(() => setHoverMin(null), []);
 
   // Render events with drag overrides for the in-flight block.
@@ -645,6 +695,48 @@ export default function CalendarDrawer({
     };
   })();
 
+  // Context menu items for calendar events.
+  const handleEvContextMenu = useCallback((ev, task, x, y) => {
+    setCalCtxMenu({ ev, task, x, y });
+  }, []);
+
+  const calCtxItems = calCtxMenu ? (() => {
+    const { ev, task } = calCtxMenu;
+    const items = [];
+    if (task) {
+      items.push({ type: 'lbl', label: 'Task' });
+      items.push({ label: 'Open in drawer', onClick: () => onOpenTask?.(task.id) });
+      items.push({ label: task.done ? 'Unmark done' : 'Mark as done', onClick: () => onMarkDone?.(task.id, !task.done) });
+      items.push({ type: 'sep' });
+    }
+    items.push({ label: 'Calendar colour…', onClick: () => setCalColorPickerFor({ evId: ev.id, x: calCtxMenu.x, y: calCtxMenu.y }) });
+    if (ev.color) {
+      items.push({ label: 'Reset colour', onClick: () => setEvents(evs => evs.map(x => x.id === ev.id ? { ...x, color: null } : x)) });
+    }
+    items.push({ type: 'sep' });
+    if (!task) {
+      items.push({ label: 'Rename', onClick: () => setRenamingId(ev.id) });
+    }
+    items.push({
+      label: 'Duplicate block',
+      onClick: () => {
+        const newId = newEventId();
+        const occupied = events.map(x => [x.startMin, x.startMin + x.durationMin]);
+        const lastEnd = occupied.length ? Math.max(...occupied.map(([, e]) => e)) : 9 * 60;
+        const nextStart = snapMin(clamp(lastEnd, 0, DAY_MIN - ev.durationMin));
+        setEvents(evs => [...evs, { ...ev, id: newId, startMin: nextStart, source: null }]);
+        setSelectedId(newId);
+        markSettle(newId, massFor(ev.durationMin), 'create');
+      },
+    });
+    items.push({
+      label: 'Remove from calendar',
+      onClick: () => { setEvents(evs => evs.filter(x => x.id !== ev.id)); setSelectedId(null); },
+      danger: true,
+    });
+    return items;
+  })() : [];
+
   // Date label for the header — short weekday + "Apr 29" style.
   const dateObj = D.parse(dateStr) || D.today();
   const wkLabel = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dateObj.getDay()];
@@ -669,7 +761,7 @@ export default function CalendarDrawer({
             className="auto-plan-btn"
             onClick={onAutoPlan}
             disabled={!isToday}
-            title={isToday ? 'Auto-plan: fill open slots with unscheduled tasks' : 'Auto-plan only fills today'}
+            title={isToday ? 'Auto-plan: fill open slots with today\'s tasks' : 'Auto-plan only fills today'}
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M3 12l4 4 14-14"/>
@@ -679,7 +771,7 @@ export default function CalendarDrawer({
           <input
             type="range" min={MIN_PXH} max={MAX_PXH} step="2" value={pxh}
             onChange={(e) => setPxh(parseInt(e.target.value, 10))}
-            className="zoom-range" aria-label="Zoom" title="Zoom (Ctrl/⌘ + scroll)"
+            className="zoom-range" aria-label="Zoom" title="Zoom (Ctrl/Cmd + scroll)"
           />
           <button
             className={'snap-btn' + (snapOn ? ' on' : '')}
@@ -709,7 +801,7 @@ export default function CalendarDrawer({
             </button>
           )}
           {onClose && (
-            <button className="icon-btn cal-close" title="Close calendar" onClick={onClose}>×</button>
+            <button className="icon-btn cal-close" title="Close calendar" onClick={onClose}>&#215;</button>
           )}
         </div>
       </header>
@@ -728,6 +820,25 @@ export default function CalendarDrawer({
         </div>
       </div>
 
+      {routines?.length > 0 && (
+        <div className="cal-routines">
+          <span className="cal-routines-lbl">Routines</span>
+          <div className="cal-routines-chips">
+            {routines.map(t => (
+              <div
+                key={t.id}
+                className="cal-routine-chip"
+                onMouseDown={(e) => onRoutineMouseDown?.(e, t)}
+                title="Drag onto calendar to schedule"
+              >
+                <span className="cal-routine-icon">&#8635;</span>
+                <span className="cal-routine-name">{t.title}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="cal-scroll" ref={scrollRef}>
         <div className="cal-grid-wrap" style={{ height: gridH }}>
           <div className="cal-gutter">
@@ -739,9 +850,10 @@ export default function CalendarDrawer({
           </div>
 
           <div
-            className={'cal-grid' + (drag ? ' is-dragging' : '')}
+            className={'cal-grid' + (drag ? ' is-dragging' : '') + (pan ? ' is-panning' : '')}
             ref={gridRef}
             onMouseDown={onGridMouseDown}
+            onDoubleClick={onGridDoubleClick}
             onMouseMove={onGridMouseMove}
             onMouseLeave={onGridMouseLeave}
             style={{ height: gridH, '--pxh': pxh + 'px' }}
@@ -765,7 +877,7 @@ export default function CalendarDrawer({
               </React.Fragment>
             ))}
 
-            {hoverMin != null && !drag && (
+            {hoverMin != null && !drag && !pan && (
               <div className="hover-line" style={{ top: (hoverMin / 60) * pxh }}>
                 <span className="hover-time">{minToCompact(hoverMin)}</span>
               </div>
@@ -792,7 +904,8 @@ export default function CalendarDrawer({
 
             {renderEvents.map(ev => {
               const task = ev.taskId ? tasks.find(t => t.id === ev.taskId) : null;
-              const color = task ? projectColor(task) : (ev.color || '#5eead4');
+              // ev.color is a per-event override; falls back to bucket/project color via projectColor.
+              const color = ev.color || (task ? projectColor(task) : '#5eead4');
               return (
                 <EventBlock
                   key={ev.id}
@@ -810,6 +923,7 @@ export default function CalendarDrawer({
                   isAuto={ev.source === 'auto' && differentiateAutoBlocks}
                   onStartDrag={startEventDrag}
                   onSelect={setSelectedId}
+                  onContextMenu={handleEvContextMenu}
                   onRename={(id, title) => {
                     setRenamingId(null);
                     if (title !== null) setEvents(ev => ev.map(x => x.id === id ? { ...x, title } : x));
@@ -822,7 +936,7 @@ export default function CalendarDrawer({
               const task = previewEv.taskId
                 ? tasks.find(t => t.id === previewEv.taskId)
                 : null;
-              const color = task ? projectColor(task) : '#5eead4';
+              const color = previewEv.color || (task ? projectColor(task) : '#5eead4');
               return (
                 <EventBlock
                   ev={previewEv}
@@ -853,8 +967,25 @@ export default function CalendarDrawer({
       </div>
 
       <footer className="cal-foot">
-        <span><kbd>drag</kbd> to schedule · <kbd>drag left</kbd> to unschedule · <kbd>↑↓</kbd> nudge · <kbd>⌥↑↓</kbd> resize · <kbd>del</kbd></span>
+        <span><kbd>drag</kbd> to pan &middot; <kbd>dbl-click</kbd> new block &middot; <kbd>drag event left</kbd> to remove &middot; <kbd>&#8679;&#8679;</kbd> nudge &middot; <kbd>del</kbd></span>
       </footer>
+
+      {calCtxMenu && (
+        <ContextMenu
+          x={calCtxMenu.x}
+          y={calCtxMenu.y}
+          items={calCtxItems}
+          onClose={() => setCalCtxMenu(null)}
+        />
+      )}
+      {calColorPickerFor && (
+        <CalEventColorPicker
+          x={calColorPickerFor.x}
+          y={calColorPickerFor.y}
+          onPick={(color) => setEvents(evs => evs.map(e => e.id === calColorPickerFor.evId ? { ...e, color } : e))}
+          onClose={() => setCalColorPickerFor(null)}
+        />
+      )}
     </section>
   );
 }

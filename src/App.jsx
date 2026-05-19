@@ -934,9 +934,14 @@ function App() {
   // edits to project colors flow through.
   const calProjectColor = useCallback((task) => {
     if (!task) return '#5eead4';
+    const buckets = tweaks?.customGroups || [];
+    if (task.groupId) {
+      const bucket = buckets.find(b => b.id === task.groupId);
+      if (bucket?.color) return bucket.color;
+    }
     const ctx = (taxonomy?.contexts || []).find(c => c.id === task.project);
     return ctx?.color || '#a5b4fc';
-  }, [taxonomy]);
+  }, [taxonomy, tweaks?.customGroups]);
 
   // setEvents wrapper that lets the drawer treat the visible day's events
   // as its full list. Adds/updates/deletes against the visible slice get
@@ -953,6 +958,17 @@ function App() {
       return [...others, ...visibleNext];
     });
   }, [calendarDateStr]);
+
+  // Routine tasks due on the visible calendar day that haven't been scheduled yet.
+  const calDayRoutines = useMemo(() => {
+    const scheduledIds = new Set(visibleEvents.map(e => e.taskId).filter(Boolean));
+    return tasks.filter(t =>
+      t.recurrence?.isRoutine &&
+      t.date === calendarDateStr &&
+      !t.done &&
+      !scheduledIds.has(t.id)
+    );
+  }, [tasks, visibleEvents, calendarDateStr]);
 
   // Inbox card → calendar drag — prototype's external-drag mechanism.
   // Bail if the target is an interactive child (chip, popover, checkbox)
@@ -1049,7 +1065,8 @@ function App() {
     const scheduledIds = new Set(visible.map(e => e.taskId).filter(Boolean));
     const queue = tasks
       .filter(t => !t.done && !t.archived && t.cardType !== 'project'
-        && !scheduledIds.has(t.id) && parseTimeEst(t.timeEstimate) > 0)
+        && !scheduledIds.has(t.id) && parseTimeEst(t.timeEstimate) > 0
+        && t.date === today)
       .sort((a, b) => (a.priority || 'p3').localeCompare(b.priority || 'p3'));
     const busy = visible.map(e => [e.startMin, e.startMin + e.durationMin]);
     const additions = [];
@@ -5542,6 +5559,10 @@ function App() {
         onTogglePin={()=>setTweak('calendarPinned', !tweaks.calendarPinned)}
         differentiateAutoBlocks={tweaks.differentiateAutoBlocks !== false}
         hideCompletedOnCalendar={!!tweaks.hideCompletedOnCalendar}
+        routines={calDayRoutines}
+        onRoutineMouseDown={onTaskMouseDown}
+        onOpenTask={(id) => openTask(id)}
+        onMarkDone={(id, done) => updateTask(id, { done })}
       />
     )}
     {extDrag && extDragRef.current && (
