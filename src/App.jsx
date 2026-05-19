@@ -71,6 +71,7 @@ import {
   fetchPeople, upsertPerson,
   subscribeTasks, subscribeTaxonomy, subscribePeople,
   rowToTask, rowToPerson, normalizeTask,
+  bucketColumnsMissing,
 } from './lib/db.js';
 // ── extracted utilities ──────────────────────────────────────────────────
 import { I } from './utils/icons.jsx';
@@ -4935,7 +4936,7 @@ function App() {
             onDelete={deleteTask}
             onBulkUpdate={bulkUpdateTasks}
             activeDrag={activeDrag}
-            bucketColumnsMissing={false /* TODO: surface _bucketColumnsMissing from db.js */}
+            bucketColumnsMissing={bucketColumnsMissing()}
             onReorderBuckets={(orderIds) => {
               const byId = new Map((tweaks.customGroups || []).map(g => [g.id, g]));
               const next = orderIds.map(id => byId.get(id)).filter(Boolean);

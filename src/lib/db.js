@@ -169,7 +169,17 @@ export function rowToTask(row) {
     // Pre-migration-0011 servers still return `group_id`. The new field map
     // only knows about `bucket_id`, so handle the old name explicitly and
     // route it to the same JS field (`groupId`).
+    //
+    // Once `_bucketColumnsMissing` is true, taskToRow drops bucket_id from
+    // upserts — so the DB's `group_id` value is frozen at whatever it had
+    // before the user started moving cards on the Buckets view. Routing it
+    // back through the realtime echo would clobber the local groupId every
+    // time the row is touched (Buckets DnD reverting instantly was the
+    // reported symptom). Skip the legacy translation in that state and let
+    // the localStorage shadow + in-memory state stay authoritative until
+    // the user applies migration 0011.
     if (k === 'group_id') {
+      if (_bucketColumnsMissing) continue;
       if (task.groupId == null) task.groupId = v;
       continue;
     }
@@ -251,6 +261,11 @@ let _positionColumnMissing = false;
 // the new in-memory bucket logic, just without cloud persistence of the
 // bucket fields until they run the migration.
 let _bucketColumnsMissing = false;
+
+// Read-only accessor for the bucket-columns-missing flag. App.jsx surfaces
+// this to BucketsView so the in-app migration banner can warn the user that
+// drops won't survive a refresh until they apply migration 0011.
+export function bucketColumnsMissing() { return _bucketColumnsMissing; }
 
 export async function fetchTasks(workspaceId) {
   if (!supabase) throw new Error('Supabase client not configured');
