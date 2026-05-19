@@ -3508,7 +3508,7 @@ body[data-look="glass"][data-color-style="hsl"] .scard.selected[style*="--card-c
 }
 .bk-col-toggle-completed:hover { color: var(--t1); border-color: var(--t3); }
 /* Sidebar: reuse .side-panel.inbox-col + bk-specific header/body */
-.side-panel.inbox-col.bk-sidebar { width: 260px }
+.side-panel.inbox-col.bk-sidebar { width: 260px; left: 0; }
 .side-panel.inbox-col.bk-sidebar.unpinned { position: relative !important; }
 /* Collapsed state for No Bucket sidebar — extends generic .side-panel.collapsed */
 .side-panel.collapsed .bk-sidebar-hdr { padding: 8px 0; align-items: center; justify-content: center; }
