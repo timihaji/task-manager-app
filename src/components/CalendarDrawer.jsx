@@ -806,7 +806,19 @@ export default function CalendarDrawer({
   const numLabel = `${moLabel} ${dateObj.getDate()}`;
 
   return (
-    <section className={`cal-drawer is-open${(calendarWidth || 460) < 420 ? ' cal-narrow' : ''}`} ref={drawerRef} style={{width: calendarWidth || 460}}>
+    <section
+      className={`cal-drawer is-open${(calendarWidth || 460) < 420 ? ' cal-narrow' : ''}`}
+      ref={drawerRef}
+      style={{width: calendarWidth || 460}}
+      onContextMenu={(e) => {
+        // Suppress the browser's native menu anywhere in the drawer that
+        // hasn't been handled by an event block's own contextmenu listener.
+        // (Event blocks call preventDefault + stopPropagation in their native
+        // listener, so this only runs for right-clicks on the empty grid,
+        // gutter, routines strip, header, etc.)
+        e.preventDefault();
+      }}
+    >
       <div className="cal-resize-handle" onMouseDown={onResizeMouseDown}/>
       <header className="cal-hdr">
         <div className="cal-hdr-left">
