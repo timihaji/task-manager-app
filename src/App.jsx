@@ -5111,7 +5111,7 @@ function App() {
         const a = bodyClickGuard.current;
         bodyClickGuard.current = null;
         if (a && (Math.abs(e.clientX - a.x) > 4 || Math.abs(e.clientY - a.y) > 4)) return;
-        if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar,.dvv,.rt-view')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); if (!tweaks.calendarPinned) setTweak('calendarOpen',false); }
+        if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar,.dvv,.rt-view,.cal-drawer,.ctx-menu,.cal-color-picker')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); if (!tweaks.calendarPinned) setTweak('calendarOpen',false); }
       }}>
       <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false); if (isNarrowScreen) setNavCollapsed(true);}} collapsed={navCollapsed} theme={theme} width={Number(tweaks.navWidth)||196} onResizeStart={resizeNav}/>
       {isNarrowScreen && !navCollapsed && (

@@ -62,6 +62,44 @@ function CalEventColorPicker({ x, y, onPick, onClose }) {
   );
 }
 
+// When a manual (user-placed) event lands on top of auto-planned events,
+// shift the auto events past the manual event's end so the user's intent
+// takes precedence. Single left-to-right pass — if a displaced auto event
+// now collides with the next auto event, that one is pushed too (cascade).
+function displaceAutoEvents(allEvents, manualEv) {
+  const manualStart = manualEv.startMin;
+  const manualEnd   = manualEv.startMin + manualEv.durationMin;
+  // Auto events sorted by their *current* startMin.
+  const autoSorted = allEvents
+    .filter(e => e.id !== manualEv.id && e.source === 'auto')
+    .sort((a, b) => a.startMin - b.startMin);
+  let pushCursor = null; // end of the most recently displaced event, or null
+  const moved = new Map();
+  for (const ev of autoSorted) {
+    const evEnd = ev.startMin + ev.durationMin;
+    let needsPush = false;
+    let target = 0;
+    if (pushCursor !== null && ev.startMin < pushCursor) {
+      // Collides with a previously displaced auto event → cascade.
+      needsPush = true;
+      target = pushCursor;
+    } else if (ev.startMin < manualEnd && evEnd > manualStart) {
+      // Direct overlap with manual event.
+      needsPush = true;
+      target = manualEnd;
+    } else {
+      // No conflict — clear cursor once we're definitively past the displaced region.
+      if (pushCursor !== null && ev.startMin >= pushCursor) pushCursor = null;
+    }
+    if (needsPush) {
+      const newStart = Math.min(target, DAY_MIN - ev.durationMin);
+      moved.set(ev.id, { ...ev, startMin: newStart });
+      pushCursor = newStart + ev.durationMin;
+    }
+  }
+  return allEvents.map(e => moved.get(e.id) || e);
+}
+
 // Compute side-by-side columns for overlapping events. Map<eventId, {col, cols}>.
 function layoutOverlaps(events) {
   const sorted = [...events].sort((a, b) => a.startMin - b.startMin || a.durationMin - b.durationMin);
@@ -475,8 +513,13 @@ export default function CalendarDrawer({
           setSelectedId(null);
         } else {
           // User-drag commits ownership: clear source='auto' so the block
-          // renders solid (no longer matches .is-auto).
-          setEvents(ev => ev.map(x => x.id === drag.evId ? { ...x, startMin: drag.startMin, source: null } : x));
+          // renders solid (no longer matches .is-auto). Then displace any
+          // auto-planned events that now overlap with the moved block.
+          setEvents(ev => {
+            const updated = ev.map(x => x.id === drag.evId ? { ...x, startMin: drag.startMin, source: null } : x);
+            const movedEv = updated.find(x => x.id === drag.evId);
+            return movedEv ? displaceAutoEvents(updated, movedEv) : updated;
+          });
           markSettle(drag.evId, massFor(drag.durationMin), 'move');
         }
       } else if (drag.kind === 'resize') {
@@ -509,13 +552,15 @@ export default function CalendarDrawer({
         const id = newEventId();
         setEvents(ev => {
           // Re-scheduling the same task on the same day replaces its prior
-          // event, mirroring the prototype.
+          // event, mirroring the prototype. Then displace any auto-planned
+          // events that overlap with the dropped block.
           const filtered = ev.filter(x => !(x.taskId === preview.taskId && x.date === dateStr));
-          return [...filtered, {
+          const newEv = {
             id, taskId: preview.taskId,
             date: dateStr,
             startMin: preview.startMin, durationMin: preview.durationMin,
-          }];
+          };
+          return displaceAutoEvents([...filtered, newEv], newEv);
         });
         setSelectedId(id);
         setDrag(null);
