@@ -1319,6 +1319,9 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 .dr-blocker-chip.done{opacity:.55}
 .dr-blocker-chip-x{cursor:pointer;color:var(--t4);padding:0 2px}
 .dr-blocker-chip-x:hover{color:#fca5a5}
+.dr-unblock-row{display:flex;justify-content:flex-end;padding:0 0 8px}
+.dr-unblock-btn{font:12px var(--font);padding:5px 12px;border-radius:4px;background:rgba(34,197,94,.14);color:#86efac;border:1px solid rgba(34,197,94,.32);cursor:pointer;font-weight:600;letter-spacing:.02em}
+.dr-unblock-btn:hover{background:rgba(34,197,94,.22);color:#bbf7d0}
 .dr-blocker-search{position:relative}
 .dr-blocker-results{position:absolute;top:100%;left:0;right:0;background:var(--surface-1);border:1px solid var(--border-s);border-radius:3px;max-height:180px;overflow-y:auto;z-index:50;margin-top:2px}
 .dr-blocker-result{padding:5px 8px;font-size:12px;cursor:pointer;color:var(--t1)}
@@ -2744,7 +2747,6 @@ button:active:not(:disabled):not(.no-press),
 /* ── 1 · cursor language ─────────────────────────────────────────────── */
 .card,.scard{cursor:grab}
 .card.dragging,.scard.is-dragging{cursor:grabbing}
-.card.blocked{cursor:not-allowed}
 .card-add-zone,.card-add-zone button{cursor:copy}
 
 /* ── 1 · press-down (~80 ms scale to .97 on every clickable) ─────────── */
@@ -3295,87 +3297,71 @@ body[data-look="glass"][data-color-style="hsl"] .scard.selected[style*="--card-c
    ───────────────────────────────────────────────────────────────────────── */
 
 /* BucketsView — Trello-style Kanban */
-.bk-view {
+/* Buckets view — built on Timeline's .timeline-scroll + .col + .side-panel
+   vocabulary so animations, pan, auto-scroll, and arming behave identically
+   to the Cards/Timeline view. Buckets-specific tweaks live under .bk-* below. */
+.bk-view-shell {
   display: flex;
+  flex-direction: column;
   height: 100%;
   width: 100%;
-  overflow: hidden;
   background: var(--bg);
-}
-.bk-sidebar {
-  width: 280px;
-  min-width: 280px;
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid var(--border);
-  background: var(--surface);
-}
-.bk-sidebar-hdr {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--t2);
-}
-.bk-sidebar-title { flex: 1; }
-.bk-sidebar-count { color: var(--t3); font-weight: 500; }
-.bk-sidebar-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.bk-sidebar-empty,
-.tg-pane-empty,
-.tg-tree-empty,
-.bk-col-empty {
-  color: var(--t3);
-  font-size: 12px;
-  padding: 12px;
-  text-align: center;
-  font-style: italic;
-}
-.bk-board {
-  flex: 1;
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 12px;
-  align-items: flex-start;
-}
-.bk-col {
-  width: 280px;
-  min-width: 280px;
-  max-height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
   overflow: hidden;
 }
-.bk-col-hdr {
+.bk-mig-banner {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--t1);
+  background: rgba(245, 158, 11, .12);
+  border-bottom: 1px solid var(--border);
+}
+/* Buckets board reuses .timeline-scroll for pan + auto-scroll, but adds a
+   small gap between columns so the bucket-tint backgrounds don't bleed into
+   one another. */
+.bk-board {
+  gap: 10px;
+  padding: 10px 10px 0;
+  align-items: stretch;
+}
+/* Override .col defaults: bucket columns are slightly rounded cards on the
+   board (vs Timeline's flush-against-each-other look) — the bucket-tinted
+   background makes the rounded shape feel intentional. */
+.col.bk-col {
+  border-right: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  max-height: 100%;
+}
+.col.bk-col.is-dragging {
+  opacity: .55;
+  box-shadow: 0 6px 18px rgba(0,0,0,.18);
+}
+.col-hdr.bk-col-hdr {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+  gap: 6px;
+  padding: 8px 10px;
   position: relative;
-  cursor: grab;
+  border-bottom: 1px solid var(--border);
+  background: inherit;
 }
+.bk-col-grip {
+  cursor: grab;
+  color: var(--t3);
+  font-size: 11px;
+  user-select: none;
+  padding: 0 2px;
+  letter-spacing: -1px;
+}
+.bk-col-grip:active { cursor: grabbing; }
 .bk-col-swatch {
   width: 10px;
   height: 10px;
   border-radius: 3px;
   flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.05) inset;
 }
 .bk-col-title {
   flex: 1;
@@ -3384,8 +3370,16 @@ body[data-look="glass"][data-color-style="hsl"] .scard.selected[style*="--card-c
   color: var(--t1);
   user-select: none;
   cursor: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.bk-col-count { color: var(--t3); font-size: 12px; font-weight: 500; }
+.bk-col-count {
+  color: var(--t3);
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: 2px;
+}
 .bk-col-kebab {
   background: none;
   border: none;
@@ -3399,7 +3393,7 @@ body[data-look="glass"][data-color-style="hsl"] .scard.selected[style*="--card-c
 .bk-col-kebab:hover { background: var(--surface-2); color: var(--t1); }
 .bk-col-rename {
   flex: 1;
-  background: var(--surface-2);
+  background: var(--surface);
   border: 1px solid var(--border);
   color: var(--t1);
   font-size: 13px;
@@ -3456,16 +3450,42 @@ body[data-look="glass"][data-color-style="hsl"] .scard.selected[style*="--card-c
 .bk-col-menu-swatch:hover,
 .tg-menu-swatch:hover { transform: scale(1.1); }
 .bk-col-body {
-  flex: 1;
+  flex: 1 1 auto;
   overflow-y: auto;
-  padding: 8px;
+  padding: 6px 6px 8px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--card-gap, 3px);
   min-height: 60px;
 }
-.bk-card-slot { cursor: grab; }
-.bk-card-slot:active { cursor: grabbing; }
+.bk-col-empty,
+.tg-pane-empty,
+.tg-tree-empty {
+  color: var(--t3);
+  font-size: 12px;
+  padding: 12px;
+  text-align: center;
+  font-style: italic;
+}
+.bk-col-addcard-row {
+  padding: 4px 2px;
+}
+.bk-col-addcard-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--accent, var(--border));
+  color: var(--t1);
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  outline: none;
+}
+.col-add.bk-col-add {
+  /* Per-column +Add card affordance. Inherit Timeline's .col-add style
+     (including the magnet/transform animation at styles.css:2311) so the
+     button feels identical to Timeline. */
+  margin-top: auto;
+}
 .bk-col-toggle-completed {
   background: none;
   border: 1px dashed var(--border);
@@ -3475,13 +3495,67 @@ body[data-look="glass"][data-color-style="hsl"] .scard.selected[style*="--card-c
   border-radius: 4px;
   cursor: pointer;
   margin-top: 4px;
+  align-self: stretch;
 }
 .bk-col-toggle-completed:hover { color: var(--t1); border-color: var(--t3); }
+/* Sidebar: reuse .side-panel.inbox-col + bk-specific header/body */
+.side-panel.inbox-col.bk-sidebar { width: 340px }
+.col-hdr.bk-sidebar-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--t2);
+}
+.bk-sidebar-title { flex: 1 }
+.bk-sidebar-count { color: var(--t3); font-weight: 500 }
+.col-body.bk-sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--card-gap, 3px);
+  position: relative;
+}
+.bk-sidebar-empty {
+  color: var(--t3);
+  font-size: 12px;
+  padding: 12px;
+  text-align: center;
+  font-style: italic;
+}
+/* Drop-target highlight when dragging a card from a bucket back to the
+   sidebar — lit up only when the in-flight drag actually came from a bucket
+   (the React component gates this). */
+.bk-sidebar-droplabel {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  margin: -2px 0 6px;
+  padding: 6px 10px;
+  border: 1px dashed var(--accent, #0f766e);
+  color: var(--accent, #0f766e);
+  background: var(--surface);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+/* Inline trailing "+ New bucket" affordance + the same-shape input column
+   that appears while the user is typing the new name. */
 .bk-add-col {
   flex-shrink: 0;
+  align-self: flex-start;
   width: 200px;
   min-width: 200px;
   height: 40px;
+  margin-top: 4px;
   background: transparent;
   border: 1.5px dashed var(--border);
   border-radius: 8px;
@@ -3490,12 +3564,24 @@ body[data-look="glass"][data-color-style="hsl"] .scard.selected[style*="--card-c
   cursor: pointer;
 }
 .bk-add-col:hover { color: var(--t1); border-color: var(--t2); }
-.bk-empty {
-  margin: 40px auto;
+.col.bk-col-creating {
+  background: var(--surface);
+}
+.bk-col-body-creating { min-height: 80px }
+/* Onboarding panel when no buckets are defined. Sits in the board area; the
+   sidebar still shows triage candidates on the left. */
+.bk-empty-board {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 80px 40px;
   text-align: center;
   color: var(--t2);
 }
-.bk-empty p { margin: 0 0 10px; }
+.bk-empty-board p { margin: 0 0 8px; max-width: 380px }
+.bk-empty-board .bk-empty-hint { color: var(--t3); font-size: 13px; margin-bottom: 18px }
 .bk-empty-btn {
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -3505,7 +3591,45 @@ body[data-look="glass"][data-color-style="hsl"] .scard.selected[style*="--card-c
   font-size: 13px;
   cursor: pointer;
 }
-.bk-empty-btn:hover { background: var(--surface); }
+.bk-empty-btn:hover { background: var(--surface); border-color: var(--t3) }
+/* Multi-drag count badge layered on the DragOverlay ghost. */
+.dnd-overlay-ghost-wrap { position: relative; pointer-events: none }
+.bk-multi-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--accent, #0f766e);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+}
+/* Topbar sort selector for Buckets view. Inherit existing .tb-select styles
+   if present; provide a sane fallback if not. */
+.tb-sort-label {
+  font-size: 11px;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-right: 4px;
+}
+.bk-sort-select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--t1);
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.bk-sort-select:hover { border-color: var(--t3) }
 
 /* TagsView — tree + filtered list */
 .tg-view {

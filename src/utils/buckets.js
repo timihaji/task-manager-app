@@ -78,3 +78,61 @@ export function partitionByBucket(tasks, buckets) {
 export function mkBucketId() {
   return `bk_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
+
+// Global sort modes for the Buckets view. The user picks one in the topbar and
+// every column (plus the No-bucket sidebar) honours the same mode. Manual
+// falls back to bucketPosition; the other modes are deterministic sorts on
+// task fields. A within-column drag silently flips the mode back to Manual so
+// the drop result actually sticks visibly.
+export const BUCKETS_SORT_MODES = ['manual', 'date', 'priority', 'created', 'title'];
+
+const PRI_RANK = { p1: 1, p2: 2, p3: 3, p4: 4, p5: 5 };
+const priVal = (t) => PRI_RANK[t?.priority] ?? PRI_RANK[t?.pri] ?? 99;
+
+export function sortBucketTasks(tasks, mode) {
+  const list = (tasks || []).slice();
+  switch (mode) {
+    case 'date':
+      // Tasks with a date first (ascending). Tasks without a date sink to bottom.
+      return list.sort((a, b) => {
+        const da = a?.date || '';
+        const db = b?.date || '';
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
+        if (da < db) return -1;
+        if (da > db) return 1;
+        return 0;
+      });
+    case 'priority':
+      // p1 (high) first; same-priority ties break on createdAt desc.
+      return list.sort((a, b) => {
+        const pa = priVal(a);
+        const pb = priVal(b);
+        if (pa !== pb) return pa - pb;
+        const ta = a?.createdAt || '';
+        const tb = b?.createdAt || '';
+        return ta < tb ? 1 : ta > tb ? -1 : 0;
+      });
+    case 'created':
+      // Most-recently-created first.
+      return list.sort((a, b) => {
+        const ta = a?.createdAt || '';
+        const tb = b?.createdAt || '';
+        return ta < tb ? 1 : ta > tb ? -1 : 0;
+      });
+    case 'title':
+      // Case-insensitive A→Z, empty titles last.
+      return list.sort((a, b) => {
+        const ta = (a?.title || '').toLowerCase();
+        const tb = (b?.title || '').toLowerCase();
+        if (!ta && !tb) return 0;
+        if (!ta) return 1;
+        if (!tb) return -1;
+        return ta.localeCompare(tb);
+      });
+    case 'manual':
+    default:
+      return sortByBucketPosition(list);
+  }
+}

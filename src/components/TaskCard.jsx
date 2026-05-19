@@ -44,7 +44,8 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
   sortableData,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
   selectedIds, renamingId, spawningSet, focusedId, onAdd, depth=0, blockingCountFor, taskTitleById,
-  onContextMenu, onBulkUpdate, recents, onRecentTag, onRecentProj, openPopRequest, onPopHandled, getEffectiveLifeArea, onAddTaxonomy, onStartRename, onExternalDrag }) {
+  onContextMenu, onBulkUpdate, recents, onRecentTag, onRecentProj, openPopRequest, onPopHandled, getEffectiveLifeArea, onAddTaxonomy, onStartRename, onExternalDrag,
+  hideBucketChip }) {
   const tagPalette = theme==='dark'?TAG_DARK:TAG_LIGHT;
   const tp = tagPalette[task.tags?.[0]] || tagPalette.admin;
   const proj = PROJ.find(p=>p.id===task.project);
@@ -200,7 +201,7 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
             ↺ d{task.checkInDayOffset ?? '?'}
           </span>
         )}
-        {bucket && (
+        {bucket && !hideBucketChip && (
           <span className="card-tag card-tag-bucket"
             style={{ background: `${bucket.color || '#94a3b8'}22`, color: bucket.color || '#94a3b8' }}
             title={`Bucket: ${bucket.name}`}>

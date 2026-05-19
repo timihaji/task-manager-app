@@ -80,6 +80,10 @@ import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useDndSensors, getInsertionIndex, compositeCollisionDetection } from './utils/dnd.js';
 import { computePosition } from './utils/position.js';
+import {
+  sortBucketTasks,
+  BUCKETS_SORT_MODES,
+} from './utils/buckets.js';
 import * as haptics from './utils/haptics.js';
 
 // ── extracted leaf components ────────────────────────────────────────────
@@ -250,6 +254,7 @@ function App() {
     dark_bg:'#071512', dark_surface:'#10201d', dark_sidebar:'#06110f', dark_border:'#1d342f', dark_text:'#e6fffb',
     light_bg:'#f3f7f4', light_surface:'#fffdfa', light_sidebar:'#e7efe9', light_border:'#d5ded7', light_text:'#17211d',
   stackSort:'smart', stackShowCompleted:true, stackGroupByDate:false, stackCompactBelowDeck:true, stackShowSpine:true, stackOrder:[], stackFilterOpen:false, stackFilters:{},
+    bucketsSort:'manual',
     newTaskPosition:'top',
     // Per-card colour wash (right-click → Card colour…). Sat / lightShift / pct
     // are tuned per-theme since the same hex needs different treatment on dark vs light surfaces.
@@ -3082,6 +3087,63 @@ function App() {
     });
   };
 
+  // Sibling of reorderManyInDate, but for Buckets: groups by groupId and
+  // writes bucketPosition. Shares Timeline's computeGroupPositions interpolation
+  // logic by passing { position } shims over the bucketPosition field, so the
+  // same fractional-position math handles single-card and multi-card moves.
+  // Pre-filter mirrors BucketsView's isTriageCandidate so the position math
+  // ignores cards that aren't on the bucket board.
+  const reorderManyInBucket = (taskIds, bucketId, anchorId, insertAfter = false, extraPatch = null) => {
+    if (!taskIds || !taskIds.length) return;
+    setTasks(prev => {
+      const idSet = new Set(taskIds);
+      const movedOrdered = prev.filter(t => idSet.has(t.id));
+      if (!movedOrdered.length) return prev;
+      const remaining = prev.filter(t => !idSet.has(t.id));
+      const inCol = remaining.filter(t =>
+        (t.groupId ?? null) === bucketId
+        && !t.archived && !t.parentId
+        && !t.snoozedUntil && !t.someday && !t.blocked
+        && !t.delegatedTo && !t.checkInOf
+        && !(t.recurrence && t.recurrence.isRoutine)
+      ).sort((a, b) => {
+        const pa = Number.isFinite(a.bucketPosition) ? a.bucketPosition : Infinity;
+        const pb = Number.isFinite(b.bucketPosition) ? b.bucketPosition : Infinity;
+        return pa - pb;
+      });
+      let anchorTask = anchorId ? inCol.find(t => t.id === anchorId) : null;
+      if (!anchorTask && anchorId) {
+        const anchorPrevIdx = prev.findIndex(t => t.id === anchorId);
+        if (anchorPrevIdx >= 0) {
+          for (const c of inCol) {
+            if (prev.indexOf(c) > anchorPrevIdx) { anchorTask = c; break; }
+          }
+        }
+      }
+      let slotIdx = anchorTask ? inCol.indexOf(anchorTask) : inCol.length;
+      if (anchorTask && insertAfter) slotIdx += 1;
+      const above = slotIdx > 0 ? inCol[slotIdx - 1] : null;
+      const below = slotIdx < inCol.length ? inCol[slotIdx] : null;
+      // computeGroupPositions reads `.position` — shim the bucketPosition field.
+      const aShim = above ? { position: above.bucketPosition } : null;
+      const bShim = below ? { position: below.bucketPosition } : null;
+      const positions = computeGroupPositions(aShim, bShim, movedOrdered.length);
+      const patched = movedOrdered.map((t, i) => ({
+        ...t,
+        groupId: bucketId,
+        bucketPosition: positions[i],
+        ...(extraPatch || {}),
+      }));
+      let insertAt;
+      if (below) insertAt = remaining.indexOf(below);
+      else if (above) insertAt = remaining.indexOf(above) + 1;
+      else insertAt = remaining.length;
+      const result = [...remaining];
+      result.splice(insertAt, 0, ...patched);
+      return result;
+    });
+  };
+
   const reorderManyToInbox = (taskIds, anchorId, insertAfter = false) => {
     if (!taskIds || !taskIds.length) return;
     setTasks(prev => {
@@ -3161,9 +3223,20 @@ function App() {
     } catch {}
     // fromCol mirrors the card's column for the §09 cross-column arming check.
     // null date → inbox; 'stack-task' source has no date so we fall back to inbox.
-    const fromCol = data.date != null ? data.date : 'inbox';
+    // In Buckets view, the column key is `bk:<bucketId>` (or `bk:none` for the
+    // No-bucket sidebar) so the same arming logic works without conflating
+    // bucket ids with date strings.
+    const fromCol = data.kind === 'bucket-task'
+      ? `bk:${data.bucketId || 'none'}`
+      : (data.date != null ? data.date : 'inbox');
     const altCopy = !!(event.activatorEvent?.altKey);
-    setActiveDrag({ id: srcId, kind: data.kind || 'task', fromCol, srcHTML, routineGhost, altCopy });
+    // Multi-select count for the +n badge in the DragOverlay. Read once at
+    // drag-start; subsequent selection changes shouldn't affect the in-flight
+    // visual. selectedIds may include the active card itself.
+    const multiCount = (selectedIds.has(srcId) && selectedIds.size > 1)
+      ? selectedIds.size
+      : 1;
+    setActiveDrag({ id: srcId, kind: data.kind || 'task', fromCol, srcHTML, routineGhost, altCopy, multiCount });
     document.body.dataset.dndActive = 'true';
     document.body.dataset.fromCol = fromCol;
     // Pointer-Y tracker: keeps dragPointerY fresh between dndOnDragOver fires.
@@ -3200,15 +3273,26 @@ function App() {
     if (oData) {
       if (oData.kind === 'task' || oData.kind === 'stack-task' || oData.kind === 'completed-task') overCol = oData.date != null ? oData.date : 'inbox';
       else if (oData.kind === 'column') overCol = oData.date != null ? oData.date : 'inbox';
+      else if (oData.kind === 'bucket-col') overCol = `bk:${oData.bucketId || 'none'}`;
+      else if (oData.kind === 'bucket-task') overCol = `bk:${oData.bucketId || 'none'}`;
+      else if (oData.kind === 'bucket-column-target') overCol = `bk:${oData.bucketId || 'none'}`;
     }
     const fromCol = document.body.dataset.fromCol;
     // Clear all current armed wrappers first
     document.querySelectorAll('.col-armed').forEach(el => el.classList.remove('col-armed'));
     if (overCol && overCol !== fromCol) {
       document.body.dataset.armedCol = overCol;
-      const sel = overCol === 'inbox'
-        ? '.side-panel.inbox-col[data-col-key="inbox"]'
-        : `.col[data-col-key="${CSS.escape(overCol)}"]`;
+      let sel;
+      if (overCol === 'inbox') {
+        sel = '.side-panel.inbox-col[data-col-key="inbox"]';
+      } else if (overCol.startsWith('bk:')) {
+        // Bucket columns carry data-bucket-col-key="<bucketId|none>"; the
+        // No-bucket sidebar uses the same attribute on its .side-panel wrapper.
+        const bk = overCol.slice(3);
+        sel = `[data-bucket-col-key="${CSS.escape(bk)}"]`;
+      } else {
+        sel = `.col[data-col-key="${CSS.escape(overCol)}"]`;
+      }
       document.querySelector(sel)?.classList.add('col-armed');
     } else {
       delete document.body.dataset.armedCol;
@@ -3222,11 +3306,19 @@ function App() {
     // 60Hz (the Stack flicker reported by the user).
     document.querySelectorAll('[data-drop-line]').forEach(el => el.removeAttribute('data-drop-line'));
     if (!oData) return;
-    if (oData.kind !== 'task' && oData.kind !== 'stack-task') return;
+    if (oData.kind !== 'task' && oData.kind !== 'stack-task' && oData.kind !== 'bucket-task') return;
 
     let sameContext = false;
     if (aData.kind === 'stack-task' && oData.kind === 'stack-task') {
       sameContext = true; // single SortableContext for the entire Stack
+    } else if (aData.kind === 'bucket-task' && oData.kind === 'bucket-task') {
+      // Buckets: each column is its own vertical SortableContext keyed by
+      // bucketId (null/undefined = the No-bucket sidebar). Same-context drops
+      // (within the column) animate via sortable transforms; cross-column drops
+      // get the manual drop-line stamp below.
+      const aBk = aData.bucketId ?? null;
+      const oBk = oData.bucketId ?? null;
+      sameContext = aBk === oBk;
     } else if (aData.kind === 'task' && oData.kind === 'task') {
       // Task SortableContext is now per-group within a column (Column.jsx /
       // InboxCol). Same-context drops are only those in the same date+parent
@@ -3259,6 +3351,84 @@ function App() {
     try {
       if (!over) return;
       haptics.drop();
+
+      // ── Buckets view ────────────────────────────────────────────────────
+      // Card → bucket column or No-bucket sidebar. `bucket-col` is the body
+      // droppable; `bucket-task` is a card in the destination column (drop
+      // resolves to its insertion slot); `bucket-column-handle` is the column
+      // wrapper itself (only reached if collision detection routes there — we
+      // treat it as a drop on that bucket's body).
+      if (aData.kind === 'bucket-task') {
+        // Header (bucket-column-target) can also be reached if the cursor sits
+        // on the column header during a card drag — treat it the same as a
+        // bucket-col body drop (top of that column).
+        if (oData.kind !== 'bucket-task' && oData.kind !== 'bucket-col' && oData.kind !== 'bucket-column-target') return;
+        const toBucketId = oData.bucketId ?? null; // null = sidebar (clear bucket)
+        const fromBucketId = aData.bucketId ?? null;
+        const sortMode = tweaks.bucketsSort || 'manual';
+        // Multi-select fan-out: every selected card moves with the dragged one.
+        const srcIds = (selectedIds.has(activeId) && selectedIds.size > 1)
+          ? [...selectedIds].filter(id => taskById(id))
+          : [activeId];
+        // Anchor + cursor-Y vs midpoint — exactly Timeline's pattern.
+        const anchorId = oData.kind === 'bucket-task' ? String(over.id) : null;
+        let insertAfter = false;
+        if (anchorId) {
+          const anchorEl = document.querySelector(`.card[data-card-id="${anchorId}"]`);
+          const y = dragPointerY.current;
+          if (anchorEl && y != null) {
+            const r = anchorEl.getBoundingClientRect();
+            insertAfter = y >= r.top + r.height / 2;
+          }
+        }
+        pushSnapshotUndo();
+        if (toBucketId === null) {
+          // Drop on the No-bucket sidebar — clear groupId + bucketPosition so a
+          // re-bucket later doesn't carry a stale slot.
+          setTasks(prev => prev.map(t => srcIds.includes(t.id)
+            ? applyTaskPatch(t, { groupId: null, bucketPosition: null })
+            : t));
+        } else {
+          reorderManyInBucket(srcIds, toBucketId, anchorId, insertAfter);
+        }
+        // Within-column drag while a non-manual sort is active: silently flip
+        // back to Manual so the new ordering is visible.
+        if (sortMode !== 'manual' && fromBucketId === toBucketId) {
+          setTweak('bucketsSort', 'manual');
+        }
+        // Toast + undo.
+        const bucketName = (tweaks.customGroups || []).find(g => g.id === toBucketId)?.name;
+        const n = srcIds.length;
+        let msg;
+        if (toBucketId === null) {
+          msg = n > 1 ? `Cleared bucket on ${n} cards` : 'Cleared bucket';
+        } else if (fromBucketId === toBucketId) {
+          msg = n > 1 ? `Reordered ${n} cards` : 'Reordered';
+        } else {
+          msg = n > 1
+            ? `Moved ${n} cards to ${bucketName || 'bucket'}`
+            : `Moved to ${bucketName || 'bucket'}`;
+        }
+        showToast(msg, { undoable: true, timeout: 4500 });
+        return;
+      }
+
+      // Bucket column reorder. Grip (kind='bucket-column-handle') dropped on a
+      // column header (kind='bucket-column-target'). Reorders tweaks.customGroups.
+      if (aData.kind === 'bucket-column-handle' && oData.kind === 'bucket-column-target') {
+        const fromId = aData.bucketId;
+        const toId = oData.bucketId;
+        if (!fromId || !toId || fromId === toId) return;
+        const order = (tweaks.customGroups || []).map(g => g.id);
+        const fromIdx = order.indexOf(fromId);
+        const toIdx = order.indexOf(toId);
+        if (fromIdx < 0 || toIdx < 0) return;
+        const nextIds = arrayMove(order, fromIdx, toIdx);
+        const byId = new Map((tweaks.customGroups || []).map(g => [g.id, g]));
+        const nextGroups = nextIds.map(id => byId.get(id)).filter(Boolean);
+        setTweak('customGroups', nextGroups);
+        return;
+      }
 
       // Routine strip pill dragged out of the strip.
       // - Drop on a column (body, strip, task, or completed-task) →
@@ -4412,6 +4582,26 @@ function App() {
             ))}
           </div>
         </>}
+        {view==='buckets' && (() => {
+          // Global sort selector for the Buckets view. Manual is the default
+          // and re-engages on any within-column drag. Five sort modes total.
+          const cur = BUCKETS_SORT_MODES.includes(tweaks.bucketsSort) ? tweaks.bucketsSort : 'manual';
+          const LABELS = { manual: 'Manual', date: 'Date', priority: 'Priority', created: 'Recent', title: 'Title A–Z' };
+          return (
+            <>
+              <div className="tb-sep"/>
+              <label className="tb-sort-label">Sort</label>
+              <select
+                className="tb-select bk-sort-select"
+                value={cur}
+                onChange={e => setTweak('bucketsSort', e.target.value)}
+                title="Sort cards inside every bucket column"
+              >
+                {BUCKETS_SORT_MODES.map(m => <option key={m} value={m}>{LABELS[m]}</option>)}
+              </select>
+            </>
+          );
+        })()}
       </div>
       <div className="tb-spacer"/>
       <div className="tb-secondary tb-secondary-right">
@@ -4723,7 +4913,29 @@ function App() {
           <BucketsView
             tasks={activeTasks}
             buckets={tweaks.customGroups || []}
+            applyFilters={applyFilters}
+            tweaks={tweaks}
+            theme={theme}
+            selectedIds={selectedIds}
+            onSelect={toggleSelected}
+            onMarqueeStart={(e, root) => startMarquee(e, root)}
+            focusedId={focusedId}
+            setFocusedId={setFocusedId}
+            renamingId={renamingId}
+            setRenamingId={setRenamingId}
+            spawningSet={spawning}
+            recents={recents}
+            onRecentTag={(v)=>pushRecent('tags', v)}
+            onRecentProj={(v)=>pushRecent('projects', v)}
             onUpdateTask={updateTask}
+            onAddTask={({ title, groupId }) => addTask('inbox', null, title || 'Untitled', { groupId })}
+            onOpenCard={openTask}
+            onContextMenu={onCardContextMenu}
+            onComplete={(id)=>completeTask(id, taskById(id)?.date||'inbox')}
+            onDelete={deleteTask}
+            onBulkUpdate={bulkUpdateTasks}
+            activeDrag={activeDrag}
+            bucketColumnsMissing={false /* TODO: surface _bucketColumnsMissing from db.js */}
             onReorderBuckets={(orderIds) => {
               const byId = new Map((tweaks.customGroups || []).map(g => [g.id, g]));
               const next = orderIds.map(id => byId.get(id)).filter(Boolean);
@@ -4750,7 +4962,6 @@ function App() {
             onCreateBucket={(bucket) => {
               setTweak('customGroups', (tweaks.customGroups || []).concat(bucket));
             }}
-            onOpenCard={openTask}
           />
         </div>
       ) : view==='tags' ? (
@@ -5123,7 +5334,14 @@ function App() {
           <div className="dnd-or-meta">↻ → one-off · drop on a day</div>
         </div>
       ) : activeDrag?.srcHTML ? (
-        <div className="dnd-overlay-ghost" dangerouslySetInnerHTML={{ __html: activeDrag.srcHTML }} />
+        <div className="dnd-overlay-ghost-wrap">
+          <div className="dnd-overlay-ghost" dangerouslySetInnerHTML={{ __html: activeDrag.srcHTML }} />
+          {activeDrag.multiCount > 1 && (
+            <span className="bk-multi-badge" aria-label={`${activeDrag.multiCount} cards`}>
+              +{activeDrag.multiCount - 1}
+            </span>
+          )}
+        </div>
       ) : null}
     </DragOverlay>
   </DndContext>;

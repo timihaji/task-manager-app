@@ -36,8 +36,13 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 // inside col-body so without registering it as specific, the column always
 // wins collision. Drops on it would silently demote the routine (column-body
 // path) instead of routing through the reschedule branch.
-const SPECIFIC_KINDS = new Set(['task', 'stack-task', 'routine-strip']);
-const CONTAINER_KINDS = new Set(['column', 'group-target', 'project-body']);
+const SPECIFIC_KINDS = new Set(['task', 'stack-task', 'routine-strip', 'bucket-task']);
+const CONTAINER_KINDS = new Set(['column', 'group-target', 'project-body', 'bucket-col']);
+// Bucket column-reorder drop targets. Only active when the in-flight drag is
+// the column GRIP (kind='bucket-column-handle'). For any other active kind
+// these aren't considered specific so card drags land on the column body's
+// bucket-col droppable as expected.
+const COLUMN_REORDER_TARGETS = new Set(['bucket-column-target']);
 const NEST_EDGE_PX = 8;     // top strip inside body → nest as first child
 
 export function compositeCollisionDetection(args) {
@@ -120,10 +125,17 @@ export function compositeCollisionDetection(args) {
 
   const pointerCollisions = pointerWithin(args);
 
-  // 1. Cursor inside a specific (card-level) droppable
+  // 1. Cursor inside a specific (card-level) droppable. Bucket column-reorder
+  //    drags target a different set of droppables (the column header strip)
+  //    than card drags; route accordingly so a card drag onto a bucket header
+  //    still resolves to the bucket body underneath.
+  const activeKind = args.active?.data?.current?.kind;
+  const specificKinds = activeKind === 'bucket-column-handle'
+    ? COLUMN_REORDER_TARGETS
+    : SPECIFIC_KINDS;
   const specific = pointerCollisions.filter(c => {
     const k = c.data?.droppableContainer?.data?.current?.kind;
-    return SPECIFIC_KINDS.has(k);
+    return specificKinds.has(k);
   });
   if (specific.length > 0) return specific;
 
@@ -140,8 +152,13 @@ export function compositeCollisionDetection(args) {
     const sameCol = allClosest.find(c2 => {
       const dd = c2.data?.droppableContainer?.data?.current;
       if (!dd) return false;
-      if (dd.kind !== 'task' && dd.kind !== 'stack-task') return false;
+      if (dd.kind !== 'task' && dd.kind !== 'stack-task' && dd.kind !== 'bucket-task') return false;
       if (cd.kind === 'project-body') return dd.parentId === cd.targetId;
+      if (cd.kind === 'bucket-col') {
+        // Bucket card in the same bucket column (null bucketId = the No-bucket
+        // sidebar). Same scoping rule as the date-column case below.
+        return (dd.bucketId ?? null) === (cd.bucketId ?? null);
+      }
       if (cd.kind === 'column') {
         // Top-level cards only. Subtasks of an expanded project also live in
         // the same column-date "namespace", but routing to one via the column
