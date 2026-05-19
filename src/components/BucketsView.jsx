@@ -13,6 +13,7 @@
 // drag silently flips back to 'manual' so the new order is visible.
 
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { I } from '../utils/icons.jsx';
 import { TaskCard } from './TaskCard.jsx';
 import {
   SortableContext,
@@ -169,6 +170,11 @@ function BucketColumn({
       <div
         className={`col-body bk-col-body${bodyDrop.isOver ? ' drag-over' : ''}`}
         ref={bodyDrop.setNodeRef}
+        onDoubleClick={e => {
+          if (!e.target.closest('.card,.bk-col-addcard-row,.bk-col-empty,.bk-col-toggle-completed')) {
+            setAddingCard(true);
+          }
+        }}
       >
         <SortableContext items={columnTaskIds} strategy={verticalListSortingStrategy}>
           {visible.map(task => (
@@ -251,6 +257,7 @@ function NoBucketSidebar({
   onComplete, onDelete, onContextMenu, onBulkUpdate,
   onRecentTag, onRecentProj, onStartRename,
   activeDragFromBucket,
+  pinned, collapsed, width, onPin, onCollapse, onResizeStart,
 }) {
   const drop = useDroppable({
     id: 'bkbody:nobucket',
@@ -262,14 +269,25 @@ function NoBucketSidebar({
   const showLabel = drop.isOver && activeDragFromBucket;
   return (
     <aside
-      className="side-panel inbox-col bk-sidebar"
+      className={`side-panel inbox-col bk-sidebar${collapsed ? ' collapsed' : ''}${!pinned ? ' unpinned' : ''}`}
+      style={collapsed ? undefined : { width, minWidth: width }}
       data-col-key="bk:none"
       data-bucket-col-key="none"
       aria-label="Unbucketed tasks"
     >
       <div className="col-hdr bk-sidebar-hdr">
+        <button type="button" className="side-collapse" onClick={onCollapse}
+          title={collapsed ? 'Expand No bucket' : 'Collapse No bucket'}>
+          <I.Chv d={collapsed ? 'r' : 'l'}/>
+        </button>
         <span className="bk-sidebar-title">No bucket</span>
         <span className="bk-sidebar-count">{sidebarTasks.length}</span>
+        <button type="button"
+          className={`bk-sidebar-pin${pinned ? ' pinned' : ''}`}
+          onClick={onPin}
+          title={pinned ? 'Unpin (scroll with board)' : 'Pin (sticky left)'}
+          aria-pressed={!!pinned}
+        ><I.Tack/></button>
       </div>
       <div
         className={`col-body bk-sidebar-body${drop.isOver ? ' drag-over' : ''}`}
@@ -315,6 +333,7 @@ function NoBucketSidebar({
           <div className="bk-sidebar-empty">Nothing to triage</div>
         )}
       </div>
+      {!collapsed && <div className="side-resizer" onMouseDown={onResizeStart}/>}
     </aside>
   );
 }
@@ -329,6 +348,8 @@ export function BucketsView({
   onReorderBuckets, onRenameBucket, onChangeBucketColor, onDeleteBucket, onCreateBucket,
   activeDrag,
   bucketColumnsMissing,
+  noBucketPinned, noBucketCollapsed, noBucketWidth,
+  onNoBucketPin, onNoBucketCollapse, onNoBucketResizeStart,
 }) {
   // Per-column toggle for completed-task visibility (local — not persisted).
   const [showCompleted, setShowCompleted] = useState(() => ({}));
@@ -426,7 +447,7 @@ export function BucketsView({
         </div>
       )}
       <div
-        className="timeline-scroll bk-board"
+        className={`timeline-scroll bk-board${tweaks.bucketsAutoFit ? ' bk-board-autofit' : ''}`}
         ref={boardRef}
         onMouseDown={onBoardMouseDown}
         data-bk-board
@@ -454,6 +475,12 @@ export function BucketsView({
           onRecentProj={onRecentProj}
           onStartRename={(id) => setRenamingId(id)}
           activeDragFromBucket={activeDragFromBucket}
+          pinned={noBucketPinned}
+          collapsed={noBucketCollapsed}
+          width={noBucketWidth}
+          onPin={onNoBucketPin}
+          onCollapse={onNoBucketCollapse}
+          onResizeStart={onNoBucketResizeStart}
         />
 
         {(buckets || []).length === 0 ? (

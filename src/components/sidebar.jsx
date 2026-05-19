@@ -35,7 +35,7 @@ function ProjectSidePanel({ tasks, activeProjects, width, collapsed, stickyLeft,
   );
 }
 
-function LeftNav({ tasks, view, onView, collapsed, onSettings, theme }) {
+function LeftNav({ tasks, view, onView, collapsed, onSettings, theme, width, onResizeStart }) {
   // activeLifeAreas / onLifeAreaToggle props removed in the polish pass;
   // theme stays since callers still pass it (and a future Buckets sidebar
   // section may want it back).
@@ -69,7 +69,7 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, theme }) {
     </div>;
   };
   return (
-    <div className={`lnav${collapsed?' collapsed':''}`}>
+    <div className={`lnav${collapsed?' collapsed':''}`} style={!collapsed ? { width: width||196, minWidth: width||196 } : undefined}>
       <div className="lnav-sec">
         <NavItem ico={I.Cal} label="Timeline" v="week" cnt={counts.today}/>
         <NavItem ico={I.Stack} label="Stack" v="stack" cnt={counts.stack}/>
@@ -118,6 +118,7 @@ function LeftNav({ tasks, view, onView, collapsed, onSettings, theme }) {
           Categorisation lives in the Buckets view (top of this nav) and the
           topbar bucket filter. Per-task lifeArea data is retained in the DB
           for safety but no longer drives any UI. */}
+      {!collapsed && onResizeStart && <div className="lnav-resizer" onMouseDown={onResizeStart}/>}
       <div className="lnav-sync"><div className="sync-dot"/><span>Synced · just now</span></div>
       <div style={{padding:'4px 8px 8px'}}>
         <div className="lnav-item" onClick={onSettings}>

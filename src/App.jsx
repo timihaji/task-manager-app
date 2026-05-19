@@ -255,7 +255,9 @@ function App() {
     dark_bg:'#071512', dark_surface:'#10201d', dark_sidebar:'#06110f', dark_border:'#1d342f', dark_text:'#e6fffb',
     light_bg:'#f3f7f4', light_surface:'#fffdfa', light_sidebar:'#e7efe9', light_border:'#d5ded7', light_text:'#17211d',
   stackSort:'smart', stackShowCompleted:true, stackGroupByDate:false, stackCompactBelowDeck:true, stackShowSpine:true, stackOrder:[], stackFilterOpen:false, stackFilters:{},
-    bucketsSort:'manual',
+    bucketsSort:'manual', bucketsAutoFit:false,
+    noBucketPinned:true, noBucketCollapsed:false, noBucketWidth:260,
+    navWidth:196,
     newTaskPosition:'top',
     // Per-card colour wash (right-click → Card colour…). Sat / lightShift / pct
     // are tuned per-theme since the same hex needs different treatment on dark vs light surfaces.
@@ -2921,12 +2923,26 @@ function App() {
   const resizeSidePanel = (e, panel) => {
     e.preventDefault();
     e.stopPropagation();
-    const key = panel==='inbox' ? 'inboxWidth' : 'projectPanelWidth';
+    const key = panel==='inbox' ? 'inboxWidth' : panel==='nobucket' ? 'noBucketWidth' : 'projectPanelWidth';
     const startX = e.clientX;
-    const startWidth = Number(tweaks[key]) || (panel==='inbox'?340:190);
-    const min = panel==='inbox'?132:140;
-    const max = panel==='inbox'?340:360;
+    const startWidth = Number(tweaks[key]) || (panel==='inbox'?340:panel==='nobucket'?260:190);
+    const min = panel==='inbox'?132:panel==='nobucket'?132:140;
+    const max = panel==='inbox'?360:panel==='nobucket'?400:360;
     const onMove = ev => setTweak(key, Math.max(min, Math.min(max, startWidth + ev.clientX - startX)));
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
+  const resizeNav = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = Number(tweaks.navWidth) || 196;
+    const onMove = ev => setTweak('navWidth', Math.max(140, Math.min(280, startWidth + ev.clientX - startX)));
     const onUp = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
@@ -4600,6 +4616,12 @@ function App() {
               >
                 {BUCKETS_SORT_MODES.map(m => <option key={m} value={m}>{LABELS[m]}</option>)}
               </select>
+              <button
+                type="button"
+                className={`tb-btn bk-autofit-btn${tweaks.bucketsAutoFit ? ' active' : ''}`}
+                onClick={() => setTweak('bucketsAutoFit', !tweaks.bucketsAutoFit)}
+                title={tweaks.bucketsAutoFit ? 'Switch to manual column width' : 'Auto-fit columns to screen'}
+              >Fit</button>
             </>
           );
         })()}
@@ -4778,7 +4800,7 @@ function App() {
         if (a && (Math.abs(e.clientX - a.x) > 4 || Math.abs(e.clientY - a.y) > 4)) return;
         if(!e.target.closest('.card,.scard,.list-item,.side-panel,.lnav,.drawer,.bulk-bar,.dvv,.rt-view')) { setFocusedId(null); setRenamingId(null); setDrawerId(null); setSettingsOpen(false); setTweak('calendarOpen',false); }
       }}>
-      <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false); if (isNarrowScreen) setNavCollapsed(true);}} collapsed={navCollapsed} theme={theme}/>
+      <LeftNav tasks={tasks} view={view} onSettings={openSettings} onView={v=>{setView(v);setSettingsOpen(false);setFilterOpen(false); if (isNarrowScreen) setNavCollapsed(true);}} collapsed={navCollapsed} theme={theme} width={Number(tweaks.navWidth)||196} onResizeStart={resizeNav}/>
       {isNarrowScreen && !navCollapsed && (
         <div className="lnav-scrim" onClick={()=>setNavCollapsed(true)}/>
       )}
@@ -4937,6 +4959,12 @@ function App() {
             onBulkUpdate={bulkUpdateTasks}
             activeDrag={activeDrag}
             bucketColumnsMissing={bucketColumnsMissing()}
+            noBucketPinned={tweaks.noBucketPinned !== false}
+            noBucketCollapsed={!!tweaks.noBucketCollapsed}
+            noBucketWidth={Number(tweaks.noBucketWidth) || 260}
+            onNoBucketPin={() => setTweak('noBucketPinned', !tweaks.noBucketPinned)}
+            onNoBucketCollapse={() => setTweak('noBucketCollapsed', !tweaks.noBucketCollapsed)}
+            onNoBucketResizeStart={(e) => resizeSidePanel(e, 'nobucket')}
             onReorderBuckets={(orderIds) => {
               const byId = new Map((tweaks.customGroups || []).map(g => [g.id, g]));
               const next = orderIds.map(id => byId.get(id)).filter(Boolean);
