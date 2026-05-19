@@ -897,9 +897,11 @@ function App() {
     return () => { cancelled = true; };
   }, [workspaceId, supabaseDisabled]);
 
-  // Sync events: localStorage shadow + cloud diff sync. Mirrors the tasks
-  // pattern but simpler (no conflict logic — events are short-lived and the
-  // drawer is single-user).
+  // Sync events: localStorage shadow + cloud diff sync. Debounced and longer
+  // than the tasks debounce (80ms) so routine drops — where the event references
+  // a task that extendRoutineHorizon just created — have time to win their FK
+  // race against the tasks upsert. Per-event retries on failure handle the
+  // edge case where the task is still in flight.
   useEffect(() => {
     if (!eventsReady) return;
     try { localStorage.setItem('tm_events_v1', JSON.stringify(events)); } catch {}
@@ -907,26 +909,45 @@ function App() {
       lastSyncedEventsRef.current = events;
       return;
     }
-    const prev = lastSyncedEventsRef.current;
-    const prevById = new Map(prev.map(e => [e.id, e]));
-    const nextById = new Map(events.map(e => [e.id, e]));
-    const upserts = [];
-    for (const [id, ev] of nextById) {
-      const old = prevById.get(id);
-      if (!old || JSON.stringify(old) !== JSON.stringify(ev)) upserts.push(ev);
-    }
-    const deletes = [];
-    for (const id of prevById.keys()) if (!nextById.has(id)) deletes.push(id);
-    if (!upserts.length && !deletes.length) return;
-    (async () => {
-      try {
-        for (const ev of upserts) await upsertEvent(ev, userId, workspaceId);
-        for (const id of deletes) await deleteEventRow(id);
-        lastSyncedEventsRef.current = events;
-      } catch (e) {
-        console.error('[events] sync failed', e);
+    const handle = setTimeout(() => {
+      const prev = lastSyncedEventsRef.current;
+      const prevById = new Map(prev.map(e => [e.id, e]));
+      const nextById = new Map(events.map(e => [e.id, e]));
+      const upserts = [];
+      for (const [id, ev] of nextById) {
+        const old = prevById.get(id);
+        if (!old || JSON.stringify(old) !== JSON.stringify(ev)) upserts.push(ev);
       }
-    })();
+      const deletes = [];
+      for (const id of prevById.keys()) if (!nextById.has(id)) deletes.push(id);
+      if (!upserts.length && !deletes.length) return;
+      (async () => {
+        // FK-violation aware: each event retries up to twice with a 600ms gap
+        // so a routine drop whose task is still being upserted recovers.
+        const tryUpsert = async (ev, attempt = 0) => {
+          try {
+            await upsertEvent(ev, userId, workspaceId);
+          } catch (e) {
+            const isFk = e?.code === '23503' || /foreign key/i.test(e?.message || '');
+            if (isFk && attempt < 2) {
+              await new Promise(r => setTimeout(r, 600));
+              return tryUpsert(ev, attempt + 1);
+            }
+            throw e;
+          }
+        };
+        try {
+          for (const ev of upserts) await tryUpsert(ev);
+          for (const id of deletes) await deleteEventRow(id);
+          lastSyncedEventsRef.current = events;
+        } catch (e) {
+          console.error('[events] sync failed', e);
+          const msg = e?.message || e?.details || e?.hint || String(e);
+          showToast(`Calendar save failed: ${msg}`, { timeout: 0 });
+        }
+      })();
+    }, 250);
+    return () => clearTimeout(handle);
   }, [events, eventsReady, supabaseDisabled, userId, workspaceId]);
 
   // ── Calendar drawer plumbing ────────────────────────────────────────────
