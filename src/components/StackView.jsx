@@ -297,6 +297,7 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
     renaming && 'renaming',
     selected && 'selected',
     menuOpen && 'menu-open',
+    task.snoozedUntil && 'is-snoozed',
   ].filter(Boolean).join(' ');
 
   const isCardSurface = (e) => {

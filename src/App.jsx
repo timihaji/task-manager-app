@@ -99,6 +99,7 @@ import { PriBars } from './components/PriBars.jsx';
 import { TaskCard } from './components/TaskCard.jsx';
 import { GroupByDropdown } from './components/GroupByDropdown.jsx';
 import { Column, InboxCol } from './components/Column.jsx';
+import { SnoozeTickProvider, AutoWakeWatcher } from './components/SnoozeCountdown.jsx';
 // ── extracted view components ────────────────────────────────────────────
 import { ProjectSidePanel, LeftNav } from './components/sidebar.jsx';
 import { CMDS, CommandPalette, SC_ROWS, ShortcutsOverlay } from './components/modals.jsx';
@@ -154,6 +155,7 @@ function normalizeSavedView(value) {
 
 const clearSnoozePatch = {
   snoozedUntil: null,
+  snoozedAt: null,
   snoozeMode: null,
   snoozeOffsetDays: null,
 };
@@ -306,6 +308,9 @@ function App() {
     completedOpenCols: [],          // colKeys with completed section expanded
     blockedOpenCols: [],            // colKeys with blocked section expanded
     routinesOpenCols: [],           // colKeys with routines section expanded
+    snoozedOpenCols: [],            // colKeys with Snoozed section expanded (other than today, which uses its own flag)
+    snoozedTodayClosed: false,      // today's Snoozed section defaults open; this tracks explicit-closed state
+    wakeUpToastsEnabled: true,      // in-app toast when a snoozed task wakes up
     collapsedProjects: [],          // project IDs folded in week/inbox/list views
     stackExpandedProjects: [],      // project IDs expanded in Stack view
     drawerSecs: { props:true, sched:true, dele:true, notes:true, subs:true, log:false, block:true },
@@ -646,6 +651,15 @@ function App() {
     const next = typeof updater === 'function' ? updater(cur) : updater;
     return { ...prev, blockedOpenCols: Array.from(next) };
   });
+  // Snoozed section per column — colKeys with the section *expanded* live in
+  // tweaks. Today's column auto-expands at render time so users see the
+  // countdown bar for "later today" snoozes without clicking.
+  const snoozedOpen = useMemo(() => new Set(Array.isArray(tweaks.snoozedOpenCols) ? tweaks.snoozedOpenCols : []), [tweaks.snoozedOpenCols]);
+  const setSnoozedOpen = (updater) => setTweakState(prev => {
+    const cur = new Set(Array.isArray(prev.snoozedOpenCols) ? prev.snoozedOpenCols : []);
+    const next = typeof updater === 'function' ? updater(cur) : updater;
+    return { ...prev, snoozedOpenCols: Array.from(next) };
+  });
   // Per-day "↻ Routines" section is collapsed by default. Same pattern as
   // completed/blocked — colKeys with the section *expanded* live in tweaks.
   const routinesOpen = useMemo(() => new Set(Array.isArray(tweaks.routinesOpenCols) ? tweaks.routinesOpenCols : []), [tweaks.routinesOpenCols]);
@@ -675,6 +689,7 @@ function App() {
   const [spawning,setSpawning]=useState(new Set());
   const [toast,setToast]     = useState(null);
   const [toastUndoable,setToastUndoable]=useState(false);
+  const [toastAction,setToastAction]=useState(null); // { label, onClick } — optional action button shown alongside the toast
   const [undoStack,setUndoStack]=useState([]);
   // Nav collapse: if the user has set an explicit override (tweaks.navUserCollapsed
   // is true/false), honour it; otherwise fall back to "collapsed on narrow screens".
@@ -735,11 +750,64 @@ function App() {
   const showToast = (msg, opts={}) => {
     setToast(msg);
     setToastUndoable(!!opts.undoable);
+    setToastAction(opts.action || null);
     if (opts.timeout !== 0) {
       const t = opts.timeout || 7500;
-      setTimeout(() => { setToast(null); setToastUndoable(false); }, t);
+      setTimeout(() => { setToast(null); setToastUndoable(false); setToastAction(null); }, t);
     }
   };
+
+  // Wake-up handler used by AutoWakeWatcher. Clears snooze fields on each
+  // expired task, appends a 'woke' activity entry, surfaces a toast (when
+  // enabled), and fires a system Notification when the tab is hidden.
+  // wakeOnLoad: grouped toast with a "View" action pointing to the
+  // recently-woken side panel — used the first time the watcher fires after
+  // hydration, since those tasks slept through app downtime.
+  const wakeUpToastsEnabled = tweaks.wakeUpToastsEnabled !== false;
+  const handleWakeTasks = useCallback((expired, opts = {}) => {
+    if (!expired || expired.length === 0) return;
+    const wokeIds = new Set(expired.map(t => t.id));
+    const wokeAt = new Date().toISOString();
+    setTasks(prev => prev.map(t => wokeIds.has(t.id)
+      ? {
+          ...t,
+          snoozedUntil: null,
+          snoozedAt: null,
+          snoozeMode: null,
+          snoozeOffsetDays: null,
+          activity: [...(t.activity || []), { type: 'woke', at: wokeAt }],
+        }
+      : t));
+    if (wakeUpToastsEnabled) {
+      if (opts.wakeOnLoad) {
+        const n = expired.length;
+        showToast(`${n} task${n===1?'':'s'} woke up while you were away`, {
+          timeout: 9000,
+          action: { label: 'View', onClick: () => setTweak('sidePanelView', 'recently-woken') },
+        });
+      } else {
+        const titles = expired.slice(0, 3).map(t => `"${(t.title||'Task').slice(0, 32)}"`).join(', ');
+        const extra = expired.length > 3 ? ` and ${expired.length - 3} more` : '';
+        showToast(`Woke up: ${titles}${extra}`, { timeout: 6000 });
+      }
+    }
+    if (typeof Notification !== 'undefined'
+        && Notification.permission === 'granted'
+        && (typeof document === 'undefined' || document.visibilityState !== 'visible')) {
+      try {
+        const titles = expired.slice(0, 3).map(t => t.title).join(', ');
+        const extra = expired.length > 3 ? ` (+${expired.length - 3} more)` : '';
+        new Notification(expired.length === 1 ? 'Task woke up' : `${expired.length} tasks woke up`, {
+          body: titles + extra,
+          tag: 'task-wake',
+        });
+      } catch {}
+    }
+  // setTasks/setTweak/showToast are stable enough for our purposes; the
+  // dep list is intentionally light so this callback doesn't churn the
+  // AutoWakeWatcher effect on every tick.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wakeUpToastsEnabled]);
   const pushRecent = (kind, val) => {
     if (!val) return;
     setRecents(r => {
@@ -1693,6 +1761,16 @@ function App() {
       } else if (changes.snoozedUntil && !Object.prototype.hasOwnProperty.call(changes, 'snoozeMode')) {
         normalized = { ...normalized, snoozeMode: 'absolute', snoozeOffsetDays: null };
       }
+      // "Snooze moves the date" — when an absolute snooze is set, shift the
+      // task's date to the wake-up day so it lives in the right column both
+      // before AND after waking. Only when the caller hasn't already set date
+      // explicitly (some flows like check-ins do, and we respect their value).
+      if (changes.snoozedUntil
+        && !Object.prototype.hasOwnProperty.call(changes, 'date')
+        && (normalized.snoozeMode === 'absolute' || (!normalized.snoozeMode && !task.snoozeMode))) {
+        const dayKey = D.snoozeDayKey(changes.snoozedUntil);
+        if (dayKey) normalized = { ...normalized, date: dayKey };
+      }
     }
     return syncTaskSnooze({ ...task, ...normalized });
   }, []);
@@ -1824,7 +1902,6 @@ function App() {
   const tasksByDate = useMemo(()=>{
     const map = new Map([['inbox', []]]);
     activeTasks.forEach(t=>{
-      if(t.snoozedUntil) return;
       if(t.someday) return;
       if(t.parentId) return; // children render inside their project, not in a column
       if(isAutoSnoozedDelegation(t)) return;
@@ -1850,7 +1927,14 @@ function App() {
       // the rest stay accessible via Stack / drawer / parent's activity log.
       if(view === 'week' && t.checkInOf && !nextNudgeIds.has(t.id)) return;
       if(showStaleOnly && !isStale(t)) return;
-      const key = t.date || 'inbox';
+      // Snoozed tasks bucket into the column matching their wake-up day so
+      // the user can SEE what they've snoozed and when it'll return. Per
+      // Column.jsx, snoozed tasks render in their own collapsible group
+      // (parallel to Completed). For tasks snoozed to today, the SnoozeCountdown
+      // bar + timer make the wait visible at a glance.
+      const key = t.snoozedUntil
+        ? (D.snoozeDayKey(t.snoozedUntil) || 'inbox')
+        : (t.date || 'inbox');
       if(!map.has(key)) map.set(key, []);
       map.get(key).push(t);
     });
@@ -4100,7 +4184,7 @@ function App() {
       if(e.key==='Escape'){ setRenamingId(null); setDrawerId(null); setSettingsOpen(false); setFocusedId(null); setPalette(false); setShortcuts(false); setQuickEntry(false); setAddModal(null); setFilterOpen(false); clearSelection(); if (tweaks.calendarOpen) setTweak('calendarOpen', false); return; }
       if(inInput) return;
       if(e.key==='?'){ setShortcuts(s=>!s); return; }
-      const flatNav = view==='stack' || view==='list' || view==='inbox' || view==='upcoming' || view==='backlog' || view==='snoozed' || view==='someday' || view==='blocked' || view==='completed' || view==='archived' || view?.type==='project' || view?.type==='tag' || view?.type==='lifeArea';
+      const flatNav = view==='stack' || view==='list' || view==='inbox' || view==='upcoming' || view==='backlog' || view==='snoozed' || view==='recently-woken' || view==='someday' || view==='blocked' || view==='completed' || view==='archived' || view?.type==='project' || view?.type==='tag' || view?.type==='lifeArea';
       if(e.key==='j'||e.key==='J'){ flatNav ? moveFocusInFlat(1) : moveFocusInCol(1); }
       if(e.key==='k'||e.key==='K'){ flatNav ? moveFocusInFlat(-1) : moveFocusInCol(-1); }
       if(e.key==='ArrowRight'){ if(!flatNav) moveFocusToCol(1); else moveFocusInFlat(1); }
@@ -4279,6 +4363,20 @@ function App() {
     else if(sidePanelView==='upcoming') list = applyFilters(activeTasks.filter(t=>D.isFut(t.date)&&!t.done&&!t.parentId&&!t.blocked&&!t.delegatedTo));
     else if(sidePanelView==='backlog') list = applyFilters(activeTasks.filter(t=>!t.date&&!t.done&&!t.parentId&&!t.someday&&!t.blocked&&!t.delegatedTo));
     else if(sidePanelView==='snoozed') list = applyFilters(activeTasks.filter(t=>!!t.snoozedUntil&&!t.parentId&&!t.delegatedTo));
+    else if(sidePanelView==='recently-woken') {
+      // Tasks whose most recent activity entry is a 'woke' event in the past
+      // 24h. Lets users find tasks that quietly returned to view after a
+      // sleep (especially after wake-on-load).
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      list = applyFilters(activeTasks.filter(t => {
+        if (t.parentId || t.delegatedTo) return false;
+        const acts = Array.isArray(t.activity) ? t.activity : [];
+        const lastWoke = acts.slice().reverse().find(a => a?.type === 'woke');
+        if (!lastWoke) return false;
+        const at = new Date(lastWoke.at).getTime();
+        return Number.isFinite(at) && at >= cutoff;
+      }));
+    }
     else if(sidePanelView==='someday') list = applyFilters(activeTasks.filter(t=>!!t.someday&&!t.parentId&&!t.delegatedTo));
     else if(sidePanelView==='blocked') list = applyFilters(activeTasks.filter(t=>t.blocked&&!t.done&&!t.parentId&&!t.delegatedTo));
     else if(sidePanelView==='completed') list = applyFilters(activeTasks.filter(t=>t.done&&!t.parentId));
@@ -4659,9 +4757,14 @@ function App() {
       collapsedGrps={collapsedGrps}
       completedOpen={completedOpen.has(colKey)}
       blockedOpen={blockedOpen.has(colKey)}
+      snoozedOpen={colKey === todayStr ? !tweaks.snoozedTodayClosed : snoozedOpen.has(colKey)}
       onToggleGrp={gk=>setCollapsedGrps(s=>{const ns=new Set(s);ns.has(gk)?ns.delete(gk):ns.add(gk);return ns;})}
       onToggleCompleted={ck=>setCompletedOpen(s=>{const ns=new Set(s);ns.has(ck)?ns.delete(ck):ns.add(ck);return ns;})}
       onToggleBlocked={ck=>setBlockedOpen(s=>{const ns=new Set(s);ns.has(ck)?ns.delete(ck):ns.add(ck);return ns;})}
+      onToggleSnoozed={ck=>{
+        if(ck===todayStr){ setTweak('snoozedTodayClosed', !tweaks.snoozedTodayClosed); }
+        else { setSnoozedOpen(s=>{const ns=new Set(s);ns.has(ck)?ns.delete(ck):ns.add(ck);return ns;}); }
+      }}
       onAdd={(ck,d,pos)=>addTask(ck,d,'Untitled',pos)}
       onOpen={openTask}
       onToggle={completeTask} onDelete={deleteTask}
@@ -4750,6 +4853,8 @@ function App() {
     onDragEnd={dndOnDragEnd}
     onDragCancel={dndOnDragCancel}
   >
+    <SnoozeTickProvider tasks={tasks}>
+    <AutoWakeWatcher tasks={tasks} tasksReady={tasksReady} onWake={handleWakeTasks}/>
     {!supabaseDisabled && tasksReady && !migrationDismissed && (
       <MigrateFromLocal onComplete={() => setMigrationDismissed(true)} />
     )}
@@ -5021,6 +5126,7 @@ function App() {
             inboxGroupBy={inboxGroupBy} onInboxGroupBy={setInboxGroupBy}
             collapsedGrps={collapsedGrps}
             onToggleGrp={gk=>setCollapsedGrps(s=>{const ns=new Set(s);ns.has(gk)?ns.delete(gk):ns.add(gk);return ns;})}
+            onWakeNow={(id)=>updateTask(id,{snoozedUntil:null,snoozedAt:null,snoozeMode:null,snoozeOffsetDays:null})}
             cardExtras={cardExtras}/>
           {tweaks.showProjectPanel && <ProjectSidePanel tasks={activeTasks}
             activeProjects={filters.projects}
@@ -5487,7 +5593,10 @@ function App() {
       <div className={`spawn-toast${toastUndoable?' undo-toast':''}`}>
         <span>{toast}</span>
         {toastUndoable && undoStack.length>0 && (
-          <button onClick={()=>{ undo(); setToast(null); setToastUndoable(false); }}>Undo</button>
+          <button onClick={()=>{ undo(); setToast(null); setToastUndoable(false); setToastAction(null); }}>Undo</button>
+        )}
+        {toastAction && (
+          <button onClick={()=>{ toastAction.onClick?.(); setToast(null); setToastAction(null); }}>{toastAction.label}</button>
         )}
       </div>
     )}
@@ -5568,6 +5677,7 @@ function App() {
         </div>
       ) : null}
     </DragOverlay>
+    </SnoozeTickProvider>
   </DndContext>;
 }
 

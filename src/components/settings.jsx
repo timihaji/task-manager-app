@@ -279,6 +279,26 @@ const PRESETS_DATA = [
 // Must be module-level so the component references are stable across renders.
 const SettingsCtx = createContext(null);
 
+function NotifPermissionControl() {
+  const supported = typeof window !== 'undefined' && 'Notification' in window;
+  const [perm, setPerm] = useState(supported ? Notification.permission : 'unsupported');
+  useEffect(() => {
+    if (!supported) return;
+    const id = setInterval(() => {
+      if (Notification.permission !== perm) setPerm(Notification.permission);
+    }, 1500);
+    return () => clearInterval(id);
+  }, [supported, perm]);
+  if (!supported) return <span style={{fontSize:12,color:'var(--t4)'}}>Not supported in this browser</span>;
+  if (perm === 'granted') return <span style={{fontSize:12,color:'#16a34a',fontWeight:500}}>✓ Enabled</span>;
+  if (perm === 'denied') return <span style={{fontSize:12,color:'var(--t4)'}}>Blocked — re-enable in your browser settings</span>;
+  return (
+    <button className="tb-btn primary" onClick={async () => {
+      try { const r = await Notification.requestPermission(); setPerm(r); } catch {}
+    }}>Enable</button>
+  );
+}
+
 function SRow({label, desc, children}) {
   return (
     <div style={{display:'flex',alignItems:'center',gap:16,padding:'12px 16px',borderBottom:'1px solid var(--border)'}}>
@@ -435,6 +455,25 @@ function SettingsView({ tweaks, setTweak, taxonomy, taxonomyActions }) {
               <SRow label="Accent color" desc="Highlights, today badge, focus rings.">
                 <SwatchPicker value={tweaks.accentColor} onChange={c=>setTweak('accentColor',c)} size={26}/>
                 <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--t4)'}}>{tweaks.accentColor}</span>
+              </SRow>
+            </SCard>
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--t4)',marginBottom:12,marginTop:24,paddingBottom:8,borderBottom:'1px solid var(--border)'}}>Notifications</div>
+            <SCard>
+              <SRow label="Wake-up notifications" desc="When a snoozed task wakes up while this tab is hidden, show a system notification.">
+                <NotifPermissionControl/>
+              </SRow>
+              <SRow label="Show toast in-app" desc="A small toast appears at the bottom-right whenever tasks wake up — even when the tab is focused.">
+                <Tog id="wakeUpToastsEnabled"/>
+              </SRow>
+              <SRow label="Send a test notification" desc="Confirms the OS allows notifications from this site.">
+                <button className="tb-btn" onClick={() => {
+                  if (typeof Notification === 'undefined') { alert('Notifications not supported in this browser.'); return; }
+                  if (Notification.permission === 'granted') {
+                    new Notification('Task Manager', { body: 'Test notification — wake-up alerts will look like this.' });
+                  } else {
+                    alert(`Notifications are ${Notification.permission}. Click "Enable" above first.`);
+                  }
+                }}>Test</button>
               </SRow>
             </SCard>
           </>}

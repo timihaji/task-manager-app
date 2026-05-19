@@ -357,7 +357,7 @@ function TaskDrawer({ task, theme, tasks, buckets, tagTree, onCreateBucket, onCr
     : task.snoozeMode === 'before_due'
       ? `${task.snoozeOffsetDays || '?'}d before Due Date`
       : task.snoozedUntil
-        ? `Until ${task.snoozedUntil}`
+        ? `Until ${D.fmtSnooze(task.snoozedUntil)}`
         : 'Not snoozed';
 
   return (
@@ -868,10 +868,15 @@ function TaskDrawer({ task, theme, tasks, buckets, tagTree, onCreateBucket, onCr
                           fontWeight:snoozeMode===m.v?600:400}}>{m.l}</button>
                     ))}
                   </div>
-                  {(task.snoozedUntil || task.snoozeMode) && <div className="dr-dd-item" onClick={()=>{upd({snoozedUntil:null, snoozeMode:null, snoozeOffsetDays:null});setSnoozeOpen(false);}}>Remove snooze</div>}
+                  {(task.snoozedUntil || task.snoozeMode) && <div className="dr-dd-item" onClick={()=>{upd({snoozedUntil:null, snoozedAt:null, snoozeMode:null, snoozeOffsetDays:null});setSnoozeOpen(false);}}>Remove snooze</div>}
                   {snoozeMode === 'today' && SNOOZE_OPTS.map(o => (
                     <div key={o.l} className="dr-dd-item"
-                      onClick={()=>{upd({snoozedUntil:o.fn(), snoozeMode:'absolute', snoozeOffsetDays:null});setSnoozeOpen(false);}}>
+                      onClick={()=>{
+                        const dayStr = o.fn();
+                        const d = D.parse(dayStr); d.setHours(9, 0, 0, 0);
+                        upd({snoozedUntil: d.toISOString(), snoozedAt: new Date().toISOString(), snoozeMode:'absolute', snoozeOffsetDays:null});
+                        setSnoozeOpen(false);
+                      }}>
                       {o.l}
                     </div>
                   ))}

@@ -11,6 +11,7 @@ import { cardColorVars } from '../utils/cardColor.js';
 import { groupTasksBy, getGLabel, getGColor } from '../utils/grouping.js';
 import { CardPopover } from './CardPopover.jsx';
 import { TagPicker, ProjPicker, TimePicker, DatePicker, PriPicker, SnoozePicker } from './pickers.jsx';
+import { SnoozeCountdownBar, SnoozeTimerLabel } from './SnoozeCountdown.jsx';
 import { PriBars } from './PriBars.jsx';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
@@ -144,7 +145,7 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
 
   const isStaleCard = isStale(task);
   return (
-    <div className={`card${focused?' focused':''}${selected?' selected':''}${isDragging?' dragging':''}${spawning?' spawning':''}${renderAsProject?' card-project':''}${isProjectDropTarget?' card-drop-target':''}${task.blocked?' blocked':''}${isStaleCard?' card-stale':''}${task.checkInOf?' card-checkin':''}`}
+    <div className={`card${focused?' focused':''}${selected?' selected':''}${isDragging?' dragging':''}${spawning?' spawning':''}${renderAsProject?' card-project':''}${isProjectDropTarget?' card-drop-target':''}${task.blocked?' blocked':''}${task.snoozedUntil?' is-snoozed':''}${isStaleCard?' card-stale':''}${task.checkInOf?' card-checkin':''}`}
       ref={isSortable ? sortable.setNodeRef : undefined}
       style={{...dragStyle, ...cardColorVars(task.cardColor, tweaks, theme)}}
       data-card-id={task.id}
@@ -158,6 +159,7 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
       {...(isSortable ? sortable.attributes : {})}
       {...(isSortable && !useExtDrag ? sortable.listeners : {})}
     >
+      {task.snoozedUntil && <SnoozeCountdownBar task={task}/>}
       <div className="card-top">
         <button className={`bulk-check${selected?' on':''}`} title={selected?'Deselect task':'Select task'}
           onClick={e=>{e.stopPropagation();onSelect(task.id);}}>{selected?'✓':''}</button>
@@ -332,9 +334,11 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
         {/* Snooze (visible only when set; reachable via right-click / shortcut otherwise) */}
         {task.snoozedUntil && (
           <span ref={snoozeRef} className={`card-meta-btn${openPop==='snooze'?' act':''}`}
-            title={`Snoozed until ${task.snoozedUntil}`}
+            title={`Snoozed until ${D.fmtSnooze(task.snoozedUntil)}`}
             onClick={e=>{e.stopPropagation(); setOpenPop(o=>o==='snooze'?null:'snooze');}}>
-            <span className="card-meta" style={{color:'#f59e0b'}}><I.Snooze/>{task.snoozedUntil}</span>
+            <span className="card-meta" style={{color:'#f59e0b'}}><I.Snooze/>
+              <SnoozeTimerLabel task={task} fallback={D.fmtSnooze(task.snoozedUntil)}/>
+            </span>
             <CardPopover open={openPop==='snooze'} onClose={()=>setOpenPop(null)} anchorRef={snoozeRef}>
               <SnoozePicker task={task} isBulk={isBulkEdit}
                 onChange={(p)=>applyChange(p)} onClose={()=>setOpenPop(null)}/>

@@ -98,8 +98,8 @@ function RoutineStripDropZone({ colKey, children }) {
   );
 }
 
-function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, tweaks, groupBy, collapsedGrps, completedOpen, blockedOpen,
-  onToggleGrp, onToggleCompleted, onToggleBlocked, onAdd, onOpen, onToggle, onDelete,
+function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, tweaks, groupBy, collapsedGrps, completedOpen, blockedOpen, snoozedOpen,
+  onToggleGrp, onToggleCompleted, onToggleBlocked, onToggleSnoozed, onAdd, onOpen, onToggle, onDelete,
   onFocus, onSelect, renamingId, onRename, onRenameDone,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
   blockingCountFor, taskTitleById,
@@ -118,8 +118,13 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
   const routines = tasks.filter(t => t.recurrence?.isRoutine && !t.blocked);
   const routineIds = new Set(routines.map(t => t.id));
   const routinesDone = routines.filter(t => t.done).length;
-  const active  = tasks.filter(t=>!t.done && !t.blocked && !routineIds.has(t.id));
-  const blocked = tasks.filter(t=>!t.done &&  t.blocked);
+  // Snoozed tasks live in their own group — pulled out of active/blocked so
+  // they don't double-count or get sorted with normal cards. `tasksByDate`
+  // (App.jsx) already buckets a snoozed task into the column matching its
+  // wake-up day, so this filter is just the per-column split.
+  const snoozed = tasks.filter(t => !t.done && t.snoozedUntil && !routineIds.has(t.id));
+  const active  = tasks.filter(t=>!t.done && !t.blocked && !t.snoozedUntil && !routineIds.has(t.id));
+  const blocked = tasks.filter(t=>!t.done &&  t.blocked && !t.snoozedUntil);
   const done    = tasks.filter(t=>t.done && !routineIds.has(t.id));
   // Flatten counter: count children inside project shells, not the shells themselves.
   // Blocked tasks (and blocked children of projects) are excluded from the day's progress math.
@@ -313,6 +318,32 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
             ))}
           </>
         )}
+        {snoozed.length>0 && (
+          <>
+            <div className="snz-grp-hdr" onClick={()=>onToggleSnoozed?.(colKey)}>
+              <svg className={`grp-chv${snoozedOpen?' open':''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              <I.Snooze/>
+              <span className="grp-name">Snoozed</span>
+              <span className="grp-cnt">{snoozed.length}</span>
+            </div>
+            {snoozedOpen && snoozed.map(task=>(
+              <TaskCard key={task.id} task={task} colKey={colKey} theme={theme} tweaks={tweaks}
+                focused={focusedCardId===task.id} renaming={renamingId===task.id} spawning={spawning?.has(task.id)}
+                selected={selectedIds?.has(task.id)}
+                onOpen={onOpen} onToggle={onToggle} onDelete={onDelete}
+                onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
+                sortableData={{ kind: 'snoozed-task', date: colKey, parentId: task.parentId || null }}
+                childrenOf={childrenOf} projectStats={projectStats}
+                collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
+                forceOpenProjects={forceOpenProjects}
+                selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawning} focusedId={focusedCardId}
+                onAdd={onAdd}
+                blockingCountFor={blockingCountFor} taskTitleById={taskTitleById}
+                getEffectiveLifeArea={cardExtras?.getEffectiveLifeArea}
+                {...(cardExtras||{})}/>
+            ))}
+          </>
+        )}
         {done.length>0 && (
           <>
             <div className="done-grp-hdr" onClick={()=>onToggleCompleted(colKey)}>
@@ -358,7 +389,7 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
 function InboxCol({ tasks, theme, tweaks, focusedCardId, selectedIds, renamingId, spawning, width, collapsed, panelView, onPanelView, onCollapse, onResizeStart, onAdd, onOpen, onToggle, onDelete, onFocus, onSelect, onRename, onRenameDone,
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
   inboxFilters, onCycleInboxFilter, onClearInboxFilters, inboxFilterCount,
-  inboxGroupBy, onInboxGroupBy, collapsedGrps, onToggleGrp, cardExtras }) {
+  inboxGroupBy, onInboxGroupBy, collapsedGrps, onToggleGrp, cardExtras, onWakeNow }) {
   const [cap, setCap] = useState('');
   const [viewOpen, setViewOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -401,7 +432,7 @@ function InboxCol({ tasks, theme, tweaks, focusedCardId, selectedIds, renamingId
   const cardSortable = (task, grpKey) => ({ kind: 'task', date: null, parentId: task.parentId || null, grpKey });
   const views = [
     ['timeline','Timeline'],['inbox','Inbox'],['upcoming','Upcoming'],['backlog','Backlog'],
-    ['snoozed','Snoozed'],['someday','Someday'],['blocked','Blocked'],['completed','Completed'],['archived','Archived'],
+    ['snoozed','Snoozed'],['recently-woken','Recently woken'],['someday','Someday'],['blocked','Blocked'],['completed','Completed'],['archived','Archived'],
   ];
   const activeLabel = views.find(([v])=>v===panelView)?.[1] || 'Inbox';
   return (
@@ -492,9 +523,64 @@ function InboxCol({ tasks, theme, tweaks, focusedCardId, selectedIds, renamingId
       <ColDroppable id="col:inbox" data={{ kind: 'column', date: null }} className="col-body"
         style={{flex:1}}
         onDoubleClick={e=>{ if(insertable && !e.target.closest('.card,.card-add-zone,.grp-hdr')) onAdd(null,null,'Untitled'); }}>
-        {tasks.length===0 && <EmptyState kind="inbox" title="Inbox is clear" hint={<>Capture anything — type above, or press <kbd>Ctrl</kbd>+<kbd>Space</kbd> from anywhere.</>}/>}
+        {tasks.length===0 && panelView==='snoozed' && <div className="snz-side-empty">No snoozed tasks. Press <kbd>S</kbd> on a task to snooze it.</div>}
+        {tasks.length===0 && panelView==='recently-woken' && <div className="snz-side-empty">No tasks have woken up in the last 24h.</div>}
+        {tasks.length===0 && panelView!=='snoozed' && panelView!=='recently-woken' && <EmptyState kind="inbox" title="Inbox is clear" hint={<>Capture anything — type above, or press <kbd>Ctrl</kbd>+<kbd>Space</kbd> from anywhere.</>}/>}
+        {/* Grouped Snoozed view: bucket by wake-up day (Today / Tomorrow /
+            This week / Later), sort ascending by snoozedUntil within each
+            group, render with a "Wake now" overlay on hover. */}
+        {panelView === 'snoozed' && tasks.length > 0 && (() => {
+          const now = new Date();
+          const todayKey = D.str(D.today());
+          const tomorrowKey = D.str(D.add(D.today(), 1));
+          const weekEnd = D.str(D.add(D.today(), 7));
+          const buckets = { today: [], tomorrow: [], week: [], later: [] };
+          tasks.forEach(t => {
+            const dayKey = D.snoozeDayKey(t.snoozedUntil);
+            if (!dayKey) { buckets.later.push(t); return; }
+            if (dayKey === todayKey) buckets.today.push(t);
+            else if (dayKey === tomorrowKey) buckets.tomorrow.push(t);
+            else if (dayKey < weekEnd) buckets.week.push(t);
+            else buckets.later.push(t);
+          });
+          Object.values(buckets).forEach(arr => arr.sort((a,b) =>
+            String(a.snoozedUntil||'').localeCompare(String(b.snoozedUntil||''))));
+          const sections = [
+            ['Today', buckets.today, true],
+            ['Tomorrow', buckets.tomorrow, false],
+            ['This week', buckets.week, false],
+            ['Later', buckets.later, false],
+          ].filter(([,arr]) => arr.length > 0);
+          return sections.map(([label, arr]) => (
+            <div className="snz-side-grp" key={label}>
+              <div className="snz-side-grp-hdr">
+                <span>{label}</span>
+                <span className="grp-cnt">{arr.length}</span>
+              </div>
+              {arr.map(task => (
+                <div key={task.id} style={{position:'relative'}}>
+                  <TaskCard task={task} colKey={task.date||'inbox'} theme={theme} tweaks={tweaks}
+                    focused={focusedCardId===task.id}
+                    selected={selectedIds?.has(task.id)}
+                    renaming={renamingId===task.id} spawning={spawning?.has(task.id)}
+                    onOpen={onOpen} onToggle={onToggle} onDelete={onDelete}
+                    onFocus={onFocus} onSelect={onSelect} onRename={onRename} onRenameDone={onRenameDone}
+                    childrenOf={childrenOf} projectStats={projectStats}
+                    collapsedProjects={collapsedProjects} onToggleProject={onToggleProject}
+                    forceOpenProjects={forceOpenProjects}
+                    selectedIds={selectedIds} renamingId={renamingId} spawningSet={spawning} focusedId={focusedCardId}
+                    onAdd={onAdd}
+                    getEffectiveLifeArea={cardExtras?.getEffectiveLifeArea}
+                    {...(cardExtras||{})}/>
+                  {onWakeNow && <button className="snz-wake-now" title="Wake this task now"
+                    onClick={(e)=>{e.stopPropagation();onWakeNow(task.id);}}>Wake now</button>}
+                </div>
+              ))}
+            </div>
+          ));
+        })()}
         {/* Per-group SortableContext (was a single context wrapping every group). */}
-        {(()=>{
+        {panelView !== 'snoozed' && (()=>{
           const customGroups = cardExtras?.customGroups || [];
           const renamingGroupId = cardExtras?.renamingGroupId;
           const onStartGroupRename = cardExtras?.onStartGroupRename;

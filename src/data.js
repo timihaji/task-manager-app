@@ -124,6 +124,60 @@ const D = {
   isPast:(s) => { if (!s) return false; const t=D.today(); return D.parse(s)<t; },
   isTdy: (s) => { if (!s) return false; return s===D.str(D.today()); },
   isFut: (s) => { if (!s) return false; const t=D.today(); return D.parse(s)>t; },
+  // Has an ISO timestamp's wall-clock moment passed? Accepts ISO timestamps
+  // (the new snoozedUntil format) and date strings (legacy day-only snoozes,
+  // treated as midnight of that day in local time).
+  isPastTime: (iso) => {
+    if (!iso) return false;
+    const t = iso.length === 10 ? new Date(iso + 'T00:00:00').getTime() : new Date(iso).getTime();
+    return Number.isFinite(t) && t <= Date.now();
+  },
+  // Local-time YYYY-MM-DD of a timestamp. Used to bucket a snoozed task into
+  // the column matching its wake-up day. Accepts both timestamp ISO and bare
+  // date string (legacy snoozes pre-migration).
+  snoozeDayKey: (iso) => {
+    if (!iso) return null;
+    if (iso.length === 10) return iso;
+    const d = new Date(iso);
+    if (!Number.isFinite(d.getTime())) return null;
+    return D.str(d);
+  },
+  // Compact human label for a wake-up time. "in 23m" / "tomorrow 9 AM" /
+  // "Thu 3 PM" / "May 22". Used on snooze pills and chips.
+  fmtSnooze: (iso) => {
+    if (!iso) return '';
+    const isDateOnly = iso.length === 10;
+    const target = isDateOnly ? new Date(iso + 'T00:00:00') : new Date(iso);
+    if (!Number.isFinite(target.getTime())) return '';
+    const now = new Date();
+    const todayKey = D.str(now);
+    const tomorrowKey = D.str(D.add(D.today(), 1));
+    const tKey = D.str(target);
+    const sameDay = tKey === todayKey;
+    const tomorrow = tKey === tomorrowKey;
+    const fmtTime = (d) => {
+      const h = d.getHours();
+      const m = d.getMinutes();
+      const h12 = h % 12 === 0 ? 12 : h % 12;
+      const mer = h < 12 ? 'AM' : 'PM';
+      return m === 0 ? `${h12} ${mer}` : `${h12}:${String(m).padStart(2,'0')} ${mer}`;
+    };
+    if (sameDay) {
+      if (isDateOnly) return 'today';
+      const diffMs = target.getTime() - now.getTime();
+      if (diffMs < 0) return 'now';
+      const diffMin = Math.round(diffMs / 60000);
+      if (diffMin < 60) return diffMin <= 1 ? 'in 1m' : `in ${diffMin}m`;
+      return `at ${fmtTime(target)}`;
+    }
+    if (tomorrow) return isDateOnly ? 'tomorrow' : `tomorrow ${fmtTime(target)}`;
+    const daysOut = Math.round((D.parse(tKey).getTime() - D.today().getTime()) / 86400000);
+    if (daysOut >= 0 && daysOut < 7) {
+      const dayLabel = DAY_S[target.getDay()];
+      return isDateOnly ? dayLabel : `${dayLabel} ${fmtTime(target)}`;
+    }
+    return `${MONTH_S[target.getMonth()]} ${target.getDate()}`;
+  },
 };
 
 // offset is a day offset from today (not weeks)
@@ -438,7 +492,12 @@ const resolveRelativeSnoozeDate = (task) => {
   const anchor = task.snoozeMode === 'before_due' ? task.dueDate : task.date;
   const offset = Number.isFinite(task.snoozeOffsetDays) ? task.snoozeOffsetDays : null;
   if (!anchor || offset == null) return null;
-  return D.str(D.add(D.parse(anchor), -offset));
+  // Relative snooze (`before_due`) keeps day-granularity by design — return an
+  // ISO timestamp at 09:00 local on the wake-up day so the picker treats it
+  // consistently with absolute timestamps.
+  const wakeDay = D.add(D.parse(anchor), -offset);
+  wakeDay.setHours(9, 0, 0, 0);
+  return wakeDay.toISOString();
 };
 
 const syncTaskSnooze = (task) => {
@@ -854,7 +913,7 @@ const makeTask = (overrides={}) => syncTaskSnooze({
   dueDate:null,
   lifeArea:null,
   timeEstimate:null, done:false, completedAt:null, snoozedUntil:null,
-  snoozeMode:null, snoozeOffsetDays:null,
+  snoozedAt:null, snoozeMode:null, snoozeOffsetDays:null,
   recurrence:null, activity:[{type:'created',at:new Date().toISOString()}],
   createdAt:new Date().toISOString(),
   cardType:'task', parentId:null, childOrder:null,
@@ -889,6 +948,7 @@ const migrateTasks = (tasks=[]) => tasks.map(t => ({
   bucketPosition: t.bucketPosition === undefined ? null : t.bucketPosition,
   lifeArea: t.lifeArea === undefined ? null : t.lifeArea,
   dueDate: t.dueDate === undefined ? null : t.dueDate,
+  snoozedAt: t.snoozedAt === undefined ? null : t.snoozedAt,
   snoozeMode: t.snoozeMode === undefined ? null : t.snoozeMode,
   snoozeOffsetDays: t.snoozeOffsetDays === undefined ? null : t.snoozeOffsetDays,
   blocked: t.blocked === undefined ? false : t.blocked,

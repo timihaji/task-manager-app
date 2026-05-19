@@ -1135,6 +1135,65 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 .blocked-grp-hdr:hover{color:#fde68a}
 .blocked-grp-hdr .grp-name{color:#fcd34d}
 .blocked-grp-hdr::before{content:'';width:6px;height:6px;border-radius:50%;background:#f59e0b;margin-right:2px;flex-shrink:0}
+
+/* Snoozed group — parallel to Completed but ABOVE it. Cards inside are
+   dimmed (.is-snoozed) so the user can tell at a glance which cards are
+   sleeping vs. active for the same day. Today's column shows a thin
+   .snz-bar at the top of each snoozed card with a live countdown. */
+.snz-grp-hdr{display:flex;align-items:center;gap:6px;padding:6px 8px 6px 4px;cursor:pointer;color:#f59e0b;user-select:none;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;border-top:1px solid var(--border);margin-top:4px}
+.snz-grp-hdr:hover{color:#fbbf24;background:var(--surface-2)}
+.snz-grp-hdr .grp-name{color:#f59e0b}
+.snz-grp-hdr svg{width:13px;height:13px;flex-shrink:0;opacity:.85}
+.snz-grp-hdr .grp-chv{width:13px;height:13px;transition:transform .15s}
+.snz-grp-hdr .grp-chv.open{transform:rotate(90deg)}
+
+/* Dimmed snoozed card across all surfaces. Hover brings it back so users
+   can still read details without un-snoozing. Specificity bump on the today
+   selector is required to beat `.col.is-today .card{opacity:1!important}`
+   (line ~239) that otherwise forces full opacity on today's cards. */
+.card.is-snoozed,.scard.is-snoozed,.list-item.is-snoozed{opacity:.65!important;transition:opacity .15s}
+.card.is-snoozed:hover,.scard.is-snoozed:hover,.list-item.is-snoozed:hover{opacity:.95!important}
+.col.is-today .card.is-snoozed{opacity:.65!important}
+.col.is-today .card.is-snoozed:hover{opacity:.95!important}
+.card.is-snoozed{position:relative}
+
+/* Countdown progress bar on cards snoozed-to-today.
+   --snz-progress is a 0..1 number set inline by SnoozeCountdown. */
+.snz-bar{position:absolute;top:0;left:0;right:0;height:2px;background:rgba(245,158,11,.18);border-top-left-radius:inherit;border-top-right-radius:inherit;overflow:hidden;pointer-events:none}
+.snz-bar-fill{height:100%;width:calc(var(--snz-progress, 0) * 100%);background:linear-gradient(90deg, #f59e0b, #f97316);transition:width .5s linear}
+/* Last-minute and last-5s emphasis */
+.snz-bar.warn .snz-bar-fill{background:linear-gradient(90deg, #f97316, #ef4444)}
+.snz-bar.crit .snz-bar-fill{background:#ef4444;animation:snz-pulse 1s ease-in-out infinite}
+@keyframes snz-pulse{0%,100%{opacity:.85}50%{opacity:1}}
+
+/* SnoozePicker — section labels, chip grid, custom-time row, notif banner. */
+.snz-sec-lbl{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t4);padding:6px 2px 3px;margin-top:2px}
+.snz-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;padding:2px 0 4px}
+.snz-chip{text-align:center;justify-content:center;display:inline-flex;align-items:center;gap:3px}
+.snz-chip-alt{opacity:.8;font-style:italic}
+.snz-chip-suffix{font-size:9px;opacity:.7;margin-left:2px}
+.snz-time-row{display:flex;align-items:center;gap:6px;padding:6px 2px 4px;flex-wrap:wrap}
+.snz-time-input{font:12px var(--font);padding:3px 6px;border:1px solid var(--border-s);border-radius:3px;background:var(--surface);color:var(--t1)}
+.snz-day-seg{display:inline-flex;background:var(--surface-3);border-radius:3px;padding:2px;gap:2px}
+.snz-day-seg span{padding:3px 8px;border-radius:2px;cursor:pointer;font:11px var(--font);color:var(--t3)}
+.snz-day-seg span.act{background:var(--surface);color:var(--t1);font-weight:500}
+.snz-time-go{padding:4px 10px;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:3px;cursor:pointer;font:11px var(--font);font-weight:500}
+.snz-time-go:disabled{opacity:.4;cursor:default;background:var(--surface-2);color:var(--t4);border-color:var(--border)}
+.snz-notif-banner{display:flex;align-items:center;gap:6px;padding:6px 8px;margin:2px 0 6px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:3px;font-size:11px;color:var(--t2)}
+.snz-notif-msg{flex:1;line-height:1.3}
+.snz-notif-enable{padding:2px 8px;border:1px solid #f59e0b;background:#f59e0b;color:#fff;border-radius:3px;cursor:pointer;font:11px var(--font);font-weight:500}
+.snz-notif-dismiss{padding:0 4px;border:none;background:transparent;color:var(--t4);cursor:pointer;font:14px var(--font);line-height:1}
+.snz-notif-dismiss:hover{color:var(--t2)}
+
+/* Snoozed side-panel grouped view */
+.snz-side-grp{margin:8px 0 4px}
+.snz-side-grp-hdr{display:flex;align-items:center;gap:6px;padding:4px 6px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t4);cursor:pointer;user-select:none;border-bottom:1px solid var(--border)}
+.snz-side-grp-hdr:hover{color:var(--t3)}
+.snz-side-grp-hdr .grp-cnt{margin-left:auto;color:var(--t4);font-weight:600}
+.snz-side-empty{padding:18px 12px;text-align:center;color:var(--t4);font-size:12px;font-style:italic}
+.snz-wake-now{position:absolute;top:4px;right:4px;padding:2px 6px;border:1px solid var(--border-s);background:var(--surface);color:var(--t3);border-radius:3px;cursor:pointer;font:10px var(--font);opacity:0;transition:opacity .15s;z-index:2}
+.card.is-snoozed:hover .snz-wake-now,.list-item.is-snoozed:hover .snz-wake-now{opacity:1}
+.snz-wake-now:hover{color:#f59e0b;border-color:#f59e0b}
 /* Timeline per-day routines strip — wrapped in .grp-free + phantom
    .card-add-zone (see Column.jsx) so its top edge sits at the same y as a
    regular first card in adjacent columns. The spacer reuses card-add-zone's

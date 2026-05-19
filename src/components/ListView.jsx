@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, daysSince, recurrenceLabel } from '../data.js';
+import { PROJ, TAG_NAMES, TAG_DARK, TAG_LIGHT, daysSince, recurrenceLabel, D } from '../data.js';
 import { I } from '../utils/icons.jsx';
 // Life-area imports dropped in the Buckets redesign polish pass. ListView
 // now shows a bucket chip resolved from tweaks.customGroups.
@@ -27,7 +27,7 @@ function ListTaskItem({ task, tweaks, focused, selected, renaming, onOpen, onFoc
     onRenameDone();
   };
   return (
-    <div className={`list-item${focused?' focused':''}${selected?' selected':''}`} data-list-id={task.id}
+    <div className={`list-item${focused?' focused':''}${selected?' selected':''}${task.snoozedUntil?' is-snoozed':''}`} data-list-id={task.id}
       onMouseEnter={()=>{ if(!focused) hoverFocusRef.current=true; onFocus(task.id); }}
       onMouseLeave={()=>{ if(hoverFocusRef.current && focused) onFocus(null); hoverFocusRef.current=false; }}
       onClick={()=>{ if(renaming) return; hoverFocusRef.current=false; onFocus(task.id); }}
@@ -53,7 +53,7 @@ function ListTaskItem({ task, tweaks, focused, selected, renaming, onOpen, onFoc
         const cls = d>=7?'crit':d>=3?'warn':'';
         return <span className={`card-aging ${cls}`} title={task.blockedReason||`Blocked ${d}d`}>{d}d</span>;
       })()}
-      {task.snoozedUntil && <span className="list-item-date" title={`Returns ${task.snoozedUntil}`}>Until {task.snoozedUntil}</span>}
+      {task.snoozedUntil && <span className="list-item-date" title={`Returns ${D.fmtSnooze(task.snoozedUntil)}`}>Until {D.fmtSnooze(task.snoozedUntil)}</span>}
       {task.date && <span className="list-item-date" title={`Start Date: ${task.date}`}>Start {task.date}</span>}
       {task.dueDate && <span className="list-item-date" title={`Due Date: ${task.dueDate}`}>Due {task.dueDate}</span>}
       {bucket && (

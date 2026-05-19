@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PROJ, ALL_TAGS, TAG_NAMES, TAG_DARK, TAG_LIGHT, D } from '../data.js';
-import { TIME_PRESETS, TIME_MORE, PRI_INFO, SNOOZE_OPTS } from '../utils/constants.js';
+import { TIME_PRESETS, TIME_MORE, PRI_INFO } from '../utils/constants.js';
 import { parseNLDate } from '../utils/parseNLDate.js';
 import { MiniCalendar } from './MiniCalendar.jsx';
 
@@ -298,38 +298,183 @@ function PriPicker({ task, onChange, onClose, isBulk }) {
 function SnoozePicker({ task, onChange, onClose, isBulk }) {
   const cur = task.snoozedUntil || task.snoozeMode || null;
   const [showCal, setShowCal] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [customTime, setCustomTime] = useState('');
+  const [customDay, setCustomDay] = useState('today');
+  const [notifDismissed, setNotifDismissed] = useState(false);
   const today = D.today();
-  const nextSat = () => { const d = new Date(today); const day = d.getDay(); d.setDate(d.getDate() + (day === 6 ? 7 : (6 - day))); return D.str(d); };
-  const nextMon = () => { const d = new Date(today); const day = d.getDay(); d.setDate(d.getDate() + (day === 1 ? 7 : (8 - day) % 7 || 7)); return D.str(d); };
-  const snoozeAbs = (dateStr) => { onChange({ snoozedUntil: dateStr, snoozeMode: 'absolute', snoozeOffsetDays: null }); onClose(); };
-  const OPTS = [
-    { l: 'Tomorrow',    fn: () => D.str(D.add(today, 1)) },
-    { l: 'In 2 days',   fn: () => D.str(D.add(today, 2)) },
-    { l: 'In 3 days',   fn: () => D.str(D.add(today, 3)) },
-    { l: 'This weekend',fn: nextSat },
-    { l: 'Next week',   fn: nextMon },
-    { l: 'In 2 weeks',  fn: () => D.str(D.add(today, 14)) },
-    { l: 'In 3 weeks',  fn: () => D.str(D.add(today, 21)) },
-    { l: 'Next month',  fn: () => { const d = new Date(today); d.setMonth(d.getMonth() + 1); return D.str(d); } },
-    { l: 'In 3 months', fn: () => { const d = new Date(today); d.setMonth(d.getMonth() + 3); return D.str(d); } },
+  const now = new Date();
+
+  // Helpers — every preset writes a full ISO timestamp now that snoozedUntil
+  // is timestamptz on the DB. Day-only presets anchor at 09:00 local.
+  const isoIn = (mins) => new Date(Date.now() + mins * 60000).toISOString();
+  const atHour = (dateObj, hour, minute=0) => {
+    const d = new Date(dateObj);
+    d.setHours(hour, minute, 0, 0);
+    return d.toISOString();
+  };
+
+  const snoozeAbs = (iso) => {
+    onChange({
+      snoozedUntil: iso,
+      snoozeMode: 'absolute',
+      snoozeOffsetDays: null,
+      snoozedAt: new Date().toISOString(),
+    });
+    onClose();
+  };
+
+  // Named periods anchored at fixed local hours; if today's already past that
+  // hour, the chip targets tomorrow at the same hour and shows a "tmrw" hint.
+  const namedPeriodTs = (hour) => {
+    const candidate = new Date(today); candidate.setHours(hour, 0, 0, 0);
+    if (candidate.getTime() <= now.getTime()) {
+      const tmrw = D.add(today, 1); tmrw.setHours(hour, 0, 0, 0);
+      return tmrw.toISOString();
+    }
+    return candidate.toISOString();
+  };
+  const namedPeriodIsTmrw = (hour) => {
+    const candidate = new Date(today); candidate.setHours(hour, 0, 0, 0);
+    return candidate.getTime() <= now.getTime();
+  };
+
+  // Later-today durations: only show chips whose wake-up stays inside today.
+  const TODAY_DURATIONS = [
+    { l: '+15m', m: 15 },
+    { l: '+30m', m: 30 },
+    { l: '+1h',  m: 60 },
+    { l: '+2h',  m: 120 },
+    { l: '+4h',  m: 240 },
   ];
+  const visibleDurations = TODAY_DURATIONS.filter(o => {
+    const t = new Date(Date.now() + o.m * 60000);
+    return D.str(t) === D.str(today);
+  });
+
+  const NAMED_PERIODS = [
+    { l: 'This afternoon', hour: 13 },
+    { l: 'This evening',   hour: 18 },
+    { l: 'Tonight',        hour: 21 },
+  ];
+
+  const nextSat = () => { const d = new Date(today); const day = d.getDay(); d.setDate(d.getDate() + (day === 6 ? 7 : (6 - day))); d.setHours(9,0,0,0); return d.toISOString(); };
+  const nextMon = () => { const d = new Date(today); const day = d.getDay(); d.setDate(d.getDate() + (day === 1 ? 7 : (8 - day) % 7 || 7)); d.setHours(9,0,0,0); return d.toISOString(); };
+
+  const WEEK_OPTS = [
+    { l: 'Tomorrow 9 AM', fn: () => atHour(D.add(today, 1), 9) },
+    { l: 'In 2 days',     fn: () => atHour(D.add(today, 2), 9) },
+    { l: 'In 3 days',     fn: () => atHour(D.add(today, 3), 9) },
+    { l: 'This weekend',  fn: nextSat },
+    { l: 'Next week',     fn: nextMon },
+  ];
+
+  const LATER_OPTS = [
+    { l: 'In 2 weeks', fn: () => atHour(D.add(today, 14), 9) },
+    { l: 'In 3 weeks', fn: () => atHour(D.add(today, 21), 9) },
+    { l: 'Next month', fn: () => { const d = new Date(today); d.setMonth(d.getMonth()+1); d.setHours(9,0,0,0); return d.toISOString(); } },
+    { l: 'In 3 months',fn: () => { const d = new Date(today); d.setMonth(d.getMonth()+3); d.setHours(9,0,0,0); return d.toISOString(); } },
+  ];
+
+  const submitCustomTime = () => {
+    if (!customTime) return;
+    const [h, m] = customTime.split(':').map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return;
+    const base = customDay === 'today' ? new Date(today) : D.add(today, 1);
+    base.setHours(h, m, 0, 0);
+    snoozeAbs(base.toISOString());
+  };
+
+  // Notification banner — only when permission is 'default' (user hasn't
+  // chosen yet) and they're looking at the today section (the case where
+  // notifications matter most). 'denied' / 'granted' silences it.
+  const notifSupported = typeof window !== 'undefined' && 'Notification' in window;
+  const notifPerm = notifSupported ? Notification.permission : 'unsupported';
+  const showNotifBanner = notifSupported && notifPerm === 'default' && !notifDismissed && visibleDurations.length > 0;
+  const enableNotif = async () => {
+    try { await Notification.requestPermission(); } catch {}
+    setNotifDismissed(true);
+  };
+
   return (
     <>
       {isBulk && <div className="card-pop-bulk-hd">Editing {isBulk} tasks</div>}
-      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'4px', padding:'4px 0'}}>
-        {OPTS.map(o => (
-          <span key={o.l} className="card-pop-chip" style={{textAlign:'center', justifyContent:'center'}}
+
+      {showNotifBanner && (
+        <div className="snz-notif-banner">
+          <span className="snz-notif-msg">Get a ping when this wakes up?</span>
+          <button className="snz-notif-enable" onClick={enableNotif}>Enable</button>
+          <button className="snz-notif-dismiss" aria-label="Dismiss" onClick={() => setNotifDismissed(true)}>×</button>
+        </div>
+      )}
+
+      {visibleDurations.length > 0 && (
+        <>
+          <div className="snz-sec-lbl">Later today</div>
+          <div className="snz-grid">
+            {visibleDurations.map(o => (
+              <span key={o.l} className="card-pop-chip snz-chip"
+                onClick={() => snoozeAbs(isoIn(o.m))}>{o.l}</span>
+            ))}
+            {NAMED_PERIODS.map(p => {
+              const tmrw = namedPeriodIsTmrw(p.hour);
+              return (
+                <span key={p.l} className="card-pop-chip snz-chip"
+                  title={tmrw ? `Already past ${p.l.toLowerCase()} today — snoozing to tomorrow` : ''}
+                  onClick={() => snoozeAbs(namedPeriodTs(p.hour))}>
+                  {p.l}{tmrw && <span className="snz-chip-suffix"> · tmrw</span>}
+                </span>
+              );
+            })}
+            <span className="card-pop-chip snz-chip snz-chip-alt"
+              onClick={() => setShowTimePicker(v => !v)}>Pick time…</span>
+          </div>
+          {showTimePicker && (
+            <div className="snz-time-row">
+              <input type="time" className="snz-time-input" value={customTime}
+                onChange={e => setCustomTime(e.target.value)} />
+              <div className="snz-day-seg">
+                <span className={customDay==='today'?'act':''} onClick={() => setCustomDay('today')}>Today</span>
+                <span className={customDay==='tomorrow'?'act':''} onClick={() => setCustomDay('tomorrow')}>Tomorrow</span>
+              </div>
+              <button className="snz-time-go" disabled={!customTime} onClick={submitCustomTime}>Snooze</button>
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="snz-sec-lbl">Later this week</div>
+      <div className="snz-grid">
+        {WEEK_OPTS.map(o => (
+          <span key={o.l} className="card-pop-chip snz-chip"
             onClick={() => snoozeAbs(o.fn())}>{o.l}</span>
         ))}
-        <span className="card-pop-chip" style={{textAlign:'center', justifyContent:'center', opacity:.8}}
+      </div>
+
+      <div className="snz-sec-lbl">Further out</div>
+      <div className="snz-grid">
+        {LATER_OPTS.map(o => (
+          <span key={o.l} className="card-pop-chip snz-chip"
+            onClick={() => snoozeAbs(o.fn())}>{o.l}</span>
+        ))}
+        <span className="card-pop-chip snz-chip snz-chip-alt"
           onClick={() => setShowCal(v => !v)}>Pick date…</span>
       </div>
+
       {showCal && (
-        <MiniCalendar value={task.snoozedUntil || null} onPick={snoozeAbs} />
+        <MiniCalendar value={task.snoozedUntil ? D.snoozeDayKey(task.snoozedUntil) : null}
+          onPick={(dateStr) => {
+            const d = D.parse(dateStr); d.setHours(9, 0, 0, 0);
+            snoozeAbs(d.toISOString());
+          }} />
       )}
+
       {cur && (
         <div className="card-pop-foot">
-          <button className="card-pop-clear" onClick={() => { onChange({ snoozedUntil: null, snoozeMode: null, snoozeOffsetDays: null }); onClose(); }}>Wake up now</button>
+          <button className="card-pop-clear"
+            onClick={() => { onChange({ snoozedUntil: null, snoozeMode: null, snoozeOffsetDays: null, snoozedAt: null }); onClose(); }}>
+            Wake up now
+          </button>
         </div>
       )}
     </>
