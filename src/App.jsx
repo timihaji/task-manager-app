@@ -354,17 +354,7 @@ function App() {
       lifeAreas: normalizedLifeAreas,
     };
   };
-  const [tweaks, setTweakState] = useState(() => {
-    // Hydrate from localStorage shadow on first render so UI prefs are
-    // immediately correct in dev-bypass mode and during the cloud-fetch
-    // gap on real sessions. Cloud fetch (below) still wins once it arrives.
-    let saved = null;
-    try {
-      const raw = localStorage.getItem('tm_settings');
-      if (raw) saved = JSON.parse(raw);
-    } catch {}
-    return saved && typeof saved === 'object' ? { ...TM_DEFAULTS, ...saved } : { ...TM_DEFAULTS };
-  });
+  const [tweaks, setTweakState] = useState(() => ({ ...TM_DEFAULTS }));
   const [taxonomy, setTaxonomyState] = useState(() => normalizeTaxonomy(null));
   const [settingsReady, setSettingsReady] = useState(false);
   const [taxonomyReady, setTaxonomyReady] = useState(false);
@@ -386,9 +376,10 @@ function App() {
   // workspace is ready. Local state is merged with the cloud values (cloud
   // wins) so any transient defaults the user already saw stay consistent.
   useEffect(() => {
+    // Remove legacy tm_settings key — settings are now Supabase-only.
+    try { localStorage.removeItem('tm_settings'); } catch {}
     if (supabaseDisabled) {
-      // Dev-bypass: localStorage shadow already hydrated `tweaks`; just mark
-      // ready so write-side effects (which gate on settingsReady) can fire.
+      // Dev-bypass: no Supabase; settings stay at TM_DEFAULTS for the session.
       setSettingsReady(true);
       setTaxonomyReady(true);
       return;
@@ -452,13 +443,9 @@ function App() {
   }, [workspaceId, userId, supabaseDisabled]);
 
   // localStorage shadow + debounced cloud save of the settings blob.
-  // Shadow runs unconditionally so UI prefs (filters, folds, view, etc.)
-  // survive refresh in dev-bypass too — where settingsReady never flips
-  // because there's no userId for the cloud fetch to gate on. Cloud save
-  // stays gated on settingsReady AND userId so it doesn't fire pre-hydration
-  // (would clobber cloud state) or in dev mode.
+  // Cloud save gated on settingsReady AND userId so it doesn't fire
+  // pre-hydration (would clobber cloud state) or in dev-bypass mode.
   useEffect(() => {
-    try { localStorage.setItem('tm_settings', JSON.stringify(tweaks)); } catch {}
     if (!settingsReady || !userId) return;
     const handle = setTimeout(() => {
       saveSettings(userId, tweaks).catch(e => {
