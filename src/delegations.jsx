@@ -789,19 +789,20 @@ function RightPane({
   }, [cadenceOpen]);
 
   const commitCadence = (next) => {
-    // Validate, sort, dedupe.
+    // Validate, sort, dedupe. Empty array is a valid "no cadence" signal.
+    const isExplicitNone = Array.isArray(next) && next.length === 0;
     const arr = (Array.isArray(next) ? next : [])
       .map(n => Math.round(Number(n)))
       .filter(n => Number.isFinite(n) && n >= 1 && n <= 60);
     const uniq = [...new Set(arr)].sort((a, b) => a - b);
-    if (!uniq.length) return;
+    if (!uniq.length && !isExplicitNone) return;
     if (uniq.join(',') === (task.checkInSchedule || []).join(',')) {
       setCadenceOpen(false);
       return;
     }
     onUpdate?.(task.id, { checkInSchedule: uniq });
     setCadenceOpen(false);
-    showToast?.(`Cadence updated to ${uniq.join('·')}d`, { undoable: true, timeout: 3500 });
+    showToast?.(uniq.length ? `Cadence updated to ${uniq.join('·')}d` : 'Cadence cleared', { undoable: true, timeout: 3500 });
   };
   const commitCustom = () => {
     const parsed = customCadence.split(/[\s,]+/).filter(Boolean).map(s => Number(s));
@@ -1015,7 +1016,7 @@ function RightPane({
                 aria-expanded={cadenceOpen}
                 data-tooltip="Click to change the check-in cadence"
                 onClick={() => setCadenceOpen(v => !v)}>
-                {(task.checkInSchedule||[]).join(' · ')}d schedule
+                {(task.checkInSchedule||[]).length === 0 ? 'No cadence' : `${(task.checkInSchedule||[]).join(' · ')}d schedule`}
                 <span className="dvv-cad-pill-caret"><I.ChevDown/></span>
               </button>
               {cadenceOpen && (
@@ -1027,7 +1028,9 @@ function RightPane({
                       role="menuitem"
                       onClick={() => commitCadence(CHECKIN_PRESETS[k].slice())}>
                       <span>{CHECKIN_PRESET_LABELS[k].replace(/\s+\d.*$/, '')}</span>
-                      <span className="dvv-cad-pop-vals">{CHECKIN_PRESETS[k].join('·')}d</span>
+                      {CHECKIN_PRESETS[k].length > 0 && (
+                        <span className="dvv-cad-pop-vals">{CHECKIN_PRESETS[k].join('·')}d</span>
+                      )}
                     </button>
                   ))}
                   <div className="dvv-cad-pop-sep"/>

@@ -616,14 +616,13 @@ function TaskDrawer({ task, theme, tasks, buckets, tagTree, onCreateBucket, onCr
                 const c = b.color || '#94a3b8';
                 return <button key={b.id} className={`dr-pick${act?' act':''}`}
                   style={{
-                    background: act ? `${c}33` : 'transparent',
+                    background: act ? `${c}33` : `${c}14`,
                     color: c,
                     borderColor: act ? `${c}aa` : `${c}55`,
                     boxShadow: act ? `inset 0 0 0 1px ${c}66` : undefined,
-                    opacity: act ? 1 : .7,
                   }}
                   onClick={() => upd({ groupId: act ? null : b.id })}>
-                  {b.name}
+                  <span className="dr-pick-dot" style={{background: c}} />{b.name}
                 </button>;
               })}
               {onCreateBucket && (
