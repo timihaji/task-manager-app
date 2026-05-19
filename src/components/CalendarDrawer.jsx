@@ -158,6 +158,7 @@ function EventBlock({
 
   const [editTitle, setEditTitle] = useState(null);
   const inputRef = useRef(null);
+  const blockRef = useRef(null);
 
   useEffect(() => {
     if (isRenaming && editTitle === null) setEditTitle(ev.title || '');
@@ -169,6 +170,21 @@ function EventBlock({
       inputRef.current.select();
     }
   }, [editTitle !== null]);
+
+  // Native contextmenu listener — more reliable than React's onContextMenu
+  // when an extension, parent capture-phase listener, or React-event-delegation
+  // quirk intercepts the synthetic event before it reaches the handler.
+  useEffect(() => {
+    const el = blockRef.current;
+    if (!el || !onContextMenu) return;
+    const handler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onContextMenu(ev, task, e.clientX, e.clientY);
+    };
+    el.addEventListener('contextmenu', handler);
+    return () => el.removeEventListener('contextmenu', handler);
+  }, [onContextMenu, ev, task]);
 
   const commitRename = () => {
     const val = editTitle?.trim();
@@ -182,6 +198,7 @@ function EventBlock({
   return (
     <div
       key={settle?.key}
+      ref={blockRef}
       className={
         'cal-event' +
         (dragView ? ' is-grabbing' : '') +
@@ -204,7 +221,6 @@ function EventBlock({
       }}
       onMouseDown={(e) => { if (editTitle !== null) return; onStartDrag(e, 'move', ev); }}
       onClick={(e) => { e.stopPropagation(); onSelect && onSelect(ev.id); }}
-      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(ev, task, e.clientX, e.clientY); }}
     >
       <div className="cal-event-stripe" />
       <div
