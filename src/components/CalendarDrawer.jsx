@@ -717,6 +717,21 @@ export default function CalendarDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateStr]);
 
+  const applyZoom = useCallback((next, anchorMin, anchorScreenY) => {
+    if (gridRef.current) {
+      gridRef.current.classList.add('is-zooming');
+      clearTimeout(zoomTimerRef.current);
+      zoomTimerRef.current = setTimeout(() => gridRef.current?.classList.remove('is-zooming'), 50);
+    }
+    setPxh(next);
+    const el = scrollRef.current;
+    if (el) {
+      requestAnimationFrame(() => {
+        el.scrollTop = Math.max(0, (anchorMin / 60) * next - anchorScreenY);
+      });
+    }
+  }, [setPxh]);
+
   // Ctrl/Cmd + wheel zoom — anchors to the now-line on today, cursor otherwise.
   useEffect(() => {
     const el = scrollRef.current;
@@ -735,19 +750,11 @@ export default function CalendarDrawer({
         anchorMin = (cursorY / pxh) * 60;
         anchorScreenY = e.clientY - rect.top;
       }
-      if (gridRef.current) {
-        gridRef.current.classList.add('is-zooming');
-        clearTimeout(zoomTimerRef.current);
-        zoomTimerRef.current = setTimeout(() => gridRef.current?.classList.remove('is-zooming'), 50);
-      }
-      setPxh(next);
-      requestAnimationFrame(() => {
-        el.scrollTop = Math.max(0, (anchorMin / 60) * next - anchorScreenY);
-      });
+      applyZoom(next, anchorMin, anchorScreenY);
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [pxh, setPxh, isToday, nowMin]);
+  }, [pxh, applyZoom, isToday, nowMin]);
 
   const totalMin = events.reduce((s, e) => s + e.durationMin, 0);
   const overCapacity = totalMin > 8 * 60;
@@ -866,21 +873,10 @@ export default function CalendarDrawer({
             onChange={(e) => {
               const next = parseInt(e.target.value, 10);
               const el = scrollRef.current;
-              if (el) {
-                const anchorMin = isToday ? nowMin : (el.scrollTop + el.clientHeight * 0.5) / pxh * 60;
-                const anchorScreenY = (anchorMin / 60) * pxh - el.scrollTop;
-                if (gridRef.current) {
-                  gridRef.current.classList.add('is-zooming');
-                  clearTimeout(zoomTimerRef.current);
-                  zoomTimerRef.current = setTimeout(() => gridRef.current?.classList.remove('is-zooming'), 50);
-                }
-                setPxh(next);
-                requestAnimationFrame(() => {
-                  el.scrollTop = Math.max(0, (anchorMin / 60) * next - anchorScreenY);
-                });
-              } else {
-                setPxh(next);
-              }
+              if (!el) { setPxh(next); return; }
+              const anchorMin = isToday ? nowMin : (el.scrollTop + el.clientHeight * 0.5) / pxh * 60;
+              const anchorScreenY = (anchorMin / 60) * pxh - el.scrollTop;
+              applyZoom(next, anchorMin, anchorScreenY);
             }}
             className="zoom-range" aria-label="Zoom" title="Zoom (Ctrl/Cmd + scroll)"
           />
