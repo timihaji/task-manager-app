@@ -48,6 +48,21 @@ const NEST_EDGE_PX = 8;     // top strip inside body → nest as first child
 export function compositeCollisionDetection(args) {
   const pointer = args.pointerCoordinates;
 
+  // Step -1: cursor inside the open calendar drawer — return no collisions so
+  // dnd-kit's onDragEnd gets over=null and stays a no-op. The external-drag
+  // system (mousedown-tracked) handles the calendar scheduling separately.
+  // Without this, dnd-kit's pointerWithin still resolves to the timeline
+  // column visually behind the drawer, and drops land on that hidden day.
+  if (pointer) {
+    const calDrawer = document.querySelector('.cal-drawer.is-open');
+    if (calDrawer) {
+      const r = calDrawer.getBoundingClientRect();
+      if (pointer.x >= r.left && pointer.x <= r.right && pointer.y >= r.top && pointer.y <= r.bottom) {
+        return [];
+      }
+    }
+  }
+
   // Step 0: cursor inside an EXPANDED project body — route based on what the
   // cursor is hovering, not on cursor X. Hitting a subtask = positional nest at
   // that subtask. Hitting body padding/gap = fall through to the closest
