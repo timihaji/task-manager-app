@@ -131,11 +131,11 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
     disabled: !projectHasBody,
   });
   const isSortable = !!sortableData && !renaming;
-  // When the calendar drawer is open, inbox/standalone task cards initiate
-  // the prototype's external-drag system instead of @dnd-kit's pointer
-  // sensor. We only switch for top-level cards (subtasks inside a project
-  // body keep @dnd-kit reordering).
-  const useExtDrag = !!onExternalDrag && !renaming && depth === 0;
+  // External drag (calendar scheduling) uses mousedown/mousemove; dnd-kit
+  // uses pointerdown/pointermove — different event types that coexist.
+  // Both run simultaneously: dnd-kit handles inbox→timeline/reorder drops;
+  // external drag handles inbox→calendar drops. Only top-level cards.
+  const hasExtDrag = !!onExternalDrag && !renaming && depth === 0;
   const isDragging = sortable.isDragging;
   const isProjectDropTarget = projectHasBody && projectDrop.isOver;
   const dragStyle = isSortable ? {
@@ -155,9 +155,9 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
       onContextMenu={e=>{ if(onContextMenu){ e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}
       onMouseEnter={()=>{ if(renaming) return; if(!focused) hoverFocusRef.current=true; onFocus(task.id); }}
       onMouseLeave={()=>{ if(hoverFocusRef.current && focused) onFocus(null); hoverFocusRef.current=false; }}
-      onMouseDown={useExtDrag ? (e)=>onExternalDrag(e, task) : undefined}
+      onMouseDown={hasExtDrag ? (e)=>onExternalDrag(e, task) : undefined}
       {...(isSortable ? sortable.attributes : {})}
-      {...(isSortable && !useExtDrag ? sortable.listeners : {})}
+      {...(isSortable ? sortable.listeners : {})}
     >
       {task.snoozedUntil && <SnoozeCountdownBar task={task}/>}
       <div className="card-top">
