@@ -716,7 +716,7 @@ export default function CalendarDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateStr]);
 
-  // Ctrl/Cmd + wheel zoom — anchors to cursor minute.
+  // Ctrl/Cmd + wheel zoom — anchors to the now-line on today, cursor otherwise.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -724,18 +724,24 @@ export default function CalendarDrawer({
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
       const rect = el.getBoundingClientRect();
-      const cursorY = e.clientY - rect.top + el.scrollTop;
-      const cursorMin = (cursorY / pxh) * 60;
       const next = clamp(pxh - Math.sign(e.deltaY) * 8, MIN_PXH, MAX_PXH);
+      let anchorMin, anchorScreenY;
+      if (isToday) {
+        anchorMin = nowMin;
+        anchorScreenY = (nowMin / 60) * pxh - el.scrollTop;
+      } else {
+        const cursorY = e.clientY - rect.top + el.scrollTop;
+        anchorMin = (cursorY / pxh) * 60;
+        anchorScreenY = e.clientY - rect.top;
+      }
       setPxh(next);
       requestAnimationFrame(() => {
-        const newY = (cursorMin / 60) * next;
-        el.scrollTop = newY - (e.clientY - rect.top);
+        el.scrollTop = Math.max(0, (anchorMin / 60) * next - anchorScreenY);
       });
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [pxh, setPxh]);
+  }, [pxh, setPxh, isToday, nowMin]);
 
   const totalMin = events.reduce((s, e) => s + e.durationMin, 0);
   const overCapacity = totalMin > 8 * 60;
@@ -851,7 +857,20 @@ export default function CalendarDrawer({
           </button>
           <input
             type="range" min={MIN_PXH} max={MAX_PXH} step="2" value={pxh}
-            onChange={(e) => setPxh(parseInt(e.target.value, 10))}
+            onChange={(e) => {
+              const next = parseInt(e.target.value, 10);
+              const el = scrollRef.current;
+              if (el) {
+                const anchorMin = isToday ? nowMin : (el.scrollTop + el.clientHeight * 0.5) / pxh * 60;
+                const anchorScreenY = (anchorMin / 60) * pxh - el.scrollTop;
+                setPxh(next);
+                requestAnimationFrame(() => {
+                  el.scrollTop = Math.max(0, (anchorMin / 60) * next - anchorScreenY);
+                });
+              } else {
+                setPxh(next);
+              }
+            }}
             className="zoom-range" aria-label="Zoom" title="Zoom (Ctrl/Cmd + scroll)"
           />
           <button

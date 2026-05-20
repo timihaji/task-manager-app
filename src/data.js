@@ -988,7 +988,7 @@ const daysSince = (iso) => {
 const parseTimeEst = (s) => {
   if (!s || typeof s !== 'string') return 0;
   let m = 0;
-  const h = s.match(/(\d+)\s*h/i); if (h) m += parseInt(h[1],10)*60;
+  const h = s.match(/(\d+(?:\.\d+)?)\s*h/i); if (h) m += Math.round(parseFloat(h[1]) * 60);
   const mn = s.match(/(\d+)\s*m/i); if (mn) m += parseInt(mn[1],10);
   if (!h && !mn) { const n = parseInt(s,10); if (Number.isFinite(n)) m = n; }
   return m;
