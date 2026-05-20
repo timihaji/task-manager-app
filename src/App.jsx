@@ -1017,16 +1017,23 @@ function App() {
 
   useEffect(() => {
     if (!extDrag) return;
+    // pointermove/pointerup (not mousemove/mouseup): dnd-kit's PointerSensor
+    // calls preventDefault on pointermove once it activates, which suppresses
+    // the corresponding mousemove. Pointer events still propagate to other
+    // listeners, so reading position from pointermove keeps extDrag fresh
+    // even while dnd-kit is also tracking the same drag.
     const onMove = (ev) => {
       if (!extDragRef.current) return;
       setExtDrag({ taskId: extDragRef.current.taskId, clientX: ev.clientX, clientY: ev.clientY });
     };
     const onUp = () => setExtDrag(null);
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
     return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     };
   }, [!!extDrag]); // eslint-disable-line react-hooks/exhaustive-deps
 
