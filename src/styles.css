@@ -2709,6 +2709,7 @@ button:active:not(:disabled):not(.no-press),
 .cal-drawer .cal-event:hover{box-shadow:0 2px 12px rgba(0,0,0,.45),0 0 0 1px color-mix(in srgb,var(--ev-color) 60%,var(--border-s));z-index:4;}
 .cal-drawer .cal-event:active{cursor:grabbing;}
 .cal-drawer .cal-grid.is-dragging .cal-event{transition:none;}
+.cal-drawer .cal-grid.is-zooming .cal-event{transition:box-shadow .15s ease-out,opacity .12s,filter .15s;}
 .cal-drawer .cal-event-stripe{
   position:absolute;left:0;top:0;bottom:0;
   width:3px;background:var(--ev-color);

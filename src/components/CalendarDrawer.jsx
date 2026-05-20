@@ -310,6 +310,7 @@ export default function CalendarDrawer({
   const scrollRef = useRef(null);
   const gridRef = useRef(null);
   const drawerRef = useRef(null);
+  const zoomTimerRef = useRef(null);
   const [drag, setDrag] = useState(null);
   const [pan, setPan] = useState(null); // { anchorScrollTop, anchorClientY }
 
@@ -734,6 +735,11 @@ export default function CalendarDrawer({
         anchorMin = (cursorY / pxh) * 60;
         anchorScreenY = e.clientY - rect.top;
       }
+      if (gridRef.current) {
+        gridRef.current.classList.add('is-zooming');
+        clearTimeout(zoomTimerRef.current);
+        zoomTimerRef.current = setTimeout(() => gridRef.current?.classList.remove('is-zooming'), 50);
+      }
       setPxh(next);
       requestAnimationFrame(() => {
         el.scrollTop = Math.max(0, (anchorMin / 60) * next - anchorScreenY);
@@ -863,6 +869,11 @@ export default function CalendarDrawer({
               if (el) {
                 const anchorMin = isToday ? nowMin : (el.scrollTop + el.clientHeight * 0.5) / pxh * 60;
                 const anchorScreenY = (anchorMin / 60) * pxh - el.scrollTop;
+                if (gridRef.current) {
+                  gridRef.current.classList.add('is-zooming');
+                  clearTimeout(zoomTimerRef.current);
+                  zoomTimerRef.current = setTimeout(() => gridRef.current?.classList.remove('is-zooming'), 50);
+                }
                 setPxh(next);
                 requestAnimationFrame(() => {
                   el.scrollTop = Math.max(0, (anchorMin / 60) * next - anchorScreenY);
