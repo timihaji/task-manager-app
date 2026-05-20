@@ -175,6 +175,13 @@ function EventBlock({
   // Native contextmenu listener — more reliable than React's onContextMenu
   // when an extension, parent capture-phase listener, or React-event-delegation
   // quirk intercepts the synthetic event before it reaches the handler.
+  // NOTE: `settle?.key` is in the deps because the block div uses
+  // `key={settle?.key}` to restart the settle animation. When settle clears
+  // (~520ms after drop), the key transitions hash→undefined and React
+  // unmounts the old div / mounts a new one. blockRef.current now points to
+  // the new node, but without settle.key in the deps the effect wouldn't
+  // re-run — the listener would stay orphaned on the removed node and
+  // right-click on the freshly-dropped event wouldn't fire.
   useEffect(() => {
     const el = blockRef.current;
     if (!el || !onContextMenu) return;
@@ -185,7 +192,7 @@ function EventBlock({
     };
     el.addEventListener('contextmenu', handler);
     return () => el.removeEventListener('contextmenu', handler);
-  }, [onContextMenu, ev, task]);
+  }, [onContextMenu, ev, task, settle?.key]);
 
   const commitRename = () => {
     const val = editTitle?.trim();
