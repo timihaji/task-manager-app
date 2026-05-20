@@ -5173,7 +5173,7 @@ function App() {
             collapsedGrps={collapsedGrps}
             onToggleGrp={gk=>setCollapsedGrps(s=>{const ns=new Set(s);ns.has(gk)?ns.delete(gk):ns.add(gk);return ns;})}
             onWakeNow={(id)=>updateTask(id,{snoozedUntil:null,snoozedAt:null,snoozeMode:null,snoozeOffsetDays:null})}
-            cardExtras={cardExtras}/>
+            cardExtras={{ ...cardExtras, onExternalDrag: null }}/>
           {tweaks.showProjectPanel && <ProjectSidePanel tasks={activeTasks}
             activeProjects={filters.projects}
             width={Number(tweaks.projectPanelWidth)||190}
