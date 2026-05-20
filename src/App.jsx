@@ -1000,11 +1000,16 @@ function App() {
   }, [tasks, visibleEvents, calendarDateStr]);
 
   // Inbox card → calendar drag — prototype's external-drag mechanism.
-  // Bail if the target is an interactive child (chip, popover, checkbox)
-  // so users can still tag / set priority / mark done with the drawer open.
+  // Bail if the target is an interactive child (popover, checkbox, action
+  // buttons) so users can still mark done / select with the drawer open.
+  // NOTE: .card-meta-btn (the chip row) is intentionally NOT in the bail list
+  // — timeline cards are small enough that chips occupy most of the card
+  // surface, so a chip click is the user's most natural drag-handle. The
+  // chip's own onClick still fires on mouseup-without-move (a click), so
+  // tag/priority/bucket pickers continue to work as normal.
   const onTaskMouseDown = useCallback((e, task) => {
     if (e.button !== 0) return;
-    if (e.target.closest('button, input, textarea, .card-meta-btn, .card-popover, .card-del, .bulk-check, .card-chk')) return;
+    if (e.target.closest('button, input, textarea, .card-popover, .card-del, .bulk-check, .card-chk')) return;
     e.preventDefault();
     extDragRef.current = {
       taskId: task.id,
@@ -4831,7 +4836,7 @@ function App() {
       blockingCountFor={blockingCountFor} taskTitleById={taskTitleById}
       todayPinned={todayPinEnabled}
       onToggleTodayPin={()=>setTweak('todayPinned', !todayPinEnabled)}
-      cardExtras={{ ...cardExtras, onExternalDrag: null }}/>;
+      cardExtras={cardExtras}/>;
   };
   const ctxItems = contextMenu ? (() => {
     const t = contextMenu.task;
