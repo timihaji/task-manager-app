@@ -552,11 +552,14 @@ const rollIncompleteTasksToToday = (tasks = [], todayStr = D.str(D.today())) => 
 // Routines that fired in the past and weren't completed → archive them. The
 // streak math will show the gap; the inbox stays clean. Idempotent.
 const archiveStaleRoutines = (tasks = [], todayStr = D.str(D.today())) => {
+  // 1-day grace: yesterday's undone routines stay visible so the user can
+  // tick them off retroactively. Only archive instances 2+ days in the past.
+  const graceCutoff = D.str(D.add(D.parse(todayStr), -1));
   let changed = false;
   const next = tasks.map(t => {
     if (!t?.recurrence?.isRoutine) return t;
     if (t.archived || t.done) return t;
-    if (!t.date || !D.isPast(t.date)) return t;
+    if (!t.date || t.date >= graceCutoff) return t;
     changed = true;
     return {
       ...t,

@@ -61,6 +61,9 @@ export function compositeCollisionDetection(args) {
     for (const cont of args.droppableContainers) {
       const d = cont.data?.current;
       if (d?.kind !== 'project-body') continue;
+      // Skip the active card's own body — self-collision routes every drop
+      // on the dragged project back to a no-op (sources filtered to empty).
+      if (d.targetId === String(args.active?.id)) continue;
       const bodyNode = cont.node?.current;
       if (!bodyNode) continue;
       const bodyRect = bodyNode.getBoundingClientRect();
