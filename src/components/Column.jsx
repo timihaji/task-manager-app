@@ -136,7 +136,9 @@ function Column({ date, tasks, focusedCardId, selectedIds, spawning, theme, twea
   const totalCount = flatActiveSet.size + flatDoneSet.size;
   const doneCount  = flatDoneSet.size;
   const pct = totalCount>0 ? (doneCount/totalCount)*100 : 0;
-  const groups = groupTasksBy(active, groupBy, cardExtras?.getEffectiveLifeArea, cardExtras?.customGroups);
+  // When groupBy is 'none', suppress custom-group (bucket) buckets so tasks
+  // with a groupId still render flat rather than appearing in labeled bucket rows.
+  const groups = groupTasksBy(active, groupBy, cardExtras?.getEffectiveLifeArea, groupBy === 'none' ? null : cardExtras?.customGroups);
   const renamingGroupId = cardExtras?.renamingGroupId;
   const onStartGroupRename = cardExtras?.onStartGroupRename;
   const onGroupRenameDone = cardExtras?.onGroupRenameDone;

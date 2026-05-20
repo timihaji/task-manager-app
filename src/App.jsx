@@ -630,6 +630,8 @@ function App() {
   const [groupOpen,setGroupOpen] = useState(false);
   const inboxGroupBy = tweaks.groupPrefs?.inbox || 'none';
   const setInboxGroupBy = (g) => setTweak({ groupPrefs: { ...(tweaks.groupPrefs||{}), inbox: g }});
+  const timelineGroupBy = tweaks.groupPrefs?.timeline ?? 'none';
+  const setTimelineGroupBy = (g) => setTweak({ groupPrefs: { ...(tweaks.groupPrefs||{}), timeline: g }});
   // Collapsed/expanded section state, persisted via tweak arrays so it
   // survives refresh and roams across devices. Sets are derived once per
   // change for the cheap O(1) lookups consumers expect.
@@ -4797,7 +4799,7 @@ function App() {
       focusedCardId={focusedId} selectedIds={selectedIds} spawning={spawning} theme={theme} tweaks={tweaks}
       showRoutines={tweaks.showRoutinesOnTimeline !== false}
       renamingId={renamingId}
-      groupBy={globalGroupBy}
+      groupBy={timelineGroupBy}
       collapsedGrps={collapsedGrps}
       completedOpen={completedOpen.has(colKey)}
       blockedOpen={blockedOpen.has(colKey)}
@@ -4822,7 +4824,7 @@ function App() {
       blockingCountFor={blockingCountFor} taskTitleById={taskTitleById}
       todayPinned={todayPinEnabled}
       onToggleTodayPin={()=>setTweak('todayPinned', !todayPinEnabled)}
-      cardExtras={cardExtras}/>;
+      cardExtras={{ ...cardExtras, onExternalDrag: null }}/>;
   };
   const ctxItems = contextMenu ? (() => {
     const t = contextMenu.task;
@@ -4979,18 +4981,18 @@ function App() {
           {p.label}<span className="filter-pill-x" onClick={()=>toggleFilter(p.key,p.val)}>×</span>
         </div>
       ))}
-      {/* group dropdown (global) */}
+      {/* group dropdown (timeline-local, defaults to none) */}
       {view==='week' && (
         <div className="filter-dd-wrap" onClick={e=>e.stopPropagation()}>
-          <button className="tb-btn" onClick={()=>setGroupOpen(o=>!o)}>
-            Group: {{none:'None',project:'Location',bucket:'Bucket',tag:'Tag',priority:'Priority'}[globalGroupBy]||'Location'}
+          <button className={`tb-btn${timelineGroupBy!=='none'?' tb-btn-pressed':''}`} onClick={()=>setGroupOpen(o=>!o)}>
+            Group: {{none:'None',project:'Location',bucket:'Bucket',tag:'Tag',priority:'Priority'}[timelineGroupBy]||'None'}
           </button>
           {groupOpen && (
             <div className="filter-dd" style={{minWidth:140}}>
-              {[{v:'project',l:'Location'},{v:'bucket',l:'Bucket'},{v:'tag',l:'Tag'},{v:'priority',l:'Priority'},{v:'none',l:'None'}].map(o=>(
-                <div key={o.v} className={`fdd-item${globalGroupBy===o.v?' active':''}`}
-                  onClick={()=>{setGlobalGroupBy(o.v);setGroupOpen(false);}}
-                  style={globalGroupBy===o.v?{color:'var(--accent)'}:undefined}>{o.l}</div>
+              {[{v:'none',l:'None'},{v:'project',l:'Location'},{v:'bucket',l:'Bucket'},{v:'tag',l:'Tag'},{v:'priority',l:'Priority'}].map(o=>(
+                <div key={o.v} className={`fdd-item${timelineGroupBy===o.v?' active':''}`}
+                  onClick={()=>{setTimelineGroupBy(o.v);setGroupOpen(false);}}
+                  style={timelineGroupBy===o.v?{color:'var(--accent)'}:undefined}>{o.l}</div>
               ))}
             </div>
           )}
