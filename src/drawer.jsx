@@ -1360,7 +1360,7 @@ function TaskDrawer({ task, theme, tasks, buckets, tagTree, onCreateBucket, onCr
                             const doTakeBack = () => upd({delegatedTo:null});
                             if (showConfirm) {
                               showConfirm({
-                                message: `Take back from ${task.delegatedTo}? The task lands on today's list and pending check-ins are removed.`,
+                                message: `Take back from ${task.delegatedTo}? The task lands on today's list and its check-ins are cleared. The delegation history stays in the activity log.`,
                                 destructive: true,
                                 confirmLabel: 'Take back',
                                 onConfirm: () => { doTakeBack(); showConfirm(null); },

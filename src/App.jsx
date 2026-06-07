@@ -2344,8 +2344,13 @@ function App() {
       adjustOpenCount(nameBefore, -1);
       recordDelegation(nameAfter, finalSchedule);
     } else if (delegateeRemoved) {
-      removePendingCheckIns();
-      removePendingExpiry();
+      // Take-back is a clean sweep: remove ALL spawned followers for this parent
+      // — chase-up (check-in) tasks AND the escalation task, done or pending
+      // alike. Match on parentage (checkInOf/expiryOf) so completed and orphaned
+      // followers go too, not just the pending ones removePendingCheckIns/Expiry
+      // catch. The activity log keeps the delegation record (… → reclaimed), so
+      // the follower task objects are redundant scaffolding once reclaimed.
+      next = next.filter(t => t.checkInOf !== before.id && t.expiryOf !== before.id);
       activity.push({type:'reclaimed', at: ts});
       Object.assign(merged, {
         delegatedTo: null,
@@ -2400,7 +2405,13 @@ function App() {
     // Probe once to detect whether this update will cause a delegation transition.
     const probe = applyDelegationChanges(tasks, before, changes);
     if (probe.tasks) {
-      setUndoStack(s=>[...s.slice(-9),{id,before}]);
+      // Take-back deletes follower rows; the per-task {id,before} undo only maps
+      // the parent back, so deleted check-ins/expiry wouldn't return. Snapshot
+      // the whole list for take-back so undo() restores everything via the bulk
+      // path. Other transitions keep the lighter per-task undo.
+      const isTakeBack = before.delegatedTo && changes.delegatedTo === null;
+      if (isTakeBack) pushSnapshotUndo();
+      else setUndoStack(s=>[...s.slice(-9),{id,before}]);
       // Re-run applyDelegationChanges against the LATEST state inside the
       // setter so we don't clobber concurrent edits (realtime echoes, snooze
       // ticks, other updateTask calls in the same batch). Using the probe's
