@@ -331,7 +331,7 @@ function App() {
     delegationsStatusFilter: 'all', // all | overdue | waiting | heard | stale
     delegationsPersonFilter: [],    // array of person names
     showDelegationsOnTimeline: false, // top-nav toggle: surface delegated cards on stack/timeline
-    showCheckInsOnTimeline: true,     // top-nav toggle: surface check-in reminders on the timeline. Default ON because the delegation parent is auto-snoozed while it has pending check-ins (see isAutoSnoozedDelegation) — if check-ins are also hidden, the user gets zero visibility into the delegation on the timeline and the cadence is invisible until they switch to the Delegations view.
+    showCheckInsOnTimeline: true,     // top-nav toggle: surface check-in nudges on the timeline. Default ON because the delegation parent is auto-snoozed while it has pending check-ins (see isAutoSnoozedDelegation), so the nudges are its only timeline-visible trace. Turning this OFF hides the nudges entirely (opt-in) — the delegation is then tracked only in the Delegations view.
     showRoutinesOnTimeline: true,     // top-nav toggle: show/hide routine strips on each day column
     todayPinned: true,                // today-column sticky pin on/off
   };
@@ -2004,13 +2004,17 @@ function App() {
         if (!t.delegatedTo && !t.checkInOf) return;
       } else {
         if (t.delegatedTo && !showDelegationsOnTimeline && !reminderDue) return;
-        // Check-in reminders always surface on the timeline — they're the
+        // Check-in reminders surface on the timeline by default — they're the
         // actionable nudges, and the delegation parent is auto-snoozed
-        // (isAutoSnoozedDelegation above), so without the check-ins visible
-        // the delegation is invisible from the timeline entirely. The
-        // showCheckInsOnTimeline tweak is kept for back-compat but no
-        // longer gates visibility.
+        // (isAutoSnoozedDelegation above), so the check-ins are the only
+        // timeline-visible trace of the delegation. Turning off
+        // showCheckInsOnTimeline hides them entirely (gate below); the
+        // delegation then lives only in the Delegations view.
       }
+      // Timeline: when "Show check-in reminders" is off, hide the nudge cards
+      // entirely. (showWaitingOn is the legacy "only delegations/check-ins"
+      // mode, where hiding them would be self-defeating, so it's excluded.)
+      if(view === 'week' && t.checkInOf && !showCheckInsOnTimeline && !showWaitingOn) return;
       // Timeline-only: only the earliest active nudge per parent surfaces;
       // the rest stay accessible via Stack / drawer / parent's activity log.
       if(view === 'week' && t.checkInOf && !nextNudgeIds.has(t.id)) return;
@@ -5155,8 +5159,8 @@ function App() {
                 <input type="checkbox" readOnly checked={!!tweaks.showDelegationsOnTimeline}/>Show delegations on timeline
               </div>
               <div className="fdd-item" onClick={()=>setTweak('showCheckInsOnTimeline', !tweaks.showCheckInsOnTimeline)}
-                title="When off, synthetic 'Check in with X' reminders stay hidden until their day">
-                <input type="checkbox" readOnly checked={!!tweaks.showCheckInsOnTimeline}/>Show check-in reminders on timeline
+                title="When off, the 'Check in with X' nudge cards are hidden from the timeline — the delegation stays tracked in the Delegations view">
+                <input type="checkbox" readOnly checked={!!tweaks.showCheckInsOnTimeline}/>Show check-in nudges on timeline
               </div>
               <div className="fdd-item" onClick={()=>setTweak('showRoutinesOnTimeline', !tweaks.showRoutinesOnTimeline)}
                 title="Hide or show the routines strip at the top of each day column">
