@@ -98,6 +98,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);display:flex;f
 .tb-btn.tb-btn-pressed:hover{background:var(--accent-dim);color:var(--accent)}
 .tb-btn.primary:hover{opacity:.88}
 .tb-btn svg{width:13px;height:13px}
+.tb-btn-label,.tb-group-prefix{display:inline} /* collapse hooks: hidden at narrow widths */
 .tb-icon-btn{width:32px;height:32px;border:none;border-radius:var(--rk-ctrl);background:transparent;color:var(--t3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .1s}
 .tb-icon-btn:hover{background:var(--surface-2);color:var(--t2)}
 .tb-icon-btn svg{width:15px;height:15px}
@@ -1932,6 +1933,22 @@ body[data-density] .scard{padding-top:var(--stack-pad-y, 7px);padding-bottom:var
 .tb-hide-mobile{}
 .lnav-scrim{display:none}
 .drawer-back{display:none}
+
+/* topbar progressive collapse: intermediate widths between desktop and mobile.
+   Sized to the worst-case (Timeline) bar, whose full layout needs ~1855px:
+   1880 drops the decorative breadcrumb + shrinks search; 1560 (covers every
+   MacBook Air, <=1512) collapses low-priority labels to icon-only. */
+@media (max-width: 1880px){
+  .tb-crumb,.tb-sep.tb-hide-mobile{display:none}
+  .search-box{width:auto;flex:0 1 200px;min-width:140px}
+}
+@media (max-width: 1560px){
+  .topbar{gap:4px}
+  .tb-btn-label,.tb-group-prefix,.tb-sort-label{display:none}
+  .tb-cmdk svg{display:none}
+  .tb-secondary-right .tb-btn{padding:0 9px}
+  .search-box{min-width:120px}
+}
 
 @media (max-width: 640px){
   /* --- Topbar mobile: burger + logo + spacer + overflow + new --- */

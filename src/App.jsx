@@ -5026,8 +5026,8 @@ function App() {
       {/* group dropdown (timeline-local, defaults to none) */}
       {view==='week' && (
         <div className="filter-dd-wrap" onClick={e=>e.stopPropagation()}>
-          <button className={`tb-btn${timelineGroupBy!=='none'?' tb-btn-pressed':''}`} onClick={()=>setGroupOpen(o=>!o)}>
-            Group: {{none:'None',project:'Location',bucket:'Bucket',tag:'Tag',priority:'Priority'}[timelineGroupBy]||'None'}
+          <button className={`tb-btn${timelineGroupBy!=='none'?' tb-btn-pressed':''}`} onClick={()=>setGroupOpen(o=>!o)} title="Group timeline by">
+            <span className="tb-group-prefix">Group: </span>{{none:'None',project:'Location',bucket:'Bucket',tag:'Tag',priority:'Priority'}[timelineGroupBy]||'None'}
           </button>
           {groupOpen && (
             <div className="filter-dd" style={{minWidth:140}}>
@@ -5042,7 +5042,7 @@ function App() {
       )}
       {/* filter dropdown */}
       <div className="filter-dd-wrap">
-        <button className="tb-btn" onClick={()=>setFilterOpen(o=>!o)}><I.Filter/>Filter</button>
+        <button className="tb-btn" onClick={()=>setFilterOpen(o=>!o)} title="Filter"><I.Filter/><span className="tb-btn-label">Filter</span></button>
         {filterOpen && (
           <div className="filter-dd">
             <div className="fdd-section">
@@ -5095,14 +5095,14 @@ function App() {
           }}
           title={view==='delegations'?'Back to previous view':'Delegations dashboard'}
           aria-pressed={view==='delegations'}
-          aria-label="Open delegations dashboard"><I.Deleg/>Delegations</button>
+          aria-label="Open delegations dashboard"><I.Deleg/><span className="tb-btn-label">Delegations</span></button>
       </div>
       {view==='week' && <button className={`tb-btn${tweaks.showRoutinesOnTimeline===false?' tb-btn-inactive':''}`}
         onClick={()=>setTweak('showRoutinesOnTimeline', tweaks.showRoutinesOnTimeline===false ? true : false)}
         title={tweaks.showRoutinesOnTimeline===false?'Show routines on timeline':'Hide routines on timeline'}
-        aria-pressed={tweaks.showRoutinesOnTimeline!==false}><I.Recur/>Routines</button>}
-      <button className="tb-btn" onClick={()=>setTweak('inboxCollapsed',!tweaks.inboxCollapsed)} title="Toggle inbox panel"><I.Inbox/>Inbox</button>
-      <button className="tb-btn" onClick={()=>setPalette(true)}><I.Search/>⌘K</button>
+        aria-pressed={tweaks.showRoutinesOnTimeline!==false}><I.Recur/><span className="tb-btn-label">Routines</span></button>}
+      <button className="tb-btn" onClick={()=>setTweak('inboxCollapsed',!tweaks.inboxCollapsed)} title="Toggle inbox panel"><I.Inbox/><span className="tb-btn-label">Inbox</span></button>
+      <button className="tb-btn tb-cmdk" onClick={()=>setPalette(true)}><I.Search/>⌘K</button>
       <div className="tb-sep"/>
       {undoStack.length > 0 && (
         <button className="tb-icon-btn" onClick={undo} title={`Undo (${undoStack.length})`} aria-label="Undo">
