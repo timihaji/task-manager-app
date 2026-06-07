@@ -1519,6 +1519,36 @@ function App() {
     window.addEventListener('resize', sync);
     return ()=>window.removeEventListener('resize', sync);
   },[]);
+  // Trackpad: two-finger swipes over the timeline page through days (the board
+  // scrolls horizontally). A horizontal swipe always pages days; a vertical
+  // swipe pages days too, unless the column under the cursor can still scroll
+  // vertically (then it scrolls the column). We drive scrollLeft directly rather
+  // than rely on native scroll chaining — the columns' overscroll-behavior:
+  // contain (see styles.css) blocks a horizontal swipe over a column from
+  // reaching the timeline, so native chaining can't move days from there.
+  // React's synthetic onWheel is passive and can't preventDefault, so attach a
+  // native non-passive listener (see CalendarDrawer zoom for the same pattern).
+  // Re-attached when entering week view.
+  useEffect(()=>{
+    const el = boardRef.current;
+    if(!el) return;
+    const onWheel = (e)=>{
+      userScrolledRef.current = true;
+      const horizontal = Math.abs(e.deltaX) >= Math.abs(e.deltaY);
+      if(!horizontal){
+        const colBody = e.target.closest?.('.col-body');
+        if(colBody){
+          const canDown = e.deltaY > 0 && colBody.scrollTop + colBody.clientHeight < colBody.scrollHeight - 1;
+          const canUp   = e.deltaY < 0 && colBody.scrollTop > 0;
+          if(canDown || canUp) return; // let the column scroll vertically
+        }
+      }
+      e.preventDefault();
+      el.scrollLeft += horizontal ? e.deltaX : e.deltaY;
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return ()=>el.removeEventListener('wheel', onWheel);
+  },[view]);
   useEffect(()=>{
     const id = requestAnimationFrame(()=>{
       const el = boardRef.current;
@@ -5195,7 +5225,6 @@ function App() {
             onResizeStart={resizeSidePanel}
             onProjectToggle={id=>toggleFilter('projects',id)}/>}
           <div className="timeline-scroll" ref={boardRef} onMouseDown={onBoardMouseDown} onScroll={onBoardScroll}
-            onWheel={()=>{userScrolledRef.current=true;}}
             onTouchStart={()=>{userScrolledRef.current=true;}}>
           {beforeTimelineSpacerWidth>0 && <div className="col-spacer" style={{width:beforeTimelineSpacerWidth}}/>}
           {renderTodayBefore && renderTimelineColumn(D.today(), 'sticky-')}
