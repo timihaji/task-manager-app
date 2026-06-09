@@ -23,7 +23,7 @@
 }
 body[data-theme="dark"]{
   --bg:#071512;--bg-side:#06110f;--bg-top:#06110f;--bg-inbox:#06110f;--bg-dr:#10201d;
-  --surface:#10201d;--surface-2:#1d342f;--surface-3:#1d342f;--border:#1d342f;--border-s:#1d342f;
+  --surface:#10201d;--surface-2:#1d342f;--surface-3:#1d342f;--border:#2f534b;--border-s:#274740;
   --t1:#e6fffb;--t2:#c3ddd7;--t3:#8eada6;--t4:#66837c;
   --shadow:0 1px 3px rgba(0,0,0,.4),0 4px 12px rgba(0,0,0,.3);
   --shadow-lg:0 8px 32px rgba(0,0,0,.6);
@@ -812,6 +812,13 @@ body[data-theme="light"] .dvv-pr-date-field input[type="date"]{color-scheme:ligh
 .card-chk:hover{border-color:var(--accent)}
 .card-chk.done{background:var(--accent);border-color:var(--accent)}
 .card-chk.done::after{content:'';width:4px;height:2.5px;border-left:1.5px solid #fff;border-bottom:1.5px solid #fff;transform:rotate(-45deg) translateY(-.5px);display:block}
+/* Empty checkbox ring is drawn by CheckGlyph with stroke=var(--border-s), which
+   equals the card hover surface (--surface-2) in dark mode — so the ring
+   vanishes on hover. Brighten the SVG stroke whenever the card is in a
+   surface-2 state (hover/focus/selected). CSS stroke overrides the SVG attr. */
+.card:hover    .card-chk:not(.done) .cg-circle,
+.card.focused  .card-chk:not(.done) .cg-circle,
+.card.selected .card-chk:not(.done) .cg-circle{stroke:var(--t3)}
 .bulk-check{width:14px;height:14px;border:1px solid var(--border-s);border-radius:2px;background:transparent;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;line-height:1;flex-shrink:0;cursor:pointer;margin-top:1px;visibility:hidden}
 .chk-mode .bulk-check,.card:hover .bulk-check,.list-item:hover .bulk-check,.bulk-check.on{visibility:visible}
 .bulk-check:hover{border-color:var(--accent)}
@@ -1422,7 +1429,7 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 
 /* ── card icon popovers ── */
 .card-meta-btn{display:inline-flex;align-items:center;gap:3px;cursor:pointer;border-radius:2px;padding:1px 3px;border:1px solid transparent;transition:background .1s,border-color .1s}
-.card-meta-btn:hover{background:var(--surface-2);border-color:var(--border-s)}
+.card-meta-btn:hover{background:color-mix(in srgb,var(--surface-2) 82%,var(--t1));border-color:color-mix(in srgb,var(--border-s) 55%,var(--t1))}
 .card-meta-btn.act{background:var(--accent-dim);border-color:var(--accent-border)}
 .card-pop{position:fixed;z-index:200;background:var(--surface);border:1px solid var(--border-s);border-radius:3px;box-shadow:var(--shadow-lg);padding:8px;min-width:200px;max-width:300px;animation:popIn .12s ease}
 @keyframes popIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}

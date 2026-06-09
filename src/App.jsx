@@ -1588,8 +1588,13 @@ function App() {
       R.style.setProperty('--surface',  tweaks.dark_surface);
       R.style.setProperty('--surface-2',tweaks.dark_border);
       R.style.setProperty('--surface-3',tweaks.dark_border);
-      R.style.setProperty('--border',   tweaks.dark_border);
-      R.style.setProperty('--border-s', tweaks.dark_border);
+      // dark_border doubles as the hover/raised surface (--surface-2). Lift the
+      // actual borders a step toward the text colour so a control's outline
+      // (checkbox ring, meta-btn) stays legible once a card hover paints the
+      // card with --surface-2. Theme-aware via color-mix → adapts to custom
+      // palettes. Matches the .card-meta-btn:hover / checkbox-ring rules in styles.css.
+      R.style.setProperty('--border',   `color-mix(in srgb, ${tweaks.dark_border} 80%, ${tweaks.dark_text})`);
+      R.style.setProperty('--border-s', `color-mix(in srgb, ${tweaks.dark_border} 86%, ${tweaks.dark_text})`);
       R.style.setProperty('--t1',       tweaks.dark_text);
     } else {
       R.style.setProperty('--bg',       tweaks.light_bg);
