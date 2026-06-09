@@ -874,29 +874,36 @@ body[data-look="glass"] .card.card-project.selected{
 .card-proj-cnt{font-size:9.5px;font-family:var(--mono);color:var(--t3)}
 .card-proj-prog{display:inline-block;flex:1;min-width:0;height:6px;border-radius:999px;background:var(--surface-3);overflow:hidden}
 .card-proj-prog-fill{display:block;height:100%;border-radius:999px;background:var(--accent);transition:width .15s}
-.card-project-body{margin-top:8px;padding-top:8px;padding-left:10px;border-top:1px dashed var(--border);display:flex;flex-direction:column;gap:var(--card-gap,3px)}
-/* Subtask cards sit a clear notch above the project parent so the nesting
-   reads at a glance, then hover steps up further. !important is needed to
-   beat the glass-look base rule (line ~56) and other forced .card bgs.
-   The hover mix uses --t4 (muted text) so the step is visible in both
-   dark and light themes — dark surface-2 and surface are too close
-   together for a pure --surface-2 hover to register. */
-.card-project-body > .card{cursor:pointer;background:var(--surface-2) !important}
-.card-project-body > .card:hover,
-.card-project-body > .card.focused,
-.card-project-body > .card.selected{background:color-mix(in srgb,var(--surface-2) 78%,var(--t4)) !important}
-/* Glass-look composition: keep the translucent base under the contrast tint. */
-body[data-look="glass"] .card-project-body > .card{
-  background:color-mix(in srgb,var(--surface-2) 70%,transparent) !important;
-}
-body[data-look="glass"] .card-project-body > .card:hover,
-body[data-look="glass"] .card-project-body > .card.focused,
-body[data-look="glass"] .card-project-body > .card.selected{
-  background:color-mix(in srgb,
-    color-mix(in srgb,var(--surface-2) 78%,var(--t4))
-    78%, transparent) !important;
-}
-.card-proj-empty{font-size:11px;color:var(--t4);font-style:italic;padding:6px 4px}
+.card-project-body{margin:6px 0 2px 5px;padding:2px 0 2px 8px;border-left:2px solid var(--border-s);display:flex;flex-direction:column;gap:1px}
+/* Subtasks render as flush checklist rows (.checklist-row) rather than nested
+   cards — no surface/border/shadow. The dimmed source is still the drag
+   placeholder. Card-color vars are intentionally ignored here for a calm list. */
+.card.card-sub{background:transparent !important;border:none;box-shadow:none;padding:3px 6px;margin:0;border-radius:5px}
+.card.card-sub:hover,
+.card.card-sub.focused,
+.card.card-sub.selected{background:var(--surface-2) !important}
+.card-proj-empty{font-size:11px;color:var(--t4);font-style:italic;padding:4px 6px}
+
+/* ── Subtask checklist row — shared by board (.card-sub), stack (.scard-sub)
+   and drawer (.dr-sub) so the three surfaces stay identical ─────────────── */
+.checklist-row{position:relative;display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:5px;cursor:pointer;background:transparent;transition:background .1s}
+.checklist-row:hover{background:var(--surface-2)}
+.checklist-row .clr-title{flex:1;min-width:0;font-size:12.5px;line-height:1.35;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text}
+.checklist-row .clr-title.done{color:var(--t4)}
+.checklist-row .clr-meta{font:10px var(--mono);color:var(--t4);flex-shrink:0;transition:opacity .1s}
+.checklist-row .clr-count{font:9.5px var(--mono);color:var(--t3);flex-shrink:0;transition:opacity .1s}
+.checklist-row .clr-overdue{color:#ef4444;font-size:9px;line-height:1;flex-shrink:0;transition:opacity .1s}
+/* Delete is overlaid on the right and revealed on hover; the duration/count
+   fade out in the same slot so titles keep full width with no reflow. */
+.checklist-row .clr-del{position:absolute;right:6px;top:50%;transform:translateY(-50%);padding:0 2px;border:none;background:none;color:var(--t4);font-size:14px;line-height:1;cursor:pointer;opacity:0;transition:opacity .1s}
+.checklist-row:hover .clr-del{opacity:1}
+.checklist-row .clr-del:hover{color:var(--t1)}
+.checklist-row:hover .clr-meta,
+.checklist-row:hover .clr-count,
+.checklist-row:hover .clr-overdue{opacity:0}
+.checklist-add{display:flex;align-items:center;gap:6px;width:100%;padding:3px 6px;border:none;background:none;border-radius:5px;font:11px var(--font);color:var(--t4);cursor:pointer;text-align:left;transition:background .1s,color .1s}
+.checklist-add:hover{background:var(--surface-2);color:var(--t2)}
+.checklist-add .clr-add-plus{font-size:13px;line-height:1;color:var(--t3)}
 /* During an active drag, the inline +Add zones between subtasks must not
    intercept pointer events — they sit inside the project body but outside
    the SortableContext, and their 22px hit box was causing dnd-kit's `over`
@@ -1054,7 +1061,7 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 .dr-dd-sep{height:1px;background:var(--border)}
 .dr-notes{width:100%;padding:8px;border:1px solid var(--border-s);border-radius:2px;background:var(--surface-2);color:var(--t1);font:13px/1.5 var(--font);resize:vertical;outline:none}
 .dr-notes:focus{border-color:var(--accent)}
-.dr-sub{display:flex;align-items:center;gap:7px;padding:4px 0}
+/* .dr-sub layout/hover now come from the shared .checklist-row class. */
 .dr-sub-chk{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--border-s);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .12s}
 .dr-sub-chk:hover{border-color:var(--accent)}
 .dr-sub-chk.done{background:var(--accent);border-color:var(--accent)}
@@ -1673,8 +1680,7 @@ body[data-dnd-active="true"] .card-add-zone{pointer-events:none}
 .scard-toggle.open .chev{transform:rotate(90deg)}
 
 .scard-subs{margin-top:6px;margin-left:19px;border-left:1.5px solid var(--accent-border);padding-left:14px;display:flex;flex-direction:column;gap:6px}
-.scard-sub{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;background:var(--surface-2);border:1px solid transparent;cursor:pointer;transition:background .1s,border-color .1s}
-.scard-sub:hover{background:var(--surface-3);border-color:var(--border-s)}
+/* .scard-sub layout/hover now come from the shared .checklist-row class. */
 .scard-sub-chk{
   width:14px;height:14px;border-radius:50%;border:1.5px solid var(--border-s);flex-shrink:0;
   display:flex;align-items:center;justify-content:center;

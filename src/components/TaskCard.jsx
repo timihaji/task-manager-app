@@ -46,7 +46,7 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
   childrenOf, projectStats, collapsedProjects, onToggleProject, forceOpenProjects,
   selectedIds, renamingId, spawningSet, focusedId, onAdd, depth=0, blockingCountFor, taskTitleById,
   onContextMenu, onBulkUpdate, recents, onRecentTag, onRecentProj, openPopRequest, onPopHandled, getEffectiveLifeArea, onAddTaxonomy, onStartRename, onExternalDrag,
-  hideBucketChip }) {
+  hideBucketChip, asSubtask=false }) {
   const tagPalette = theme==='dark'?TAG_DARK:TAG_LIGHT;
   const tp = tagPalette[task.tags?.[0]] || tagPalette.admin;
   const proj = PROJ.find(p=>p.id===task.project);
@@ -142,6 +142,50 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
     transform: CSS.Transform.toString(sortable.transform),
     transition: sortable.transition,
   } : undefined;
+
+  // ── Subtask row ──────────────────────────────────────────────────────────
+  // Inside a project body, render a flush Sunsama-style checklist row instead
+  // of a full nested card: checkbox + title + subtle duration + overdue flag.
+  // Keeps the dnd-kit sortable wiring (reorder/drag-out) and rename/open/delete.
+  if (asSubtask) {
+    const overdue = task.dueDate && task.dueDate < D.str(D.today());
+    const subStats = isProject && projectStats ? projectStats(task) : null;
+    return (
+      <div className={`card card-sub checklist-row${focused?' focused':''}${selected?' selected':''}${isDragging?' dragging':''}${task.done?' done':''}`}
+        ref={isSortable ? sortable.setNodeRef : undefined}
+        style={{...dragStyle, ...cardColorVars(task.cardColor, tweaks, theme)}}
+        data-card-id={task.id}
+        onClick={()=>{ if(renaming) return; hoverFocusRef.current=false; onFocus(task.id); }}
+        onDoubleClick={()=>!renaming&&onOpen(task.id)}
+        onContextMenu={e=>{ if(onContextMenu){ e.preventDefault(); e.stopPropagation(); onContextMenu(task, e.clientX, e.clientY); } }}
+        onMouseEnter={()=>{ if(renaming) return; if(!focused) hoverFocusRef.current=true; onFocus(task.id); }}
+        onMouseLeave={()=>{ if(hoverFocusRef.current && focused) onFocus(null); hoverFocusRef.current=false; }}
+        {...(isSortable ? sortable.attributes : {})}
+        {...(isSortable ? sortable.listeners : {})}
+      >
+        <span className={`card-chk cg-host${task.done?' done':''}`} onClick={e=>{e.stopPropagation();onToggle(task.id,colKey);}} style={{display:'inline-flex',cursor:'pointer',flexShrink:0}}>
+          <CheckGlyph done={!!task.done} size={14}/>
+        </span>
+        {renaming ? (
+          <input ref={editRef} className="card-title-input" value={draft}
+            onClick={e=>e.stopPropagation()}
+            onChange={e=>setDraft(e.target.value)}
+            onBlur={()=>finishRename(true)}
+            onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault();finishRename(true);} if(e.key==='Escape'){e.preventDefault();finishRename(false);} }}/>
+        ) : (
+          <span className={`clr-title${task.done?' done':''}`}
+            onDoubleClick={e=>{ e.stopPropagation(); onStartRename?.(task.id); }}
+            title={task.title}>{task.title}</span>
+        )}
+        {isProject && subStats?.total>0 && (
+          <span className="clr-count" title={`${subStats.done}/${subStats.total} subtasks done`}>{subStats.done}/{subStats.total}</span>
+        )}
+        {task.timeEstimate && <span className="clr-meta">{task.timeEstimate}</span>}
+        {overdue && <span className="clr-overdue" title={fmtDueDate(task.dueDate)}>●</span>}
+        <button className="clr-del" title="Delete subtask" onClick={e=>{e.stopPropagation();onDelete(task.id,colKey);}}>×</button>
+      </div>
+    );
+  }
 
   const isStaleCard = isStale(task);
   return (
@@ -377,16 +421,11 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
       {open && (
         <div className="card-project-body" ref={projectDrop.setNodeRef} onClick={e=>e.stopPropagation()}>
           {kids.length === 0 && (
-            <div className="card-proj-empty">Drop or add cards</div>
+            <div className="card-proj-empty">No subtasks yet</div>
           )}
           <SortableContext items={kids.map(k => k.id)} strategy={verticalListSortingStrategy}>
             {kids.map((child)=>(
-              <React.Fragment key={child.id}>
-                <div className="card-add-zone" title="Add above"
-                  onClick={e=>{e.stopPropagation();onAdd?.(task.id,null,{beforeId:child.id, parentId:task.id});}}>
-                  <button tabIndex={-1}>+</button>
-                </div>
-                <TaskCard task={child} colKey={task.id} theme={theme} tweaks={tweaks}
+                <TaskCard key={child.id} task={child} colKey={task.id} theme={theme} tweaks={tweaks}
                   focused={focusedId===child.id}
                   selected={selectedIds?.has(child.id)}
                   renaming={renamingId===child.id}
@@ -407,14 +446,14 @@ function TaskCard({ task, colKey, theme, tweaks, focused, selected, renaming, sp
                   getEffectiveLifeArea={getEffectiveLifeArea}
                   onAddTaxonomy={onAddTaxonomy}
                   onStartRename={onStartRename}
+                  asSubtask
                   />
-              </React.Fragment>
             ))}
           </SortableContext>
-          <div className="card-add-zone" title="Add card to project"
+          <button className="checklist-add" title="Add card to project"
             onClick={e=>{e.stopPropagation();onAdd?.(task.id,null,{parentId:task.id});}}>
-            <button tabIndex={-1}>+</button>
-          </div>
+            <span className="clr-add-plus">+</span> Add subtask
+          </button>
         </div>
       )}
       <button className="card-del" onClick={e=>{e.stopPropagation();onDelete(task.id,colKey);}}>×</button>

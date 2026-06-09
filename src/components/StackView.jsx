@@ -440,18 +440,20 @@ function StackCard({ task, idx, showIdx=true, isNow, isDeck, isLater, completing
 
       {isProject && expanded && (
         <div className="scard-subs" onClick={e=>e.stopPropagation()}>
-          {[...openSubs, ...doneSubs].map(c => (
-            <div key={c.id} className="scard-sub" onClick={()=>onOpen?.(c.id)}>
+          {[...openSubs, ...doneSubs].map(c => {
+            const overdue = c.dueDate && c.dueDate < D.str(D.today());
+            return (
+            <div key={c.id} className="scard-sub checklist-row" onClick={()=>onOpen?.(c.id)}>
               <span className={`scard-sub-chk cg-host${c.done?' done':''}`}
                    onClick={(e)=>{e.stopPropagation(); onSubToggle?.(c);}}
                    style={{display:'inline-flex',cursor:'pointer'}}>
                 <CheckGlyph done={!!c.done} size={14}/>
               </span>
               <div className={`scard-sub-title${c.done?' done':''}`}>{c.title}</div>
-              {c.date && <span className="scard-sub-meta">{c.date}</span>}
-              {c.timeEstimate && <span className="scard-sub-meta">{c.timeEstimate}</span>}
+              {c.timeEstimate && <span className="clr-meta">{c.timeEstimate}</span>}
+              {overdue && <span className="clr-overdue" title={`Due ${c.dueDate}`}>●</span>}
             </div>
-          ))}
+          );})}
         </div>
       )}
     </div>

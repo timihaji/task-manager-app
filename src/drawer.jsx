@@ -1399,7 +1399,7 @@ function TaskDrawer({ task, theme, tasks, buckets, tagTree, onCreateBucket, onCr
         {/* SUBTASKS — hidden for project cards (children are used instead) */}
         {task.cardType !== 'project' && <DrSection title={`Subtasks${subCount?` (${doneCount}/${subCount})`:''}`} open={secs.subs} onToggle={()=>tog('subs')}>
           {(task.subtasks||[]).map(s=>(
-            <div key={s.id} className="dr-sub">
+            <div key={s.id} className="dr-sub checklist-row">
               <span className="dr-sub-chk cg-host" onClick={()=>togSub(s.id)} style={{display:'inline-flex',cursor:'pointer'}}>
                 <CheckGlyph done={!!s.done} size={14}/>
               </span>
