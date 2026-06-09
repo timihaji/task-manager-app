@@ -1519,32 +1519,33 @@ function App() {
     window.addEventListener('resize', sync);
     return ()=>window.removeEventListener('resize', sync);
   },[]);
-  // Trackpad: two-finger swipes over the timeline page through days (the board
-  // scrolls horizontally). A horizontal swipe always pages days; a vertical
-  // swipe pages days too, unless the column under the cursor can still scroll
-  // vertically (then it scrolls the column). We drive scrollLeft directly rather
-  // than rely on native scroll chaining — the columns' overscroll-behavior:
-  // contain (see styles.css) blocks a horizontal swipe over a column from
-  // reaching the timeline, so native chaining can't move days from there.
-  // React's synthetic onWheel is passive and can't preventDefault, so attach a
-  // native non-passive listener (see CalendarDrawer zoom for the same pattern).
+  // Trackpad over the timeline is axis-locked: horizontal swipes page through
+  // days (the board scrolls horizontally), vertical swipes scroll the column.
+  // We drive scrollLeft directly for horizontal because the columns'
+  // overscroll-behavior:contain (see styles.css) swallows a horizontal swipe
+  // over a column before it can chain to the timeline. That same x-axis
+  // containment means a vertical swipe over a column can't leak sideways, so we
+  // leave vertical-over-a-column to the browser (native momentum). React's
+  // synthetic onWheel is passive and can't preventDefault, so attach a native
+  // non-passive listener (see CalendarDrawer zoom for the same pattern).
   // Re-attached when entering week view.
   useEffect(()=>{
     const el = boardRef.current;
     if(!el) return;
     const onWheel = (e)=>{
       userScrolledRef.current = true;
-      const horizontal = Math.abs(e.deltaX) >= Math.abs(e.deltaY);
-      if(!horizontal){
-        const colBody = e.target.closest?.('.col-body');
-        if(colBody){
-          const canDown = e.deltaY > 0 && colBody.scrollTop + colBody.clientHeight < colBody.scrollHeight - 1;
-          const canUp   = e.deltaY < 0 && colBody.scrollTop > 0;
-          if(canDown || canUp) return; // let the column scroll vertically
-        }
+      if(Math.abs(e.deltaX) > Math.abs(e.deltaY)){
+        e.preventDefault();
+        el.scrollLeft += e.deltaX; // page days
+        return;
       }
+      // Vertical: native scroll if the cursor is over a column body. Over a
+      // header/gap there's no scrollable target, so route to that column's body
+      // and swallow the event so the browser can't map deltaY onto scrollLeft.
+      if(e.target.closest?.('.col-body')) return;
       e.preventDefault();
-      el.scrollLeft += horizontal ? e.deltaX : e.deltaY;
+      const colBody = e.target.closest?.('.col')?.querySelector?.('.col-body');
+      if(colBody) colBody.scrollTop += e.deltaY;
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return ()=>el.removeEventListener('wheel', onWheel);
