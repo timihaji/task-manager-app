@@ -77,7 +77,16 @@ function parseArgs(argv) {
 }
 
 // --- helpers ----------------------------------------------------------------
-const PRIORITY_MAP = { 1: 'p1', 5: 'p2', 9: 'p3', 0: 'p3' }; // Apple -> app
+// Apple's Reminders UI sets 1 (high), 5 (medium), 9 (low), 0 (none), but the
+// underlying field is a 0-9 scale. Bucket the whole range so an off-canonical
+// value (e.g. priority 4) still maps sensibly instead of defaulting to p3.
+function mapPriority(p) {
+  const n = Number(p) || 0;
+  if (n >= 1 && n <= 4) return 'p1';
+  if (n === 5) return 'p2';
+  if (n >= 6 && n <= 9) return 'p3';
+  return 'p3'; // 0 / none
+}
 
 // Local YYYY-MM-DD (the app stores scheduled days in the user's local tz).
 function localDayStr(d) {
@@ -115,7 +124,7 @@ function reminderToRow(r, userId, workspaceId, project) {
     card_type: 'task',
     project,
     tags: [],
-    priority: PRIORITY_MAP[r.priority] || 'p3',
+    priority: mapPriority(r.priority),
     date,                 // due day -> scheduled day; null lands it in the Inbox
     done: false,
     archived: false,

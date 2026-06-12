@@ -21,11 +21,20 @@ function run(argv) {
     const items = list.reminders.whose({ completed: false })();
     for (let j = 0; j < items.length; j++) {
       const r = items[j];
+      // Timed reminders carry `dueDate`; all-day reminders carry only
+      // `alldayDueDate`. Check both so all-day items still get a scheduled day
+      // instead of falling through to the Inbox.
       let dueIso = null;
       try {
         const due = r.dueDate();
         if (due) dueIso = due.toISOString();
       } catch (e) {}
+      if (!dueIso) {
+        try {
+          const allday = r.alldayDueDate();
+          if (allday) dueIso = allday.toISOString();
+        } catch (e) {}
+      }
       let body = '';
       try { body = r.body() || ''; } catch (e) {}
       let priority = 0;
